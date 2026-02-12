@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+:root {
+  /* Steel Claw Color Palette - Enhanced Readability */
+  --steel-primary: #A8B0B8;      /* Steel Silver */
+  --steel-dark: #3A3D42;         /* Dark Gunmetal */
+  --steel-light: #E8EAED;        /* Light Silver (더 밝게) */
+  --steel-bright: #F5F5F5;       /* Bright White (가장 밝은 텍스트) */
+  --steel-rust: #D2691E;         /* Rust Brown (더 밝게) */
+  --steel-warm: #9B9EA3;         /* Warm Gray (더 밝게) */
+  --steel-rivet: #2B2D30;        /* Dark Gray */
+  
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background-color: var(--steel-dark);
+  color: var(--steel-bright);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--steel-dark);
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+}
+
+/* Steel Industrial Background */
+.gradient-bg {
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(139, 69, 19, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(168, 176, 184, 0.1) 0%, transparent 50%),
+    linear-gradient(135deg, 
+      var(--steel-rivet) 0%, 
+      var(--steel-dark) 25%, 
+      var(--steel-warm) 50%, 
+      var(--steel-dark) 75%, 
+      var(--steel-rivet) 100%);
+  position: relative;
+}
+
+/* Industrial Glass Effect */
+.glass {
+  background: rgba(168, 176, 184, 0.08);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(200, 205, 208, 0.12);
+  box-shadow: 
+    inset 0 1px 0 rgba(200, 205, 208, 0.15),
+    0 4px 12px rgba(43, 45, 48, 0.5),
+    0 1px 3px rgba(43, 45, 48, 0.8);
+  position: relative;
+}
+
+.glass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--steel-light), transparent);
+  opacity: 0.3;
+}
+
+/* Metal Texture Overlay */
+.gradient-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 1px,
+      rgba(200, 205, 208, 0.02) 1px,
+      rgba(200, 205, 208, 0.02) 2px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 1px,
+      rgba(139, 69, 19, 0.01) 1px,
+      rgba(139, 69, 19, 0.01) 2px
+    );
+  pointer-events: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
