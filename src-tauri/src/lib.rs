@@ -182,6 +182,11 @@ async fn get_install_path() -> Result<String, String> {
     openclaw::get_install_path().await
 }
 
+#[tauri::command]
+async fn install_browser_control() -> Result<String, String> {
+    openclaw::install_browser_control().await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -226,6 +231,8 @@ pub fn run() {
             apply_default_security_settings,
             // 경로 정보
             get_install_path,
+            // 브라우저 컨트롤
+            install_browser_control,
         ])
         .setup(|app| {
             // OpenClaw 관리자 초기화

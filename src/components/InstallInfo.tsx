@@ -10,9 +10,11 @@ export const InstallInfo: React.FC = () => {
       .then(setInstallPath)
       .catch(() => {
         // 폴백: 일반적인 경로 표시
-        if (process.platform === 'win32') {
+        // OS 판별을 위해 Tauri API 사용
+        const platform = navigator.userAgent.toLowerCase();
+        if (platform.includes('windows')) {
           setInstallPath('%LOCALAPPDATA%\\Programs\\openclaw\\');
-        } else if (process.platform === 'darwin') {
+        } else if (platform.includes('mac')) {
           setInstallPath('~/Library/Application Support/openclaw/');
         } else {
           setInstallPath('~/.local/share/openclaw/');

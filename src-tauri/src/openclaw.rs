@@ -982,3 +982,37 @@ pub async fn get_install_path() -> Result<String, String> {
     let manager = get_manager()?;
     Ok(manager.get_install_dir().to_string_lossy().to_string())
 }
+
+/// 브라우저 컨트롤 설치
+pub async fn install_browser_control() -> Result<String, String> {
+    let manager = get_manager()?;
+    
+    eprintln!("브라우저 컨트롤 설치 시작...");
+    
+    // openclaw browser control 실행
+    match manager.run_openclaw(vec!["browser", "control", "install"]).await {
+        Ok(output) => {
+            eprintln!("브라우저 컨트롤 설치 출력: {}", output);
+            
+            // 설정에 브라우저 제어 활성화
+            let mut config = read_existing_config();
+            set_nested_value(
+                &mut config,
+                &["browser", "enabled"],
+                json!(true),
+            );
+            set_nested_value(
+                &mut config,
+                &["browser", "profile"],
+                json!("chrome"),
+            );
+            write_config(&config)?;
+            
+            Ok("브라우저 컨트롤이 설치되었습니다. Chrome 확장 프로그램을 설치해주세요.".to_string())
+        }
+        Err(e) => {
+            eprintln!("브라우저 컨트롤 설치 실패: {}", e);
+            Err(format!("브라우저 컨트롤 설치 실패: {}", e))
+        }
+    }
+}

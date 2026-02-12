@@ -8,8 +8,9 @@ import Summary from './components/Summary'
 import Success from './components/Success'
 import Loading from './components/Loading'
 import Dashboard from './components/Dashboard'
+import { BrowserControl } from './pages/BrowserControl'
 
-type Step = 'loading' | 'dashboard' | 'welcome' | 'model' | 'messenger' | 'integrations' | 'summary' | 'connect' | 'success'
+type Step = 'loading' | 'dashboard' | 'welcome' | 'model' | 'messenger' | 'integrations' | 'browsercontrol' | 'summary' | 'connect' | 'success'
 type Messenger = 'telegram' | 'discord' | 'whatsapp' | null
 
 export interface ModelConfig {
@@ -123,8 +124,11 @@ function App() {
       case 'integrations':
         setStep('messenger')
         break
-      case 'summary':
+      case 'browsercontrol':
         setStep('integrations')
+        break
+      case 'summary':
+        setStep('browsercontrol')
         break
       case 'connect':
         setStep('summary')
@@ -178,8 +182,15 @@ function App() {
         <Integrations
           initialValues={config.integrations}
           onUpdate={handleIntegrationsUpdate}
-          onComplete={() => setStep('summary')}
-          onSkip={() => setStep('summary')}
+          onComplete={() => setStep('browsercontrol')}
+          onSkip={() => setStep('browsercontrol')}
+          onBack={handleBack}
+        />
+      )}
+      
+      {step === 'browsercontrol' && (
+        <BrowserControl
+          onNext={() => setStep('summary')}
           onBack={handleBack}
         />
       )}
