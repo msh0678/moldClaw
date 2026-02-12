@@ -152,29 +152,76 @@ impl OpenClawManager {
     }
     
     pub async fn install_openclaw(&self) -> Result<String, String> {
+        eprintln!("OpenClaw 설치 시작...");
+        eprintln!("설치 디렉토리: {:?}", self.install_dir);
+        eprintln!("npm 경로: {:?}", self.bundled_npm);
+        
         // 설치 디렉토리 생성
         fs::create_dir_all(&self.install_dir)
             .map_err(|e| format!("설치 디렉토리 생성 실패: {}", e))?;
         
+        // 설치 경로를 안전하게 문자열로 변환 (한글/특수문자 대응)
+        let install_prefix = self.install_dir
+            .to_str()
+            .ok_or_else(|| {
+                format!("설치 경로를 문자열로 변환할 수 없습니다: {:?}", self.install_dir)
+            })?;
+        
+        // npm 캐시 디렉토리 설정 (공백 있는 경로 대응)
+        let cache_dir = self.install_dir.join(".npm-cache");
+        fs::create_dir_all(&cache_dir)
+            .map_err(|e| format!("캐시 디렉토리 생성 실패: {}", e))?;
+        
+        let cache_path = cache_dir
+            .to_str()
+            .ok_or("캐시 경로 변환 실패")?;
+        
+        eprintln!("npm install 명령: npm install openclaw --prefix \"{}\"", install_prefix);
+        
         // npm으로 OpenClaw 설치
-        let output = Command::new(&self.bundled_npm)
-            .args([
+        let mut cmd = Command::new(&self.bundled_npm);
+        cmd.args([
                 "install",
                 "openclaw",
-                "--prefix", self.install_dir.to_str().unwrap(),
+                "--prefix", install_prefix,
                 "--no-fund",
                 "--no-audit",
+                "--no-update-notifier",
+                "--progress=false",
             ])
-            .env("PATH", self.get_node_path())
-            .env("npm_config_cache", self.install_dir.join(".npm-cache"))
-            .output()
+            .env("PATH", self.get_full_path())  // get_node_path 대신 get_full_path 사용
+            .env("npm_config_cache", cache_path)
+            .env("npm_config_prefix", install_prefix)
+            .env("NODE_ENV", "production");
+        
+        // Windows에서 추가 환경변수
+        #[cfg(windows)]
+        {
+            cmd.env("npm_config_script_shell", "cmd.exe");
+        }
+        
+        eprintln!("npm install 실행 중...");
+        let output = cmd.output()
             .map_err(|e| format!("npm 실행 실패: {}", e))?;
         
         if output.status.success() {
-            Ok("OpenClaw 설치 완료!".to_string())
+            eprintln!("✓ OpenClaw 설치 성공");
+            
+            // 설치 확인
+            let openclaw_bin = self.get_openclaw_bin();
+            if openclaw_bin.exists() {
+                eprintln!("✓ OpenClaw 실행파일 확인: {:?}", openclaw_bin);
+                Ok("OpenClaw 설치 완료!".to_string())
+            } else {
+                Err(format!("설치는 성공했지만 실행파일을 찾을 수 없습니다: {:?}", openclaw_bin))
+            }
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("OpenClaw 설치 실패: {}", stderr))
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            eprintln!("✗ npm install 실패");
+            eprintln!("stdout: {}", stdout);
+            eprintln!("stderr: {}", stderr);
+            Err(format!("OpenClaw 설치 실패:\n{}\n{}", stdout, stderr))
         }
     }
     
@@ -182,25 +229,51 @@ impl OpenClawManager {
         let openclaw_bin = self.get_openclaw_bin();
         
         if !openclaw_bin.exists() {
-            return Err("OpenClaw가 설치되지 않았습니다".to_string());
+            eprintln!("OpenClaw 실행파일이 없음: {:?}", openclaw_bin);
+            return Err(format!("OpenClaw가 설치되지 않았습니다. 경로: {:?}", openclaw_bin));
         }
+        
+        eprintln!("OpenClaw 실행: {:?} {:?}", openclaw_bin, args);
         
         // OpenClaw 실행
         let mut cmd = Command::new(&openclaw_bin);
         cmd.args(&args)
             .env("PATH", self.get_full_path())
-            .env("HOME", dirs::home_dir().unwrap())
-            .env("USERPROFILE", dirs::home_dir().unwrap())
             .env("OPENCLAW_CONFIG_DIR", &self.openclaw_home);
         
+        // 홈 디렉토리 안전하게 설정
+        if let Some(home) = dirs::home_dir() {
+            cmd.env("HOME", &home);
+            #[cfg(windows)]
+            cmd.env("USERPROFILE", &home);
+        }
+        
+        // Node.js 경로 명시적으로 설정
+        cmd.env("NODE", &self.bundled_node);
+        
+        // Windows에서 추가 설정
+        #[cfg(windows)]
+        {
+            // Windows에서 .cmd 파일 실행 시 필요
+            cmd.env("PATHEXT", ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC");
+        }
+        
         let output = cmd.output()
-            .map_err(|e| format!("OpenClaw 실행 실패: {}", e))?;
+            .map_err(|e| {
+                eprintln!("OpenClaw 실행 오류: {}", e);
+                format!("OpenClaw 실행 실패: {}", e)
+            })?;
+        
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
         
         if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            Ok(stdout.to_string())
         } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("OpenClaw 오류: {}", stderr))
+            eprintln!("OpenClaw 실행 실패");
+            eprintln!("stdout: {}", stdout);
+            eprintln!("stderr: {}", stderr);
+            Err(format!("OpenClaw 오류:\n{}\n{}", stdout, stderr))
         }
     }
     
@@ -233,10 +306,43 @@ impl OpenClawManager {
     }
     
     fn get_openclaw_bin(&self) -> PathBuf {
+        let bin_dir = self.install_dir.join("node_modules/.bin");
+        
         if cfg!(windows) {
-            self.install_dir.join("node_modules/.bin/openclaw.cmd")
+            // Windows에서는 .cmd 파일 우선, 없으면 .ps1, .bat 순서로 확인
+            let cmd_path = bin_dir.join("openclaw.cmd");
+            if cmd_path.exists() {
+                return cmd_path;
+            }
+            
+            let ps1_path = bin_dir.join("openclaw.ps1");
+            if ps1_path.exists() {
+                return ps1_path;
+            }
+            
+            let bat_path = bin_dir.join("openclaw.bat");
+            if bat_path.exists() {
+                return bat_path;
+            }
+            
+            // 기본값
+            cmd_path
         } else {
-            self.install_dir.join("node_modules/.bin/openclaw")
+            // Unix 시스템에서는 심볼릭 링크 확인
+            let openclaw_path = bin_dir.join("openclaw");
+            
+            // 실행 권한 자동 설정
+            #[cfg(unix)]
+            if openclaw_path.exists() {
+                use std::os::unix::fs::PermissionsExt;
+                if let Ok(metadata) = fs::metadata(&openclaw_path) {
+                    let mut perms = metadata.permissions();
+                    perms.set_mode(0o755);
+                    let _ = fs::set_permissions(&openclaw_path, perms);
+                }
+            }
+            
+            openclaw_path
         }
     }
     
