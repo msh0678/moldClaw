@@ -397,7 +397,6 @@ Be the assistant you'd actually want to talk to. Concise when needed, thorough w
 pub async fn configure_telegram(token: &str, dm_policy: &str) -> Result<(), String> {
     let mut config = read_existing_config();
 
-    set_nested_value(&mut config, &["channels", "telegram", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "telegram", "botToken"], json!(token));
     set_nested_value(&mut config, &["channels", "telegram", "dmPolicy"], json!(dm_policy));
 
@@ -423,7 +422,6 @@ pub async fn configure_telegram_full(
 ) -> Result<(), String> {
     let mut config = read_existing_config();
 
-    set_nested_value(&mut config, &["channels", "telegram", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "telegram", "botToken"], json!(token));
     set_nested_value(&mut config, &["channels", "telegram", "dmPolicy"], json!(dm_policy));
     
@@ -455,14 +453,12 @@ pub async fn configure_telegram_full(
 pub async fn configure_discord(token: &str, dm_policy: &str) -> Result<(), String> {
     let mut config = read_existing_config();
 
-    set_nested_value(&mut config, &["channels", "discord", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
-    set_nested_value(&mut config, &["channels", "discord", "dm", "enabled"], json!(true));
-    set_nested_value(&mut config, &["channels", "discord", "dm", "policy"], json!(dm_policy));
+    set_nested_value(&mut config, &["channels", "discord", "dmPolicy"], json!(dm_policy));
     
-    // dm.allowFrom 설정 (open일 때는 ["*"])
+    // allowFrom 설정 (open일 때는 ["*"])
     if dm_policy == "open" {
-        set_nested_value(&mut config, &["channels", "discord", "dm", "allowFrom"], json!(["*"]));
+        set_nested_value(&mut config, &["channels", "discord", "allowFrom"], json!(["*"]));
     }
 
     write_config(&config)?;
@@ -480,25 +476,26 @@ pub async fn configure_discord_full(
 ) -> Result<(), String> {
     let mut config = read_existing_config();
 
-    set_nested_value(&mut config, &["channels", "discord", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
-    set_nested_value(&mut config, &["channels", "discord", "dm", "enabled"], json!(true));
-    set_nested_value(&mut config, &["channels", "discord", "dm", "policy"], json!(dm_policy));
+    set_nested_value(&mut config, &["channels", "discord", "dmPolicy"], json!(dm_policy));
     
-    // dm.allowFrom 설정
+    // allowFrom 설정
     if dm_policy == "open" {
-        set_nested_value(&mut config, &["channels", "discord", "dm", "allowFrom"], json!(["*"]));
+        set_nested_value(&mut config, &["channels", "discord", "allowFrom"], json!(["*"]));
     } else if !allow_from.is_empty() {
-        set_nested_value(&mut config, &["channels", "discord", "dm", "allowFrom"], json!(allow_from));
+        set_nested_value(&mut config, &["channels", "discord", "allowFrom"], json!(allow_from));
     }
     
     // 그룹 정책
     set_nested_value(&mut config, &["channels", "discord", "groupPolicy"], json!(group_policy));
     
+    // groupAllowFrom (Discord는 최상위 레벨)
+    if !group_allow_from.is_empty() {
+        set_nested_value(&mut config, &["channels", "discord", "groupAllowFrom"], json!(group_allow_from));
+    }
+    
     // guilds 설정
     set_nested_value(&mut config, &["channels", "discord", "guilds", "*", "requireMention"], json!(require_mention));
-    
-    // groupAllowFrom은 guilds 레벨에 설정하지 않음 (groupPolicy가 allowlist일 때 전체에 적용)
 
     write_config(&config)?;
     Ok(())
