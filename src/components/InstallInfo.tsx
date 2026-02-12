@@ -9,12 +9,14 @@ export const InstallInfo: React.FC = () => {
       </p>
       <code className="block bg-white p-2 rounded text-xs mb-2">
         {process.platform === 'win32' 
-          ? 'C:\\Users\\사용자명\\.openclaw-install\\'
-          : '~/.openclaw-install/'}
+          ? 'C:\\Users\\사용자명\\AppData\\Local\\Programs\\openclaw\\'
+          : process.platform === 'darwin'
+          ? '~/Library/Application Support/openclaw/'
+          : '~/.local/share/openclaw/'}
       </code>
       <p className="text-xs text-blue-600">
-        💡 이렇게 하는 이유: moldClaw 앱 디렉토리 내부에 설치하면 
-        문서, 다운로드 등 사용자 파일에 접근할 수 없을 수 있습니다.
+        💡 이 위치는 OS별 표준 프로그램 설치 위치로, 
+        백업 서비스가 자동으로 제외하며 전체 파일시스템 접근이 가능합니다.
       </p>
     </div>
   );

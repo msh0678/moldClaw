@@ -8,17 +8,39 @@ moldClaw와 OpenClaw의 역할 분리:
 
 ## 디렉토리 구조
 
+### Windows
 ```
-사용자 홈 디렉토리/
-├── .openclaw/              # OpenClaw 설정 (config, workspace 등)
-│   ├── openclaw.json       # 설정 파일
-│   └── workspace/          # 작업 디렉토리
-├── .openclaw-install/      # OpenClaw 설치 위치
-│   └── node_modules/
-│       └── .bin/
-│           └── openclaw    # 실행파일
-└── .local/share/moldClaw/  # moldClaw 앱 데이터
-    └── node-portable/      # 번들된 Node.js (필요시)
+C:\Users\사용자명\
+├── .openclaw\                          # OpenClaw 설정
+├── AppData\
+│   └── Local\
+│       ├── Programs\
+│       │   └── openclaw\               # OpenClaw 설치 위치 ✓
+│       │       └── node_modules\
+│       └── moldClaw\                   # moldClaw 앱 데이터
+└── Documents\                          # 접근 가능 ✓
+```
+
+### macOS
+```
+/Users/사용자명/
+├── .openclaw/                          # OpenClaw 설정
+├── Library/
+│   ├── Application Support/
+│   │   ├── openclaw/                   # OpenClaw 설치 위치 ✓
+│   │   └── moldClaw/                   # moldClaw 앱 데이터
+└── Documents/                          # 접근 가능 ✓
+```
+
+### Linux
+```
+/home/사용자명/
+├── .openclaw/                          # OpenClaw 설정
+├── .local/
+│   └── share/
+│       ├── openclaw/                   # OpenClaw 설치 위치 ✓
+│       └── moldClaw/                   # moldClaw 앱 데이터
+└── Documents/                          # 접근 가능 ✓
 ```
 
 ## 왜 분리해야 하나?
@@ -37,10 +59,12 @@ moldClaw와 OpenClaw의 역할 분리:
 
 ## 대안 고려사항
 
-### 옵션 1: 현재 방식 (권장)
-- 설치: `~/.openclaw-install/`
-- 장점: 전체 파일시스템 접근
-- 단점: 사용자 홈 디렉토리에 폴더 생성
+### 옵션 1: OS별 표준 위치 (권장) ✓
+- Windows: `%LOCALAPPDATA%\Programs\openclaw\`
+- macOS: `~/Library/Application Support/openclaw/`
+- Linux: `~/.local/share/openclaw/`
+- 장점: OS 관례 준수, 백업 제외 가능, 전체 파일시스템 접근
+- 단점: OS별로 다른 경로
 
 ### 옵션 2: 시스템 전역 설치
 - 설치: `npm install -g openclaw`

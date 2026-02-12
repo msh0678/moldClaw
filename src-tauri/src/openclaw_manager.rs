@@ -90,12 +90,33 @@ impl OpenClawManager {
             openclaw_home
         };
         
-        // OpenClaw 설치 위치 - 사용자 홈 디렉토리에 설치
-        // moldClaw 앱 디렉토리가 아닌 사용자 공간에 설치해야 전체 파일시스템 접근 가능
-        let install_dir = real_home.join(".openclaw-install");
+        // OpenClaw 설치 위치 - OS별 표준 위치 사용
+        let install_dir = if cfg!(windows) {
+            // Windows: %LOCALAPPDATA%\Programs\openclaw
+            dirs::data_local_dir()
+                .ok_or("로컬 데이터 디렉토리를 찾을 수 없습니다")?
+                .join("Programs/openclaw")
+        } else if cfg!(target_os = "macos") {
+            // macOS: ~/Library/Application Support/openclaw
+            dirs::data_dir()
+                .ok_or("데이터 디렉토리를 찾을 수 없습니다")?
+                .join("openclaw")
+        } else {
+            // Linux: ~/.local/share/openclaw
+            dirs::data_local_dir()
+                .ok_or("로컬 데이터 디렉토리를 찾을 수 없습니다")?
+                .join("openclaw")
+        };
         
         eprintln!("OpenClaw 설치 디렉토리: {:?}", install_dir);
         eprintln!("OpenClaw 설정 디렉토리: {:?}", openclaw_home);
+        
+        // 설치 디렉토리가 moldClaw 앱 디렉토리가 아님을 확인
+        if let Ok(app_data) = app_handle.path().app_data_dir() {
+            if install_dir.starts_with(&app_data) {
+                eprintln!("⚠️  경고: OpenClaw가 moldClaw 앱 디렉토리 내부에 설치됨");
+            }
+        }
         
         Ok(Self {
             bundled_node,
@@ -158,9 +179,25 @@ impl OpenClawManager {
         eprintln!("설치 디렉토리: {:?}", self.install_dir);
         eprintln!("npm 경로: {:?}", self.bundled_npm);
         
-        // 설치 디렉토리 생성
+        // 설치 디렉토리 생성 (이미 존재하면 확인)
+        if self.install_dir.exists() {
+            // 기존 설치가 있는지 확인
+            let existing_openclaw = self.get_openclaw_bin();
+            if existing_openclaw.exists() {
+                eprintln!("⚠️  기존 OpenClaw 설치 발견: {:?}", existing_openclaw);
+                
+                // 버전 확인 시도
+                if let Ok(version_output) = Command::new(&existing_openclaw)
+                    .arg("--version")
+                    .output() {
+                    let version = String::from_utf8_lossy(&version_output.stdout);
+                    eprintln!("   기존 버전: {}", version.trim());
+                }
+            }
+        }
+        
         fs::create_dir_all(&self.install_dir)
-            .map_err(|e| format!("설치 디렉토리 생성 실패: {}", e))?;
+            .map_err(|e| format!("설치 디렉토리 생성 실패: {} (경로: {:?})", e, self.install_dir))?;
         
         // 설치 경로를 안전하게 문자열로 변환 (한글/특수문자 대응)
         let install_prefix = self.install_dir
