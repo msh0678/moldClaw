@@ -52,6 +52,17 @@ impl OpenClawManager {
         let bundled_node = resource_resolver::get_node_executable(&node_dir);
         let bundled_npm = resource_resolver::get_npm_executable(&node_dir);
         
+        // Windows에서 실행 가능 확인
+        #[cfg(windows)]
+        {
+            if !bundled_node.exists() {
+                return Err(format!("Node.exe를 찾을 수 없습니다: {:?}", bundled_node));
+            }
+            if !bundled_npm.exists() {
+                return Err(format!("npm.cmd를 찾을 수 없습니다: {:?}", bundled_npm));
+            }
+        }
+        
         // Unix 시스템에서 실행 권한 설정
         #[cfg(unix)]
         {
@@ -161,15 +172,25 @@ impl OpenClawManager {
     }
     
     pub async fn get_node_version(&self) -> Result<String, String> {
-        let output = Command::new(&self.bundled_node)
-            .arg("--version")
-            .output()
+        let mut cmd = Command::new(&self.bundled_node);
+        cmd.arg("--version");
+        
+        // Windows에서는 CREATE_NO_WINDOW 플래그 사용
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        
+        let output = cmd.output()
             .map_err(|e| format!("Node.js 버전 확인 실패: {}", e))?;
         
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
         } else {
-            Err("Node.js 버전을 가져올 수 없습니다".to_string())
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(format!("Node.js 버전을 가져올 수 없습니다: {}", stderr))
         }
     }
     
@@ -181,7 +202,47 @@ impl OpenClawManager {
             return true;
         }
         
-        // 2. 시스템 전역 설치 확인 
+        // 2. Windows - npm 전역 설치 위치 확인
+        #[cfg(windows)]
+        {
+            // npm 전역 설치 기본 위치들
+            let possible_paths = vec![
+                // npm 기본 전역 설치 위치
+                dirs::home_dir().map(|h| h.join("AppData\\Roaming\\npm\\openclaw.cmd")),
+                dirs::home_dir().map(|h| h.join("AppData\\Roaming\\npm\\openclaw.ps1")),
+                // Chocolatey
+                PathBuf::from("C:\\ProgramData\\chocolatey\\bin\\openclaw.exe").into(),
+                // Scoop
+                dirs::home_dir().map(|h| h.join("scoop\\shims\\openclaw.cmd")),
+            ];
+            
+            for path_option in possible_paths {
+                if let Some(path) = path_option {
+                    if path.exists() {
+                        eprintln!("OpenClaw 발견 (전역 설치): {:?}", path);
+                        return true;
+                    }
+                }
+            }
+            
+            // where.exe로 PATH 검색
+            if let Ok(output) = Command::new("cmd")
+                .args(["/C", "where openclaw"])
+                .output() {
+                if output.status.success() {
+                    let paths = String::from_utf8_lossy(&output.stdout);
+                    for path in paths.lines() {
+                        let path = path.trim();
+                        if !path.is_empty() && PathBuf::from(path).exists() {
+                            eprintln!("OpenClaw 발견 (PATH): {}", path);
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Unix 시스템
         #[cfg(not(windows))]
         {
             if let Ok(output) = Command::new("which")
@@ -193,26 +254,6 @@ impl OpenClawManager {
                     if !path.is_empty() && PathBuf::from(&path).exists() {
                         eprintln!("OpenClaw 발견 (시스템 전역): {}", path);
                         return true;
-                    }
-                }
-            }
-        }
-        
-        // Windows에서는 where 명령 사용
-        #[cfg(windows)]
-        {
-            if let Ok(output) = Command::new("where.exe")
-                .arg("openclaw")
-                .output() {
-                if output.status.success() {
-                    let paths = String::from_utf8_lossy(&output.stdout);
-                    // where는 여러 경로를 반환할 수 있음
-                    for path in paths.lines() {
-                        let path = path.trim();
-                        if !path.is_empty() && PathBuf::from(path).exists() {
-                            eprintln!("OpenClaw 발견 (시스템 전역): {}", path);
-                            return true;
-                        }
                     }
                 }
             }
@@ -313,6 +354,15 @@ impl OpenClawManager {
         #[cfg(windows)]
         {
             cmd.env("npm_config_script_shell", "cmd.exe");
+            
+            // Windows에서 npm이 node.exe를 찾을 수 있도록
+            if let Some(node_dir) = self.bundled_node.parent() {
+                cmd.env("NODE_PATH", node_dir);
+            }
+            
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
         }
         
         eprintln!("npm install 실행 중...");
@@ -375,7 +425,15 @@ impl OpenClawManager {
         #[cfg(windows)]
         {
             // Windows에서 .cmd 파일 실행 시 필요
-            cmd.env("PATHEXT", ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC");
+            cmd.env("PATHEXT", ".COM;.EXE;.BAT;.CMD;.PS1;.VBS;.JS;.WS;.MSC");
+            
+            // Windows 시스템 경로 확인
+            if let Ok(system_root) = std::env::var("SystemRoot") {
+                cmd.env("SystemRoot", system_root);
+            }
+            if let Ok(comspec) = std::env::var("COMSPEC") {
+                cmd.env("COMSPEC", comspec);
+            }
         }
         
         let output = cmd.output()
@@ -401,13 +459,28 @@ impl OpenClawManager {
         // 백그라운드로 gateway 시작
         let openclaw_bin = self.get_openclaw_bin();
         
-        Command::new(&openclaw_bin)
-            .args(["gateway", "start"])
+        let mut cmd = Command::new(&openclaw_bin);
+        cmd.args(["gateway", "start"])
             .env("PATH", self.get_full_path())
-            .env("HOME", dirs::home_dir().unwrap())
-            .env("USERPROFILE", dirs::home_dir().unwrap())
-            .env("OPENCLAW_CONFIG_DIR", &self.openclaw_home)
-            .spawn()
+            .env("OPENCLAW_CONFIG_DIR", &self.openclaw_home);
+        
+        // 홈 디렉토리 설정
+        if let Some(home) = dirs::home_dir() {
+            cmd.env("HOME", &home);
+            #[cfg(windows)]
+            cmd.env("USERPROFILE", &home);
+        }
+        
+        // Windows 특별 처리
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+        }
+        
+        cmd.spawn()
             .map_err(|e| format!("Gateway 시작 실패: {}", e))?;
         
         Ok(())
@@ -473,21 +546,53 @@ impl OpenClawManager {
             return Ok(local_bin);
         }
         
-        // 2. 시스템 PATH에서 찾기
+        // 2. Windows - 알려진 위치 확인
         #[cfg(windows)]
-        let cmd_name = "where.exe";
-        #[cfg(not(windows))]
-        let cmd_name = "which";
-        
-        if let Ok(output) = Command::new(cmd_name)
-            .arg("openclaw")
-            .output() {
-            if output.status.success() {
-                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !path_str.is_empty() {
-                    // Windows의 where는 여러 줄 출력 가능
-                    for line in path_str.lines() {
+        {
+            let known_locations = vec![
+                // npm 전역 설치
+                dirs::home_dir().map(|h| h.join("AppData\\Roaming\\npm\\openclaw.cmd")),
+                dirs::home_dir().map(|h| h.join("AppData\\Roaming\\npm\\openclaw.ps1")),
+                // node_modules/.bin 스타일
+                dirs::home_dir().map(|h| h.join("AppData\\Roaming\\npm\\node_modules\\.bin\\openclaw.cmd")),
+            ];
+            
+            for path_option in known_locations {
+                if let Some(path) = path_option {
+                    if path.exists() {
+                        return Ok(path);
+                    }
+                }
+            }
+            
+            // cmd /C where 사용 (더 안정적)
+            if let Ok(output) = Command::new("cmd")
+                .args(["/C", "where openclaw"])
+                .output() {
+                if output.status.success() {
+                    let paths = String::from_utf8_lossy(&output.stdout);
+                    for line in paths.lines() {
                         let path = PathBuf::from(line.trim());
+                        if path.exists() && (path.extension().map_or(false, |ext| 
+                            ext == "cmd" || ext == "exe" || ext == "ps1" || ext == "bat"
+                        )) {
+                            return Ok(path);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Unix
+        #[cfg(not(windows))]
+        {
+            if let Ok(output) = Command::new("which")
+                .arg("openclaw")
+                .output() {
+                if output.status.success() {
+                    let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !path_str.is_empty() {
+                        let path = PathBuf::from(path_str);
                         if path.exists() {
                             return Ok(path);
                         }

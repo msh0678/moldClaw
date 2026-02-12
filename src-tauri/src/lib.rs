@@ -246,40 +246,78 @@ pub fn run() {
                 
                 // 1. 정상 종료 시도 (먼저)
                 println!("1. OpenClaw Gateway 정상 종료 시도...");
-                let stop_result = std::process::Command::new("openclaw")
-                    .args(["gateway", "stop"])
-                    .output();
-                    
-                if let Ok(output) = stop_result {
-                    if output.status.success() {
-                        println!("   ✓ Gateway 정상 종료 성공");
-                    } else {
-                        println!("   ✗ Gateway 정상 종료 실패");
+                
+                #[cfg(windows)]
+                {
+                    // Windows: cmd를 통해 실행
+                    let stop_result = std::process::Command::new("cmd")
+                        .args(["/C", "openclaw", "gateway", "stop"])
+                        .output();
+                        
+                    if let Ok(output) = stop_result {
+                        if output.status.success() {
+                            println!("   ✓ Gateway 정상 종료 성공");
+                        } else {
+                            println!("   ✗ Gateway 정상 종료 실패");
+                        }
                     }
+                    
+                    // 2초 대기
+                    std::thread::sleep(std::time::Duration::from_millis(2000));
+                    
+                    // 2. Windows: taskkill 사용
+                    println!("2. 남은 프로세스 강제 종료...");
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/F", "/IM", "openclaw.exe"])
+                        .output();
+                    
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/F", "/IM", "openclaw-gateway.exe"])
+                        .output();
+                    
+                    // Windows는 wmic로 프로세스 찾기
+                    let _ = std::process::Command::new("wmic")
+                        .args(["process", "where", "name like '%openclaw%'", "delete"])
+                        .output();
                 }
                 
-                // 2초 대기
-                std::thread::sleep(std::time::Duration::from_millis(2000));
-                
-                // 2. 강제 종료 (fallback)
-                println!("2. 남은 프로세스 강제 종료...");
-                let _ = std::process::Command::new("pkill")
-                    .args(["-9", "-f", "openclaw-gateway"])
-                    .output();
-                
-                let _ = std::process::Command::new("pkill")
-                    .args(["-f", "openclaw$"])
-                    .output();
-                
-                // 3. systemd 서비스도 중지 (자동 재시작 방지)
-                println!("3. systemd 서비스 중지...");
-                let _ = std::process::Command::new("systemctl")
-                    .args(["--user", "stop", "openclaw-gateway.service"])
-                    .output();
+                #[cfg(not(windows))]
+                {
+                    let stop_result = std::process::Command::new("openclaw")
+                        .args(["gateway", "stop"])
+                        .output();
+                        
+                    if let Ok(output) = stop_result {
+                        if output.status.success() {
+                            println!("   ✓ Gateway 정상 종료 성공");
+                        } else {
+                            println!("   ✗ Gateway 정상 종료 실패");
+                        }
+                    }
                     
-                let _ = std::process::Command::new("systemctl")
-                    .args(["--user", "disable", "openclaw-gateway.service"])
-                    .output();
+                    // 2초 대기
+                    std::thread::sleep(std::time::Duration::from_millis(2000));
+                    
+                    // 2. 강제 종료 (fallback)
+                    println!("2. 남은 프로세스 강제 종료...");
+                    let _ = std::process::Command::new("pkill")
+                        .args(["-9", "-f", "openclaw-gateway"])
+                        .output();
+                    
+                    let _ = std::process::Command::new("pkill")
+                        .args(["-f", "openclaw$"])
+                        .output();
+                    
+                    // 3. systemd 서비스도 중지 (자동 재시작 방지)
+                    println!("3. systemd 서비스 중지...");
+                    let _ = std::process::Command::new("systemctl")
+                        .args(["--user", "stop", "openclaw-gateway.service"])
+                        .output();
+                        
+                    let _ = std::process::Command::new("systemctl")
+                        .args(["--user", "disable", "openclaw-gateway.service"])
+                        .output();
+                }
                 
                 println!("OpenClaw Gateway 완전 정리 완료");
             }

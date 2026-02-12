@@ -78,7 +78,7 @@ export const BrowserControl: React.FC<BrowserControlProps> = ({ onNext, onBack }
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
             <h3 className="font-bold text-purple-900 mb-2">Chrome 브라우저 제어</h3>
             <p className="text-sm text-purple-800 mb-3">
-              OpenClaw가 Chrome 브라우저를 자동으로 제어할 수 있게 설정하시겠습니까?
+              OpenClaw가 Windows의 Chrome 브라우저를 자동으로 제어할 수 있게 설정하시겠습니까?
             </p>
             <ul className="list-disc list-inside text-sm text-purple-700 space-y-1">
               <li>웹 페이지 자동 읽기 및 분석</li>
