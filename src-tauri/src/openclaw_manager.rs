@@ -90,10 +90,12 @@ impl OpenClawManager {
             openclaw_home
         };
         
-        // OpenClaw 설치 위치
-        let install_dir = dirs::data_local_dir()
-            .ok_or("로컬 데이터 디렉토리를 찾을 수 없습니다")?
-            .join("moldClaw/openclaw");
+        // OpenClaw 설치 위치 - 사용자 홈 디렉토리에 설치
+        // moldClaw 앱 디렉토리가 아닌 사용자 공간에 설치해야 전체 파일시스템 접근 가능
+        let install_dir = real_home.join(".openclaw-install");
+        
+        eprintln!("OpenClaw 설치 디렉토리: {:?}", install_dir);
+        eprintln!("OpenClaw 설정 디렉토리: {:?}", openclaw_home);
         
         Ok(Self {
             bundled_node,
