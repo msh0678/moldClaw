@@ -25,10 +25,26 @@ impl OpenClawManager {
         eprintln!("Node directory: {:?}", node_dir);
         eprintln!("Node directory exists: {}", node_dir.exists());
         
-        // 대체 경로들 시도
+        // 대체 경로들 시도 (개발/빌드 환경 모두 지원)
         let possible_dirs = vec![
+            // 1. 기본 리소스 경로
             resource_dir.join("node-portable"),
+            // 2. 개발 환경 (cargo run)
             resource_dir.join("_up_/src-tauri/resources/node-portable"),
+            // 3. AppImage 환경
+            PathBuf::from("/tmp/.mount_moldClaw").join("usr/lib/moldclaw/resources/node-portable"),
+            // 4. DEB/RPM 설치 경로
+            PathBuf::from("/usr/lib/moldclaw/resources/node-portable"),
+            PathBuf::from("/opt/moldclaw/resources/node-portable"),
+            // 5. Windows 설치 경로
+            PathBuf::from("C:\\Program Files\\moldClaw\\resources\\node-portable"),
+            // 6. 실행 파일 디렉토리 기준
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                .map(|p| p.join("resources/node-portable"))
+                .unwrap_or_default(),
+            // 7. AppData 폴백
             app_handle.path().app_data_dir()
                 .unwrap_or_default()
                 .join("resources/node-portable"),
@@ -48,7 +64,21 @@ impl OpenClawManager {
         let bundled_node = if cfg!(windows) {
             node_dir.join("node.exe")
         } else {
-            node_dir.join("bin/node")
+            let node_path = node_dir.join("bin/node");
+            // Linux/macOS에서 실행 권한 확인 및 설정
+            #[cfg(unix)]
+            {
+                if node_path.exists() {
+                    use std::os::unix::fs::PermissionsExt;
+                    let mut perms = fs::metadata(&node_path)
+                        .map_err(|e| format!("권한 확인 실패: {}", e))?
+                        .permissions();
+                    perms.set_mode(0o755); // rwxr-xr-x
+                    fs::set_permissions(&node_path, perms)
+                        .map_err(|e| format!("권한 설정 실패: {}", e))?;
+                }
+            }
+            node_path
         };
         
         let bundled_npm = if cfg!(windows) {
@@ -57,10 +87,27 @@ impl OpenClawManager {
             node_dir.join("bin/npm")
         };
         
-        // 실제 사용자 홈
+        // 실제 사용자 홈 (한글 경로 대응)
         let real_home = dirs::home_dir()
             .ok_or("홈 디렉토리를 찾을 수 없습니다")?;
+        
+        eprintln!("User home directory: {:?}", real_home);
+        eprintln!("Home directory exists: {}", real_home.exists());
+        
         let openclaw_home = real_home.join(".openclaw");
+        
+        // Windows에서 대체 경로 시도
+        #[cfg(windows)]
+        let openclaw_home = if !real_home.exists() || real_home.to_string_lossy().contains("한글") {
+            // USERPROFILE 환경변수 사용
+            if let Ok(userprofile) = std::env::var("USERPROFILE") {
+                PathBuf::from(userprofile).join(".openclaw")
+            } else {
+                openclaw_home
+            }
+        } else {
+            openclaw_home
+        };
         
         // OpenClaw 설치 위치
         let install_dir = dirs::data_local_dir()
@@ -79,6 +126,28 @@ impl OpenClawManager {
         eprintln!("Checking bundled node at: {:?}", self.bundled_node);
         eprintln!("Node exists: {}", self.bundled_node.exists());
         eprintln!("NPM exists: {}", self.bundled_npm.exists());
+        
+        // 디렉토리 내용 확인
+        if let Some(parent) = self.bundled_node.parent() {
+            eprintln!("Parent directory: {:?}", parent);
+            if parent.exists() {
+                eprintln!("Directory contents:");
+                if let Ok(entries) = fs::read_dir(parent) {
+                    for entry in entries.flatten() {
+                        eprintln!("  - {:?}", entry.file_name());
+                    }
+                }
+            } else {
+                eprintln!("Parent directory does not exist!");
+            }
+        }
+        
+        // 파일 크기 확인
+        if self.bundled_node.exists() {
+            if let Ok(metadata) = fs::metadata(&self.bundled_node) {
+                eprintln!("Node.js file size: {} bytes", metadata.len());
+            }
+        }
         
         self.bundled_node.exists() && self.bundled_npm.exists()
     }

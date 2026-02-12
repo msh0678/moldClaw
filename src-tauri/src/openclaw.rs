@@ -8,7 +8,10 @@ use crate::openclaw_manager::get_manager;
 pub async fn is_node_installed() -> Result<bool, String> {
     match get_manager() {
         Ok(manager) => Ok(manager.check_node_bundled().await),
-        Err(_) => Ok(false),
+        Err(e) => {
+            eprintln!("Manager 초기화 실패: {}", e);
+            Ok(false)
+        }
     }
 }
 
