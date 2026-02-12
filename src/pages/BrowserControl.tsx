@@ -64,14 +64,7 @@ export const BrowserControl: React.FC<BrowserControlProps> = ({ onNext, onBack }
         🌐 브라우저 자동 제어
       </h2>
       
-      {/* 브라우저 감지 */}
-      {typeof window !== 'undefined' && !navigator.userAgent.toLowerCase().includes('chrome') && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
-          <p className="text-xs text-orange-800">
-            ⚠️ Chrome 브라우저가 아닌 것 같습니다. 이 기능은 Chrome에서 최적화되어 있습니다.
-          </p>
-        </div>
-      )}
+      {/* Chrome 설치 여부는 백엔드에서 확인하므로 여기서는 안내만 */}
 
       {!isInstalled && !skipBrowser && (
         <>

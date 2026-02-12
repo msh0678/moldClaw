@@ -208,12 +208,18 @@ impl OpenClawManager {
             // npm 전역 설치 기본 위치들
             let possible_paths = vec![
                 // npm 기본 전역 설치 위치
+                dirs::data_dir().map(|d| d.join("npm\\openclaw.cmd")),
+                dirs::data_dir().map(|d| d.join("npm\\openclaw.ps1")),
+                // 대체 npm 위치
                 dirs::home_dir().map(|h| h.join("AppData\\Roaming\\npm\\openclaw.cmd")),
                 dirs::home_dir().map(|h| h.join("AppData\\Roaming\\npm\\openclaw.ps1")),
-                // Chocolatey
-                PathBuf::from("C:\\ProgramData\\chocolatey\\bin\\openclaw.exe").into(),
+                // Chocolatey - 환경변수 기반
+                std::env::var("ProgramData").ok()
+                    .map(|p| PathBuf::from(p).join("chocolatey\\bin\\openclaw.exe")),
                 // Scoop
                 dirs::home_dir().map(|h| h.join("scoop\\shims\\openclaw.cmd")),
+                // LOCALAPPDATA 기반
+                dirs::data_local_dir().map(|d| d.join("npm\\openclaw.cmd")),
             ];
             
             for path_option in possible_paths {
@@ -225,9 +231,9 @@ impl OpenClawManager {
                 }
             }
             
-            // where.exe로 PATH 검색
+            // where.exe로 PATH 검색 (에러 출력 억제)
             if let Ok(output) = Command::new("cmd")
-                .args(["/C", "where openclaw"])
+                .args(["/C", "where openclaw 2>nul"])
                 .output() {
                 if output.status.success() {
                     let paths = String::from_utf8_lossy(&output.stdout);
@@ -550,11 +556,14 @@ impl OpenClawManager {
         #[cfg(windows)]
         {
             let known_locations = vec![
-                // npm 전역 설치
-                dirs::home_dir().map(|h| h.join("AppData\\Roaming\\npm\\openclaw.cmd")),
-                dirs::home_dir().map(|h| h.join("AppData\\Roaming\\npm\\openclaw.ps1")),
+                // npm 전역 설치 - dirs API 사용
+                dirs::data_dir().map(|d| d.join("npm\\openclaw.cmd")),
+                dirs::data_dir().map(|d| d.join("npm\\openclaw.ps1")),
                 // node_modules/.bin 스타일
-                dirs::home_dir().map(|h| h.join("AppData\\Roaming\\npm\\node_modules\\.bin\\openclaw.cmd")),
+                dirs::data_dir().map(|d| d.join("npm\\node_modules\\.bin\\openclaw.cmd")),
+                // 환경변수 기반
+                std::env::var("APPDATA").ok()
+                    .map(|p| PathBuf::from(p).join("npm\\openclaw.cmd")),
             ];
             
             for path_option in known_locations {
@@ -567,7 +576,7 @@ impl OpenClawManager {
             
             // cmd /C where 사용 (더 안정적)
             if let Ok(output) = Command::new("cmd")
-                .args(["/C", "where openclaw"])
+                .args(["/C", "where openclaw 2>nul"])
                 .output() {
                 if output.status.success() {
                     let paths = String::from_utf8_lossy(&output.stdout);
@@ -606,19 +615,35 @@ impl OpenClawManager {
     
     fn get_node_path(&self) -> String {
         self.bundled_node.parent()
-            .unwrap()
-            .to_string_lossy()
-            .to_string()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| {
+                eprintln!("경고: Node.js 부모 디렉토리를 찾을 수 없습니다");
+                String::new()
+            })
     }
     
     fn get_full_path(&self) -> String {
         let node_path = self.get_node_path();
         let system_path = std::env::var("PATH").unwrap_or_default();
         
-        if cfg!(windows) {
-            format!("{};{}", node_path, system_path)
-        } else {
-            format!("{}:{}", node_path, system_path)
+        #[cfg(windows)]
+        {
+            // Windows: 세미콜론 구분, 중복 제거
+            if system_path.contains(&node_path) {
+                system_path
+            } else {
+                format!("{};{}", node_path, system_path)
+            }
+        }
+        
+        #[cfg(not(windows))]
+        {
+            // Unix: 콜론 구분
+            if system_path.contains(&node_path) {
+                system_path
+            } else {
+                format!("{}:{}", node_path, system_path)
+            }
         }
     }
 }

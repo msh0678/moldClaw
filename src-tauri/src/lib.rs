@@ -267,18 +267,30 @@ pub fn run() {
                     
                     // 2. Windows: taskkill 사용
                     println!("2. 남은 프로세스 강제 종료...");
-                    let _ = std::process::Command::new("taskkill")
-                        .args(["/F", "/IM", "openclaw.exe"])
+                    
+                    // taskkill 시도 (관리자 권한 없어도 자신의 프로세스는 종료 가능)
+                    let _ = std::process::Command::new("cmd")
+                        .args(["/C", "taskkill /F /IM openclaw.exe 2>nul"])
                         .output();
                     
-                    let _ = std::process::Command::new("taskkill")
-                        .args(["/F", "/IM", "openclaw-gateway.exe"])
+                    let _ = std::process::Command::new("cmd")
+                        .args(["/C", "taskkill /F /IM openclaw-gateway.exe 2>nul"])
                         .output();
                     
-                    // Windows는 wmic로 프로세스 찾기
-                    let _ = std::process::Command::new("wmic")
-                        .args(["process", "where", "name like '%openclaw%'", "delete"])
+                    let _ = std::process::Command::new("cmd")
+                        .args(["/C", "taskkill /F /IM node.exe /FI \"WINDOWTITLE eq *openclaw*\" 2>nul"])
                         .output();
+                    
+                    // wmic는 Windows 11에서 deprecated, 조건부 사용
+                    if let Ok(output) = std::process::Command::new("cmd")
+                        .args(["/C", "wmic /?"])
+                        .output() {
+                        if output.status.success() {
+                            let _ = std::process::Command::new("cmd")
+                                .args(["/C", "wmic process where \"name like '%openclaw%'\" delete"])
+                                .output();
+                        }
+                    }
                 }
                 
                 #[cfg(not(windows))]
