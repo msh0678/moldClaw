@@ -18,7 +18,33 @@ impl OpenClawManager {
             .resource_dir()
             .map_err(|e| format!("리소스 디렉토리 오류: {}", e))?;
         
+        // 디버깅을 위한 경로 출력
+        eprintln!("Resource directory: {:?}", resource_dir);
+        
         let node_dir = resource_dir.join("node-portable");
+        eprintln!("Node directory: {:?}", node_dir);
+        eprintln!("Node directory exists: {}", node_dir.exists());
+        
+        // 대체 경로들 시도
+        let possible_dirs = vec![
+            resource_dir.join("node-portable"),
+            resource_dir.join("_up_/src-tauri/resources/node-portable"),
+            app_handle.path().app_data_dir()
+                .unwrap_or_default()
+                .join("resources/node-portable"),
+        ];
+        
+        let mut found_dir = None;
+        for dir in &possible_dirs {
+            eprintln!("Trying directory: {:?}, exists: {}", dir, dir.exists());
+            if dir.exists() {
+                found_dir = Some(dir.clone());
+                break;
+            }
+        }
+        
+        let node_dir = found_dir.unwrap_or(node_dir);
+        
         let bundled_node = if cfg!(windows) {
             node_dir.join("node.exe")
         } else {
@@ -50,6 +76,10 @@ impl OpenClawManager {
     }
     
     pub async fn check_node_bundled(&self) -> bool {
+        eprintln!("Checking bundled node at: {:?}", self.bundled_node);
+        eprintln!("Node exists: {}", self.bundled_node.exists());
+        eprintln!("NPM exists: {}", self.bundled_npm.exists());
+        
         self.bundled_node.exists() && self.bundled_npm.exists()
     }
     
