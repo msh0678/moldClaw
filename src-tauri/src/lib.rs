@@ -177,6 +177,11 @@ async fn apply_default_security_settings() -> Result<(), String> {
     openclaw::apply_default_security_settings().await
 }
 
+#[tauri::command]
+async fn get_install_path() -> Result<String, String> {
+    openclaw::get_install_path().await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -219,6 +224,8 @@ pub fn run() {
             get_configured_integrations,
             // 보안 설정
             apply_default_security_settings,
+            // 경로 정보
+            get_install_path,
         ])
         .setup(|app| {
             // OpenClaw 관리자 초기화

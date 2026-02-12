@@ -975,3 +975,10 @@ pub async fn apply_default_security_settings() -> Result<(), String> {
     write_config(&config)?;
     Ok(())
 }
+
+
+/// 실제 설치 경로 반환
+pub async fn get_install_path() -> Result<String, String> {
+    let manager = get_manager()?;
+    Ok(manager.get_install_dir().to_string_lossy().to_string())
+}

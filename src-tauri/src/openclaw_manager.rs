@@ -77,9 +77,9 @@ impl OpenClawManager {
         
         let openclaw_home = real_home.join(".openclaw");
         
-        // Windows에서 대체 경로 시도
+        // Windows에서 대체 경로 시도 (경로가 유효하지 않은 경우만)
         #[cfg(windows)]
-        let openclaw_home = if !real_home.exists() || real_home.to_string_lossy().contains("한글") {
+        let openclaw_home = if !real_home.exists() {
             // USERPROFILE 환경변수 사용
             if let Ok(userprofile) = std::env::var("USERPROFILE") {
                 PathBuf::from(userprofile).join(".openclaw")
@@ -124,6 +124,10 @@ impl OpenClawManager {
             openclaw_home,
             install_dir,
         })
+    }
+    
+    pub fn get_install_dir(&self) -> &PathBuf {
+        &self.install_dir
     }
     
     pub async fn check_node_bundled(&self) -> bool {
@@ -336,6 +340,15 @@ impl OpenClawManager {
             cmd.env("HOME", &home);
             #[cfg(windows)]
             cmd.env("USERPROFILE", &home);
+        } else {
+            // 폴백: 환경변수에서 가져오기
+            if let Ok(home_env) = std::env::var("HOME") {
+                cmd.env("HOME", home_env);
+            }
+            #[cfg(windows)]
+            if let Ok(userprofile) = std::env::var("USERPROFILE") {
+                cmd.env("USERPROFILE", userprofile);
+            }
         }
         
         // Node.js 경로 명시적으로 설정

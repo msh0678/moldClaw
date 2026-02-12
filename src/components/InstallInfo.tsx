@@ -1,18 +1,33 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 
 export const InstallInfo: React.FC = () => {
+  const [installPath, setInstallPath] = useState<string>('');
+
+  useEffect(() => {
+    // 실제 설치 경로를 백엔드에서 가져오기
+    invoke<string>('get_install_path')
+      .then(setInstallPath)
+      .catch(() => {
+        // 폴백: 일반적인 경로 표시
+        if (process.platform === 'win32') {
+          setInstallPath('%LOCALAPPDATA%\\Programs\\openclaw\\');
+        } else if (process.platform === 'darwin') {
+          setInstallPath('~/Library/Application Support/openclaw/');
+        } else {
+          setInstallPath('~/.local/share/openclaw/');
+        }
+      });
+  }, []);
+
   return (
     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
       <h3 className="font-bold text-blue-900 mb-2">📁 OpenClaw 설치 위치</h3>
       <p className="text-sm text-blue-800 mb-2">
         OpenClaw는 전체 파일시스템 접근을 위해 다음 위치에 설치됩니다:
       </p>
-      <code className="block bg-white p-2 rounded text-xs mb-2">
-        {process.platform === 'win32' 
-          ? 'C:\\Users\\사용자명\\AppData\\Local\\Programs\\openclaw\\'
-          : process.platform === 'darwin'
-          ? '~/Library/Application Support/openclaw/'
-          : '~/.local/share/openclaw/'}
+      <code className="block bg-white p-2 rounded text-xs mb-2 break-all">
+        {installPath || '계산 중...'}
       </code>
       <p className="text-xs text-blue-600">
         💡 이 위치는 OS별 표준 프로그램 설치 위치로, 
