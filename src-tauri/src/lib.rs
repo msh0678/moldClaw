@@ -170,6 +170,11 @@ async fn restart_gateway() -> Result<String, String> {
     openclaw::restart_gateway().await
 }
 
+#[tauri::command]
+async fn apply_default_security_settings() -> Result<(), String> {
+    openclaw::apply_default_security_settings().await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -210,6 +215,8 @@ pub fn run() {
             // 통합 설정
             set_env_config,
             get_configured_integrations,
+            // 보안 설정
+            apply_default_security_settings,
         ])
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {

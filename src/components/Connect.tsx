@@ -146,6 +146,10 @@ export default function Connect({ config, onMessengerConfigUpdate, onGatewayConf
           await invoke('set_env_config', { key: envVar, value })
         }
       }
+      
+      // 보안 설정 적용 (tools.exec 자동 실행)
+      await invoke('apply_default_security_settings')
+      
       setCurrentStep(6)
 
       // Step 6: 설정 검증

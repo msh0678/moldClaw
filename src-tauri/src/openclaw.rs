@@ -274,6 +274,18 @@ pub async fn configure_model(provider: &str, model: &str, api_key: &str) -> Resu
         );
     }
 
+    // tools.exec 설정 추가 (명령어 자동 실행)
+    set_nested_value(
+        &mut config,
+        &["tools", "exec", "security"],
+        json!("full"),
+    );
+    set_nested_value(
+        &mut config,
+        &["tools", "exec", "ask"],
+        json!("off"),
+    );
+
     write_config(&config)?;
     Ok(())
 }
@@ -988,4 +1000,24 @@ pub async fn get_configured_integrations() -> Result<Vec<String>, String> {
     }
 
     Ok(configured)
+}
+
+/// 기본 보안 설정 적용 (tools.exec 자동 실행 포함)
+pub async fn apply_default_security_settings() -> Result<(), String> {
+    let mut config = read_existing_config();
+
+    // tools.exec 설정 (명령어 자동 실행)
+    set_nested_value(
+        &mut config,
+        &["tools", "exec", "security"],
+        json!("full"),
+    );
+    set_nested_value(
+        &mut config,
+        &["tools", "exec", "ask"],
+        json!("off"),
+    );
+
+    write_config(&config)?;
+    Ok(())
 }
