@@ -2,43 +2,26 @@ use std::process::Command;
 use std::path::PathBuf;
 use std::fs;
 use serde_json::{json, Value};
+use crate::openclaw_manager::get_manager;
 
-/// Node.js 설치 여부 확인
+/// Node.js 설치 여부 확인 (번들된 Node.js 사용)
 pub async fn is_node_installed() -> Result<bool, String> {
-    let output = Command::new("node")
-        .arg("--version")
-        .output();
-    
-    match output {
-        Ok(o) => Ok(o.status.success()),
+    match get_manager() {
+        Ok(manager) => Ok(manager.check_node_bundled().await),
         Err(_) => Ok(false),
     }
 }
 
 /// Node.js 버전 확인
 pub async fn get_node_version() -> Result<String, String> {
-    let output = Command::new("node")
-        .arg("--version")
-        .output()
-        .map_err(|e| format!("Node.js 확인 실패: {}", e))?;
-    
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        Err("Node.js가 설치되어 있지 않습니다".to_string())
-    }
+    let manager = get_manager()?;
+    manager.get_node_version().await
 }
 
 /// OpenClaw 설치 여부 확인
 pub async fn is_openclaw_installed() -> Result<bool, String> {
-    let output = Command::new("openclaw")
-        .arg("--version")
-        .output();
-    
-    match output {
-        Ok(o) => Ok(o.status.success()),
-        Err(_) => Ok(false),
-    }
+    let manager = get_manager()?;
+    Ok(manager.check_openclaw_installed().await)
 }
 
 /// OpenClaw 버전 확인
@@ -55,23 +38,10 @@ pub async fn get_openclaw_version() -> Result<String, String> {
     }
 }
 
-/// OpenClaw 설치 (npm install -g openclaw)
+/// OpenClaw 설치 (번들된 npm 사용)
 pub async fn install_openclaw() -> Result<String, String> {
-    let output = Command::new("npm")
-        .args(["install", "-g", "openclaw"])
-        .output()
-        .map_err(|e| format!("설치 명령 실행 실패: {}", e))?;
-
-    if output.status.success() {
-        Ok("OpenClaw 설치 완료!".to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.contains("EACCES") || stderr.contains("permission") {
-            Err("권한 문제로 설치 실패. 터미널에서 수동 설치 필요:\nsudo npm install -g openclaw".to_string())
-        } else {
-            Err(format!("설치 실패: {}", stderr))
-        }
-    }
+    let manager = get_manager()?;
+    manager.install_openclaw().await
 }
 
 /// OpenClaw 설정 디렉토리
@@ -554,15 +524,10 @@ pub async fn configure_whatsapp_full(
     Ok(())
 }
 
-/// Gateway 시작 (foreground 모드)
+/// Gateway 시작 (번들된 OpenClaw 사용)
 pub async fn start_gateway() -> Result<(), String> {
-    // daemon 대신 foreground로 시작 (개발/테스트용)
-    Command::new("openclaw")
-        .args(["gateway", "start"])
-        .spawn()
-        .map_err(|e| format!("Gateway 시작 실패: {}", e))?;
-
-    Ok(())
+    let manager = get_manager()?;
+    manager.start_gateway().await
 }
 
 /// Gateway 시작 (daemon 모드 - 서비스 설치)
@@ -596,20 +561,9 @@ pub async fn install_and_start_service() -> Result<String, String> {
 
 /// Gateway 상태 확인
 pub async fn get_status() -> Result<String, String> {
-    let output = Command::new("openclaw")
-        .args(["gateway", "status"])
-        .output()
-        .map_err(|e| format!("상태 확인 실패: {}", e))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if stdout.contains("online") || stdout.contains("running") {
-            Ok("running".to_string())
-        } else {
-            Ok("stopped".to_string())
-        }
-    } else {
-        Ok("stopped".to_string())
+    match get_manager() {
+        Ok(manager) => manager.get_status().await,
+        Err(_) => Ok("stopped".to_string()),
     }
 }
 

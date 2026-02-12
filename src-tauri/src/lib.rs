@@ -1,4 +1,5 @@
 mod openclaw;
+mod openclaw_manager;
 
 #[tauri::command]
 async fn check_node_installed() -> Result<bool, String> {
@@ -218,6 +219,12 @@ pub fn run() {
             // 보안 설정
             apply_default_security_settings,
         ])
+        .setup(|app| {
+            // OpenClaw 관리자 초기화
+            openclaw_manager::init_manager(&app.handle())
+                .map_err(|e| format!("OpenClaw 관리자 초기화 실패: {}", e))?;
+            Ok(())
+        })
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 println!("moldClaw 종료 중... OpenClaw Gateway 정리 시작");
