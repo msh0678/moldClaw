@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 /// Tauri의 리소스 해석 시스템을 활용한 경로 찾기
 pub fn find_node_portable(app_handle: &AppHandle) -> Result<PathBuf, String> {
@@ -12,11 +12,14 @@ pub fn find_node_portable(app_handle: &AppHandle) -> Result<PathBuf, String> {
     
     for path in &resource_paths {
         match app_handle.path().resolve(path, tauri::path::BaseDirectory::Resource) {
-            Ok(resolved_path) if resolved_path.exists() => {
-                eprintln!("[Tauri Resolve] ✓ Found at: {:?}", resolved_path);
-                return Ok(resolved_path);
+            Ok(resolved_path) => {
+                if resolved_path.exists() {
+                    eprintln!("[Tauri Resolve] ✓ Found at: {:?}", resolved_path);
+                    return Ok(resolved_path);
+                } else {
+                    eprintln!("[Tauri Resolve] Path resolved but not exists: {:?}", resolved_path);
+                }
             }
-            Ok(p) => eprintln!("[Tauri Resolve] Path resolved but not exists: {:?}", p),
             Err(e) => eprintln!("[Tauri Resolve] Failed to resolve {}: {}", path, e),
         }
     }
@@ -61,8 +64,8 @@ pub fn find_node_portable(app_handle: &AppHandle) -> Result<PathBuf, String> {
     }
     
     // 방법 4: AppData에 설치된 Node.js 확인
-    if let Ok(app_data) = app_handle.path().app_data_dir() {
-        let installed_node = app_data.join("node-portable");
+    if let Ok(app_data_dir) = app_handle.path().app_data_dir() {
+        let installed_node: PathBuf = app_data_dir.join("node-portable");
         if installed_node.exists() {
             eprintln!("[AppData] ✓ Found installed Node.js at: {:?}", installed_node);
             return Ok(installed_node);

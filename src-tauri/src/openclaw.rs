@@ -999,12 +999,14 @@ pub async fn install_browser_control() -> Result<String, String> {
             // browser control server 설치 시도
             let install_result = if status_output.contains("not found") || status_output.contains("error") {
                 // browser control server가 없으면 설치 시도
-                manager.run_openclaw(vec!["browser", "control", "install"]).await
-                    .or_else(|_| {
+                match manager.run_openclaw(vec!["browser", "control", "install"]).await {
+                    Ok(output) => Ok(output),
+                    Err(_) => {
                         // 대체 명령: browser start
                         eprintln!("browser control install 실패, browser start 시도");
                         manager.run_openclaw(vec!["browser", "start"]).await
-                    })
+                    }
+                }
             } else {
                 Ok("브라우저 제어가 이미 활성화되어 있습니다.".to_string())
             };
