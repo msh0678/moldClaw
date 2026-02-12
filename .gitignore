@@ -35,3 +35,7 @@ Cargo.lock
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+# Node.js Portable (각자 다운로드)
+src-tauri/resources/node-portable/**
+!src-tauri/resources/node-portable/.gitkeep
