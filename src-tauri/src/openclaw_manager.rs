@@ -170,31 +170,86 @@ impl OpenClawManager {
     }
     
     pub async fn check_openclaw_installed(&self) -> bool {
+        // 1. 우리가 설치한 위치 확인
         let openclaw_bin = self.get_openclaw_bin();
-        openclaw_bin.exists()
-    }
-    
-    pub async fn install_openclaw(&self) -> Result<String, String> {
-        eprintln!("OpenClaw 설치 시작...");
-        eprintln!("설치 디렉토리: {:?}", self.install_dir);
-        eprintln!("npm 경로: {:?}", self.bundled_npm);
+        if openclaw_bin.exists() {
+            eprintln!("OpenClaw 발견 (설치 디렉토리): {:?}", openclaw_bin);
+            return true;
+        }
         
-        // 설치 디렉토리 생성 (이미 존재하면 확인)
-        if self.install_dir.exists() {
-            // 기존 설치가 있는지 확인
-            let existing_openclaw = self.get_openclaw_bin();
-            if existing_openclaw.exists() {
-                eprintln!("⚠️  기존 OpenClaw 설치 발견: {:?}", existing_openclaw);
-                
-                // 버전 확인 시도
-                if let Ok(version_output) = Command::new(&existing_openclaw)
-                    .arg("--version")
-                    .output() {
-                    let version = String::from_utf8_lossy(&version_output.stdout);
-                    eprintln!("   기존 버전: {}", version.trim());
+        // 2. 시스템 전역 설치 확인 (npm install -g openclaw)
+        if let Ok(output) = Command::new("which")
+            .arg("openclaw")
+            .output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    eprintln!("OpenClaw 발견 (시스템 전역): {}", path);
+                    return true;
                 }
             }
         }
+        
+        // Windows에서는 where 명령 사용
+        #[cfg(windows)]
+        if let Ok(output) = Command::new("where")
+            .arg("openclaw")
+            .output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    eprintln!("OpenClaw 발견 (시스템 전역): {}", path);
+                    return true;
+                }
+            }
+        }
+        
+        false
+    }
+    
+    pub async fn get_openclaw_version(&self) -> Result<String, String> {
+        let openclaw_bin = self.find_openclaw_executable()?;
+        
+        let output = Command::new(&openclaw_bin)
+            .arg("--version")
+            .output()
+            .map_err(|e| format!("버전 확인 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            Err("버전 정보를 가져올 수 없습니다".to_string())
+        }
+    }
+    
+    pub async fn install_openclaw(&self) -> Result<String, String> {
+        eprintln!("OpenClaw 설치 확인...");
+        eprintln!("설치 디렉토리: {:?}", self.install_dir);
+        
+        // 기존 설치 확인
+        if self.check_openclaw_installed().await {
+            let existing_openclaw = self.get_openclaw_bin();
+            eprintln!("✓ 기존 OpenClaw 설치 발견: {:?}", existing_openclaw);
+            
+            // 버전 확인
+            if let Ok(version_output) = Command::new(&existing_openclaw)
+                .arg("--version")
+                .output() {
+                let version = String::from_utf8_lossy(&version_output.stdout);
+                let version_str = version.trim();
+                eprintln!("✓ 설치된 버전: {}", version_str);
+                
+                // 작동 확인
+                if version_str.contains("openclaw") || version_str.contains("OpenClaw") {
+                    return Ok(format!("OpenClaw가 이미 설치되어 있습니다 (버전: {})", version_str));
+                }
+            }
+            
+            eprintln!("⚠️  기존 설치가 손상되었을 수 있습니다. 재설치를 진행합니다...");
+        }
+        
+        eprintln!("OpenClaw 신규 설치 시작...");
+        eprintln!("npm 경로: {:?}", self.bundled_npm);
         
         fs::create_dir_all(&self.install_dir)
             .map_err(|e| format!("설치 디렉토리 생성 실패: {} (경로: {:?})", e, self.install_dir))?;
@@ -265,12 +320,8 @@ impl OpenClawManager {
     }
     
     pub async fn run_openclaw(&self, args: Vec<&str>) -> Result<String, String> {
-        let openclaw_bin = self.get_openclaw_bin();
-        
-        if !openclaw_bin.exists() {
-            eprintln!("OpenClaw 실행파일이 없음: {:?}", openclaw_bin);
-            return Err(format!("OpenClaw가 설치되지 않았습니다. 경로: {:?}", openclaw_bin));
-        }
+        // 실행할 OpenClaw 찾기
+        let openclaw_bin = self.find_openclaw_executable()?;
         
         eprintln!("OpenClaw 실행: {:?} {:?}", openclaw_bin, args);
         
@@ -383,6 +434,30 @@ impl OpenClawManager {
             
             openclaw_path
         }
+    }
+    
+    fn find_openclaw_executable(&self) -> Result<PathBuf, String> {
+        // 1. 우리가 설치한 위치 확인
+        let local_bin = self.get_openclaw_bin();
+        if local_bin.exists() {
+            return Ok(local_bin);
+        }
+        
+        // 2. 시스템 PATH에서 찾기
+        if let Ok(output) = Command::new(if cfg!(windows) { "where" } else { "which" })
+            .arg("openclaw")
+            .output() {
+            if output.status.success() {
+                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path_str.is_empty() {
+                    // Windows의 where는 여러 줄 출력 가능
+                    let first_path = path_str.lines().next().unwrap_or(&path_str);
+                    return Ok(PathBuf::from(first_path));
+                }
+            }
+        }
+        
+        Err("OpenClaw가 설치되지 않았습니다. 'OpenClaw 설치' 버튼을 클릭하세요.".to_string())
     }
     
     fn get_node_path(&self) -> String {
