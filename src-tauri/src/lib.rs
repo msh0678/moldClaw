@@ -1,5 +1,6 @@
 mod openclaw;
 mod openclaw_manager;
+mod resource_resolver;
 
 #[tauri::command]
 async fn check_node_installed() -> Result<bool, String> {

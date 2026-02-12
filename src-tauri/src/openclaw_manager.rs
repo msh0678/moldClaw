@@ -2,6 +2,7 @@ use std::process::Command;
 use std::path::PathBuf;
 use std::fs;
 use tauri::{AppHandle, Manager};
+use crate::resource_resolver;
 
 pub struct OpenClawManager {
     bundled_node: PathBuf,
@@ -45,116 +46,27 @@ impl OpenClawManager {
     }
     
     pub fn new(app_handle: &AppHandle) -> Result<Self, String> {
-        // Tauri의 resolve_resource를 사용하여 번들된 리소스 찾기
-        let node_portable_path = app_handle
-            .path()
-            .resolve("resources/node-portable", tauri::path::BaseDirectory::Resource)
-            .map_err(|e| format!("node-portable 리소스 경로 오류: {}", e))?;
+        // 새로운 resolver 사용
+        let node_dir = resource_resolver::find_node_portable(app_handle)?;
         
-        eprintln!("Resolved node-portable path: {:?}", node_portable_path);
-        eprintln!("Path exists: {}", node_portable_path.exists());
+        let bundled_node = resource_resolver::get_node_executable(&node_dir);
+        let bundled_npm = resource_resolver::get_npm_executable(&node_dir);
         
-        // resolve_resource가 실패할 경우 대체 경로들 시도
-        let possible_dirs = if node_portable_path.exists() {
-            vec![node_portable_path]
-        } else {
-            // 현재 실행 파일 위치 기준으로 찾기
-            let exe_path = std::env::current_exe()
-                .map_err(|e| format!("실행 파일 경로 오류: {}", e))?;
-            
-            let exe_dir = exe_path.parent()
-                .ok_or("실행 파일 디렉토리를 찾을 수 없습니다")?;
-            
-            eprintln!("Executable directory: {:?}", exe_dir);
-            
-            vec![
-                // 1. 실행파일과 같은 디렉토리
-                exe_dir.join("resources/node-portable"),
-                // 2. 실행파일 상위 디렉토리 (macOS .app 구조)
-                exe_dir.parent()
-                    .map(|p| p.join("Resources/resources/node-portable"))
-                    .unwrap_or_default(),
-                // 3. 개발 환경
-                exe_dir.join("../src-tauri/resources/node-portable"),
-                // 4. AppImage 임시 마운트
-                PathBuf::from(format!("/tmp/.mount_moldClaw{}/usr/lib/moldclaw/resources/node-portable", 
-                    std::process::id())),
-                // 5. 시스템 설치 경로 (Linux)
-                PathBuf::from("/usr/lib/moldclaw/resources/node-portable"),
-                PathBuf::from("/opt/moldclaw/resources/node-portable"),
-                // 6. Windows Program Files (다양한 드라이브)
-                PathBuf::from("C:\\Program Files\\moldClaw\\resources\\node-portable"),
-                PathBuf::from("D:\\Program Files\\moldClaw\\resources\\node-portable"),
-                // 7. 사용자 로컬 설치
-                dirs::home_dir()
-                    .map(|h| h.join("AppData/Local/moldClaw/resources/node-portable"))
-                    .unwrap_or_default(),
-                // 8. macOS Applications
-                PathBuf::from("/Applications/moldClaw.app/Contents/Resources/resources/node-portable"),
-            ]
-        };
-        
-        // Node.js 디렉토리 찾기
-        let mut found_dir = None;
-        for dir in &possible_dirs {
-            eprintln!("Checking directory: {:?}", dir);
-            if dir.exists() {
-                // node 실행파일이 실제로 있는지 확인
-                let node_exe = if cfg!(windows) {
-                    dir.join("node.exe")
-                } else {
-                    dir.join("bin/node")
-                };
-                
-                eprintln!("  Looking for: {:?}", node_exe);
-                if node_exe.exists() {
-                    eprintln!("  ✓ Found Node.js at: {:?}", dir);
-                    found_dir = Some(dir.clone());
-                    break;
-                } else {
-                    eprintln!("  ✗ No node executable in this directory");
-                }
-            }
-        }
-        
-        let node_dir = found_dir
-            .ok_or_else(|| {
-                let msg = format!(
-                    "Node.js portable을 찾을 수 없습니다. 시도한 경로:\n{}",
-                    possible_dirs.iter()
-                        .map(|p| format!("  - {:?}", p))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                );
-                eprintln!("{}", msg);
-                msg
-            })?;
-        
-        let bundled_node = if cfg!(windows) {
-            node_dir.join("node.exe")
-        } else {
-            let node_path = node_dir.join("bin/node");
-            // Linux/macOS에서 실행 권한 확인 및 설정
-            #[cfg(unix)]
-            {
-                if node_path.exists() {
-                    use std::os::unix::fs::PermissionsExt;
-                    let mut perms = fs::metadata(&node_path)
+        // Unix 시스템에서 실행 권한 설정
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for path in &[&bundled_node, &bundled_npm] {
+                if path.exists() {
+                    let mut perms = fs::metadata(path)
                         .map_err(|e| format!("권한 확인 실패: {}", e))?
                         .permissions();
                     perms.set_mode(0o755); // rwxr-xr-x
-                    fs::set_permissions(&node_path, perms)
+                    fs::set_permissions(path, perms)
                         .map_err(|e| format!("권한 설정 실패: {}", e))?;
                 }
             }
-            node_path
-        };
-        
-        let bundled_npm = if cfg!(windows) {
-            node_dir.join("npm.cmd")
-        } else {
-            node_dir.join("bin/npm")
-        };
+        }
         
         // 실제 사용자 홈 (한글 경로 대응)
         let real_home = dirs::home_dir()
