@@ -11,55 +11,124 @@ pub struct OpenClawManager {
 }
 
 impl OpenClawManager {
+    /// Node.js가 없으면 자동으로 다운로드하고 설치
+    pub async fn ensure_node_portable(app_handle: &AppHandle) -> Result<(), String> {
+        let app_data_dir = app_handle.path().app_data_dir()
+            .map_err(|e| format!("AppData 디렉토리 오류: {}", e))?;
+        
+        let node_install_dir = app_data_dir.join("resources/node-portable");
+        
+        // 이미 설치되어 있는지 확인
+        let node_exe = if cfg!(windows) {
+            node_install_dir.join("node.exe")
+        } else {
+            node_install_dir.join("bin/node")
+        };
+        
+        if node_exe.exists() {
+            eprintln!("Node.js already installed at: {:?}", node_install_dir);
+            return Ok(());
+        }
+        
+        eprintln!("Node.js not found. Installing to: {:?}", node_install_dir);
+        
+        // 디렉토리 생성
+        fs::create_dir_all(&node_install_dir)
+            .map_err(|e| format!("디렉토리 생성 실패: {}", e))?;
+        
+        // TODO: 실제 구현 시 Node.js 다운로드 로직 추가
+        // 1. https://nodejs.org에서 적절한 버전 다운로드
+        // 2. 압축 해제
+        // 3. 권한 설정
+        
+        Err("Node.js 자동 다운로드는 아직 구현되지 않았습니다. 수동으로 설치해주세요.".to_string())
+    }
+    
     pub fn new(app_handle: &AppHandle) -> Result<Self, String> {
-        // 번들된 Node.js 경로
-        let resource_dir = app_handle
+        // Tauri의 resolve_resource를 사용하여 번들된 리소스 찾기
+        let node_portable_path = app_handle
             .path()
-            .resource_dir()
-            .map_err(|e| format!("리소스 디렉토리 오류: {}", e))?;
+            .resolve("resources/node-portable", tauri::path::BaseDirectory::Resource)
+            .map_err(|e| format!("node-portable 리소스 경로 오류: {}", e))?;
         
-        // 디버깅을 위한 경로 출력
-        eprintln!("Resource directory: {:?}", resource_dir);
+        eprintln!("Resolved node-portable path: {:?}", node_portable_path);
+        eprintln!("Path exists: {}", node_portable_path.exists());
         
-        let node_dir = resource_dir.join("node-portable");
-        eprintln!("Node directory: {:?}", node_dir);
-        eprintln!("Node directory exists: {}", node_dir.exists());
+        // resolve_resource가 실패할 경우 대체 경로들 시도
+        let possible_dirs = if node_portable_path.exists() {
+            vec![node_portable_path]
+        } else {
+            // 현재 실행 파일 위치 기준으로 찾기
+            let exe_path = std::env::current_exe()
+                .map_err(|e| format!("실행 파일 경로 오류: {}", e))?;
+            
+            let exe_dir = exe_path.parent()
+                .ok_or("실행 파일 디렉토리를 찾을 수 없습니다")?;
+            
+            eprintln!("Executable directory: {:?}", exe_dir);
+            
+            vec![
+                // 1. 실행파일과 같은 디렉토리
+                exe_dir.join("resources/node-portable"),
+                // 2. 실행파일 상위 디렉토리 (macOS .app 구조)
+                exe_dir.parent()
+                    .map(|p| p.join("Resources/resources/node-portable"))
+                    .unwrap_or_default(),
+                // 3. 개발 환경
+                exe_dir.join("../src-tauri/resources/node-portable"),
+                // 4. AppImage 임시 마운트
+                PathBuf::from(format!("/tmp/.mount_moldClaw{}/usr/lib/moldclaw/resources/node-portable", 
+                    std::process::id())),
+                // 5. 시스템 설치 경로 (Linux)
+                PathBuf::from("/usr/lib/moldclaw/resources/node-portable"),
+                PathBuf::from("/opt/moldclaw/resources/node-portable"),
+                // 6. Windows Program Files (다양한 드라이브)
+                PathBuf::from("C:\\Program Files\\moldClaw\\resources\\node-portable"),
+                PathBuf::from("D:\\Program Files\\moldClaw\\resources\\node-portable"),
+                // 7. 사용자 로컬 설치
+                dirs::home_dir()
+                    .map(|h| h.join("AppData/Local/moldClaw/resources/node-portable"))
+                    .unwrap_or_default(),
+                // 8. macOS Applications
+                PathBuf::from("/Applications/moldClaw.app/Contents/Resources/resources/node-portable"),
+            ]
+        };
         
-        // 대체 경로들 시도 (개발/빌드 환경 모두 지원)
-        let possible_dirs = vec![
-            // 1. 기본 리소스 경로
-            resource_dir.join("node-portable"),
-            // 2. 개발 환경 (cargo run)
-            resource_dir.join("_up_/src-tauri/resources/node-portable"),
-            // 3. AppImage 환경
-            PathBuf::from("/tmp/.mount_moldClaw").join("usr/lib/moldclaw/resources/node-portable"),
-            // 4. DEB/RPM 설치 경로
-            PathBuf::from("/usr/lib/moldclaw/resources/node-portable"),
-            PathBuf::from("/opt/moldclaw/resources/node-portable"),
-            // 5. Windows 설치 경로
-            PathBuf::from("C:\\Program Files\\moldClaw\\resources\\node-portable"),
-            // 6. 실행 파일 디렉토리 기준
-            std::env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-                .map(|p| p.join("resources/node-portable"))
-                .unwrap_or_default(),
-            // 7. AppData 폴백
-            app_handle.path().app_data_dir()
-                .unwrap_or_default()
-                .join("resources/node-portable"),
-        ];
-        
+        // Node.js 디렉토리 찾기
         let mut found_dir = None;
         for dir in &possible_dirs {
-            eprintln!("Trying directory: {:?}, exists: {}", dir, dir.exists());
+            eprintln!("Checking directory: {:?}", dir);
             if dir.exists() {
-                found_dir = Some(dir.clone());
-                break;
+                // node 실행파일이 실제로 있는지 확인
+                let node_exe = if cfg!(windows) {
+                    dir.join("node.exe")
+                } else {
+                    dir.join("bin/node")
+                };
+                
+                eprintln!("  Looking for: {:?}", node_exe);
+                if node_exe.exists() {
+                    eprintln!("  ✓ Found Node.js at: {:?}", dir);
+                    found_dir = Some(dir.clone());
+                    break;
+                } else {
+                    eprintln!("  ✗ No node executable in this directory");
+                }
             }
         }
         
-        let node_dir = found_dir.unwrap_or(node_dir);
+        let node_dir = found_dir
+            .ok_or_else(|| {
+                let msg = format!(
+                    "Node.js portable을 찾을 수 없습니다. 시도한 경로:\n{}",
+                    possible_dirs.iter()
+                        .map(|p| format!("  - {:?}", p))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                );
+                eprintln!("{}", msg);
+                msg
+            })?;
         
         let bundled_node = if cfg!(windows) {
             node_dir.join("node.exe")
@@ -282,10 +351,32 @@ impl OpenClawManager {
 static mut OPENCLAW_MANAGER: Option<OpenClawManager> = None;
 
 pub fn init_manager(app_handle: &AppHandle) -> Result<(), String> {
-    unsafe {
-        OPENCLAW_MANAGER = Some(OpenClawManager::new(app_handle)?);
+    // 먼저 번들된 리소스에서 시도
+    match OpenClawManager::new(app_handle) {
+        Ok(manager) => {
+            unsafe {
+                OPENCLAW_MANAGER = Some(manager);
+            }
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("번들된 Node.js를 찾을 수 없음: {}", e);
+            
+            // AppData에 Node.js가 있는지 확인
+            if let Ok(app_data_dir) = app_handle.path().app_data_dir() {
+                let fallback_node_dir = app_data_dir.join("resources/node-portable");
+                eprintln!("AppData 경로 확인: {:?}", fallback_node_dir);
+                
+                if fallback_node_dir.exists() {
+                    // AppData의 Node.js를 사용하도록 Manager 재생성
+                    eprintln!("AppData에서 Node.js 발견, 사용 시도");
+                    // TODO: AppData 경로를 우선하는 생성자 추가
+                }
+            }
+            
+            Err(format!("Node.js Portable을 초기화할 수 없습니다: {}", e))
+        }
     }
-    Ok(())
 }
 
 pub fn get_manager() -> Result<&'static OpenClawManager, String> {
