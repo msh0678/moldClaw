@@ -181,29 +181,39 @@ impl OpenClawManager {
             return true;
         }
         
-        // 2. 시스템 전역 설치 확인 (npm install -g openclaw)
-        if let Ok(output) = Command::new("which")
-            .arg("openclaw")
-            .output() {
-            if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !path.is_empty() {
-                    eprintln!("OpenClaw 발견 (시스템 전역): {}", path);
-                    return true;
+        // 2. 시스템 전역 설치 확인 
+        #[cfg(not(windows))]
+        {
+            if let Ok(output) = Command::new("which")
+                .arg("openclaw")
+                .env("PATH", std::env::var("PATH").unwrap_or_default())
+                .output() {
+                if output.status.success() {
+                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !path.is_empty() && PathBuf::from(&path).exists() {
+                        eprintln!("OpenClaw 발견 (시스템 전역): {}", path);
+                        return true;
+                    }
                 }
             }
         }
         
         // Windows에서는 where 명령 사용
         #[cfg(windows)]
-        if let Ok(output) = Command::new("where")
-            .arg("openclaw")
-            .output() {
-            if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !path.is_empty() {
-                    eprintln!("OpenClaw 발견 (시스템 전역): {}", path);
-                    return true;
+        {
+            if let Ok(output) = Command::new("where.exe")
+                .arg("openclaw")
+                .output() {
+                if output.status.success() {
+                    let paths = String::from_utf8_lossy(&output.stdout);
+                    // where는 여러 경로를 반환할 수 있음
+                    for path in paths.lines() {
+                        let path = path.trim();
+                        if !path.is_empty() && PathBuf::from(path).exists() {
+                            eprintln!("OpenClaw 발견 (시스템 전역): {}", path);
+                            return true;
+                        }
+                    }
                 }
             }
         }
@@ -287,10 +297,17 @@ impl OpenClawManager {
                 "--no-update-notifier",
                 "--progress=false",
             ])
-            .env("PATH", self.get_full_path())  // get_node_path 대신 get_full_path 사용
+            .env("PATH", self.get_full_path())  
             .env("npm_config_cache", cache_path)
             .env("npm_config_prefix", install_prefix)
             .env("NODE_ENV", "production");
+        
+        // 프록시 환경 전달 (기업 환경 대응)
+        for proxy_var in &["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"] {
+            if let Ok(value) = std::env::var(proxy_var) {
+                cmd.env(proxy_var, value);
+            }
+        }
         
         // Windows에서 추가 환경변수
         #[cfg(windows)]
@@ -457,15 +474,24 @@ impl OpenClawManager {
         }
         
         // 2. 시스템 PATH에서 찾기
-        if let Ok(output) = Command::new(if cfg!(windows) { "where" } else { "which" })
+        #[cfg(windows)]
+        let cmd_name = "where.exe";
+        #[cfg(not(windows))]
+        let cmd_name = "which";
+        
+        if let Ok(output) = Command::new(cmd_name)
             .arg("openclaw")
             .output() {
             if output.status.success() {
                 let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !path_str.is_empty() {
                     // Windows의 where는 여러 줄 출력 가능
-                    let first_path = path_str.lines().next().unwrap_or(&path_str);
-                    return Ok(PathBuf::from(first_path));
+                    for line in path_str.lines() {
+                        let path = PathBuf::from(line.trim());
+                        if path.exists() {
+                            return Ok(path);
+                        }
+                    }
                 }
             }
         }

@@ -987,32 +987,73 @@ pub async fn get_install_path() -> Result<String, String> {
 pub async fn install_browser_control() -> Result<String, String> {
     let manager = get_manager()?;
     
-    eprintln!("브라우저 컨트롤 설치 시작...");
+    eprintln!("브라우저 컨트롤 설정 시작...");
     
-    // openclaw browser control 실행
-    match manager.run_openclaw(vec!["browser", "control", "install"]).await {
-        Ok(output) => {
-            eprintln!("브라우저 컨트롤 설치 출력: {}", output);
+    // 먼저 OpenClaw가 브라우저 제어를 지원하는지 확인
+    let browser_check = manager.run_openclaw(vec!["browser", "status"]).await;
+    
+    match browser_check {
+        Ok(status_output) => {
+            eprintln!("브라우저 상태: {}", status_output);
             
-            // 설정에 브라우저 제어 활성화
+            // browser control server 설치 시도
+            let install_result = if status_output.contains("not found") || status_output.contains("error") {
+                // browser control server가 없으면 설치 시도
+                manager.run_openclaw(vec!["browser", "control", "install"]).await
+                    .or_else(|_| {
+                        // 대체 명령: browser start
+                        eprintln!("browser control install 실패, browser start 시도");
+                        manager.run_openclaw(vec!["browser", "start"]).await
+                    })
+            } else {
+                Ok("브라우저 제어가 이미 활성화되어 있습니다.".to_string())
+            };
+            
+            // 설정 파일에 브라우저 설정 추가
             let mut config = read_existing_config();
+            
+            // browser 섹션이 없으면 생성
+            if !config.get("browser").is_some() {
+                set_nested_value(&mut config, &["browser"], json!({}));
+            }
+            
+            // Chrome profile 사용 설정
             set_nested_value(
                 &mut config,
-                &["browser", "enabled"],
+                &["browser", "target"],
+                json!("host"),  // sandbox가 아닌 host에서 실행
+            );
+            
+            // Chrome 확장 릴레이를 위한 설정
+            set_nested_value(
+                &mut config,
+                &["browser", "profiles", "chrome", "enabled"],
                 json!(true),
             );
-            set_nested_value(
-                &mut config,
-                &["browser", "profile"],
-                json!("chrome"),
-            );
+            
             write_config(&config)?;
             
-            Ok("브라우저 컨트롤이 설치되었습니다. Chrome 확장 프로그램을 설치해주세요.".to_string())
+            match install_result {
+                Ok(_) => Ok("브라우저 제어가 활성화되었습니다. Chrome 확장 프로그램을 설치해주세요.".to_string()),
+                Err(e) => {
+                    // 실패해도 설정은 저장됨
+                    Ok(format!("브라우저 제어 서버 설치는 실패했지만 설정은 완료되었습니다. 나중에 수동으로 설치할 수 있습니다: {}", e))
+                }
+            }
         }
         Err(e) => {
-            eprintln!("브라우저 컨트롤 설치 실패: {}", e);
-            Err(format!("브라우저 컨트롤 설치 실패: {}", e))
+            eprintln!("브라우저 상태 확인 실패: {}", e);
+            
+            // 그래도 설정은 저장
+            let mut config = read_existing_config();
+            if !config.get("browser").is_some() {
+                set_nested_value(&mut config, &["browser"], json!({}));
+            }
+            set_nested_value(&mut config, &["browser", "target"], json!("host"));
+            set_nested_value(&mut config, &["browser", "profiles", "chrome", "enabled"], json!(true));
+            write_config(&config)?;
+            
+            Ok("브라우저 설정이 저장되었습니다. OpenClaw를 다시 시작한 후 브라우저 제어를 사용할 수 있습니다.".to_string())
         }
     }
 }

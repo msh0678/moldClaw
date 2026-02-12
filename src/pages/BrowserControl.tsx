@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-shell';
 
+// Chrome 확장 프로그램 URL (나중에 업데이트 가능)
+const CHROME_EXTENSION_URL = 'https://chromewebstore.google.com/detail/openclaw-browser-relay/nglingapjinhecnfejdcpihlpneeadjp';
+
 interface BrowserControlProps {
   onNext: () => void;
   onBack: () => void;
@@ -31,7 +34,10 @@ export const BrowserControl: React.FC<BrowserControlProps> = ({ onNext, onBack }
       
       // Chrome 웹스토어로 이동
       setTimeout(() => {
-        open('https://chromewebstore.google.com/detail/openclaw-browser-relay/nglingapjinhecnfejdcpihlpneeadjp');
+        open(CHROME_EXTENSION_URL).catch((err) => {
+          console.error('웹스토어 열기 실패:', err);
+          setError('Chrome 웹스토어를 열 수 없습니다. 수동으로 접속해주세요.');
+        });
       }, 1000);
       
     } catch (err) {
@@ -57,6 +63,15 @@ export const BrowserControl: React.FC<BrowserControlProps> = ({ onNext, onBack }
       <h2 className="text-2xl font-bold mb-6 text-center">
         🌐 브라우저 자동 제어
       </h2>
+      
+      {/* 브라우저 감지 */}
+      {typeof window !== 'undefined' && !navigator.userAgent.toLowerCase().includes('chrome') && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
+          <p className="text-xs text-orange-800">
+            ⚠️ Chrome 브라우저가 아닌 것 같습니다. 이 기능은 Chrome에서 최적화되어 있습니다.
+          </p>
+        </div>
+      )}
 
       {!isInstalled && !skipBrowser && (
         <>
@@ -123,7 +138,7 @@ export const BrowserControl: React.FC<BrowserControlProps> = ({ onNext, onBack }
           </div>
 
           <button
-            onClick={() => open('https://chromewebstore.google.com/detail/openclaw-browser-relay/nglingapjinhecnfejdcpihlpneeadjp')}
+            onClick={() => open(CHROME_EXTENSION_URL).catch(console.error)}
             className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
           >
             Chrome 웹스토어 다시 열기
