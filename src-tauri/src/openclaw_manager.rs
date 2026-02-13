@@ -691,33 +691,18 @@ impl OpenClawManager {
     #[cfg(windows)]
     fn create_windows_scripts(&self) -> Result<(), String> {
         let openclaw_mjs = self.install_dir.join("openclaw.mjs");
-        let node_exe = self.bundled_node.to_str()
-            .ok_or("Node.js 경로 변환 실패")?;
-        let mjs_path = openclaw_mjs.to_str()
-            .ok_or("openclaw.mjs 경로 변환 실패")?;
+        let node_exe = self.bundled_node.to_string_lossy().to_string();
+        let mjs_path = openclaw_mjs.to_string_lossy().to_string();
         
-        // openclaw.cmd (Windows 표준 방식)
+        // 경로의 슬래시 통일 (/ 사용 - CMD에서도 작동)
+        let node_exe_safe = node_exe.replace('\\', "/");
+        let mjs_path_safe = mjs_path.replace('\\', "/");
+        
+        // openclaw.cmd (간단하고 안전한 방식)
         let cmd_content = format!(
-            r#"@ECHO off
-GOTO start
-:find_dp0
-SET dp0=%~dp0
-EXIT /b
-:start
-SETLOCAL
-CALL :find_dp0
-
-IF EXIST "%dp0%\node.exe" (
-  SET "_prog=%dp0%\node.exe"
-) ELSE (
-  SET "_prog={}"
-  SET PATHEXT=%PATHEXT:;.JS;=;%
-)
-
-endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%" "{}" %*
-"#,
-            node_exe.replace('\\', "\\\\"),
-            mjs_path.replace('\\', "\\\\")
+            "@echo off\r\n\"{node_exe}\" \"{mjs_path}\" %*\r\n",
+            node_exe = node_exe_safe,
+            mjs_path = mjs_path_safe
         );
         
         let cmd_path = self.install_dir.join("openclaw.cmd");
@@ -725,41 +710,11 @@ endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%" "{}" %*
             .map_err(|e| format!("openclaw.cmd 생성 실패: {}", e))?;
         eprintln!("✓ openclaw.cmd 생성 완료");
         
-        // openclaw.ps1 (PowerShell 버전)
+        // openclaw.ps1 (PowerShell 버전 - 간단하게)
         let ps1_content = format!(
-            r#"#!/usr/bin/env pwsh
-$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent
-
-$exe=""
-if ($PSVersionTable.PSVersion -lt "6.0" -or $IsWindows) {{
-  $exe=".exe"
-}}
-$ret=0
-if (Test-Path "$basedir/node$exe") {{
-  # Support pipeline input
-  if ($MyInvocation.ExpectingInput) {{
-    $input | & "$basedir/node$exe" "$basedir/{}" $args
-  }} else {{
-    & "$basedir/node$exe" "$basedir/{}" $args
-  }}
-  $ret=$LASTEXITCODE
-}} else {{
-  # Support pipeline input
-  if ($MyInvocation.ExpectingInput) {{
-    $input | & "{}" "{}" $args
-  }} else {{
-    & "{}" "{}" $args
-  }}
-  $ret=$LASTEXITCODE
-}}
-exit $ret
-"#,
-            "openclaw.mjs",
-            "openclaw.mjs",
-            node_exe,
-            mjs_path,
-            node_exe,
-            mjs_path
+            "& \"{node_exe}\" \"{mjs_path}\" $args\r\n",
+            node_exe = node_exe_safe,
+            mjs_path = mjs_path_safe
         );
         
         let ps1_path = self.install_dir.join("openclaw.ps1");
