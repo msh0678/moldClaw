@@ -5,6 +5,9 @@ mod openclaw_installer_alt;
 mod openclaw_global_installer;
 mod openclaw_extractor;
 
+#[cfg(windows)]
+mod windows_helper;
+
 #[tauri::command]
 async fn check_node_installed() -> Result<bool, String> {
     openclaw::is_node_installed().await
@@ -190,6 +193,65 @@ async fn install_browser_control() -> Result<String, String> {
     openclaw::install_browser_control().await
 }
 
+// ===== Windows 전용 명령어 =====
+
+/// Windows 필수 프로그램 상태 확인
+#[cfg(windows)]
+#[tauri::command]
+fn check_windows_prerequisites() -> Result<windows_helper::PrerequisiteStatus, String> {
+    Ok(windows_helper::check_prerequisites())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn check_windows_prerequisites() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "git_installed": true,
+        "build_tools_installed": true,
+        "node_version": null
+    }))
+}
+
+/// Git 설치 (winget 사용, 관리자 권한 필요)
+#[cfg(windows)]
+#[tauri::command]
+async fn install_git() -> Result<String, String> {
+    windows_helper::install_git_with_winget().await
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+async fn install_git() -> Result<String, String> {
+    Err("이 기능은 Windows에서만 사용 가능합니다".to_string())
+}
+
+/// Visual Studio Build Tools 설치
+#[cfg(windows)]
+#[tauri::command]
+async fn install_build_tools() -> Result<String, String> {
+    windows_helper::install_build_tools().await
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+async fn install_build_tools() -> Result<String, String> {
+    Err("이 기능은 Windows에서만 사용 가능합니다".to_string())
+}
+
+/// 환경 변수 새로고침
+#[cfg(windows)]
+#[tauri::command]
+fn refresh_path() -> Result<(), String> {
+    windows_helper::refresh_environment_variables();
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn refresh_path() -> Result<(), String> {
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -236,6 +298,11 @@ pub fn run() {
             get_install_path,
             // 브라우저 컨트롤
             install_browser_control,
+            // Windows 전용
+            check_windows_prerequisites,
+            install_git,
+            install_build_tools,
+            refresh_path,
         ])
         .setup(|app| {
             // OpenClaw 관리자 초기화
