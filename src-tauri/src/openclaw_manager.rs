@@ -371,18 +371,19 @@ impl OpenClawManager {
             .to_str()
             .ok_or("캐시 경로 변환 실패")?;
         
-        eprintln!("npm install 명령: npm install openclaw --prefix \"{}\"", install_prefix);
+        eprintln!("npm install 명령: tarball URL로 직접 설치 (Git 없이)");
         
-        // npm으로 OpenClaw 설치 (Git 없이도 설치 가능하도록)
+        // Git 없이 tarball URL로 직접 설치 시도
         let mut cmd = Command::new(&self.bundled_npm);
         cmd.args([
                 "install",
-                "openclaw",
+                "https://registry.npmjs.org/openclaw/-/openclaw-latest.tgz",  // tarball URL로 직접 설치
                 "--prefix", install_prefix,
                 "--no-fund",
                 "--no-audit",
                 "--no-update-notifier",
                 "--no-optional",  // 선택적 의존성 제외
+                "--ignore-scripts",  // Git을 호출할 수 있는 스크립트 무시
                 "--prefer-offline",  // 오프라인 우선
                 "--no-save",  // package.json 수정 안 함
                 "--registry", "https://registry.npmjs.org",  // 공식 레지스트리만 사용
@@ -632,40 +633,78 @@ impl OpenClawManager {
     async fn install_openclaw_from_tarball(&self) -> Result<String, String> {
         eprintln!("Tarball에서 OpenClaw 직접 설치 시도...");
         
-        // npm pack 사용 (Git 불필요)
+        // 방법 1: 직접 tarball URL 사용 (npm pack 대신)
+        let tarball_url = "https://registry.npmjs.org/openclaw/-/openclaw-latest.tgz";
         let output = Command::new(&self.bundled_npm)
             .args([
-                "pack",
-                "openclaw",
-                "--pack-destination", self.install_dir.to_str().unwrap(),
+                "install",
+                tarball_url,
+                "--prefix", self.install_dir.to_str().unwrap(),
+                "--no-fund",
+                "--no-audit",
+                "--no-optional",
+                "--ignore-scripts",
+                "--no-save",
             ])
             .output()
-            .map_err(|e| format!("npm pack 실패: {}", e))?;
+            .map_err(|e| format!("tarball URL 설치 실패: {}", e))?;
         
         if output.status.success() {
-            // tarball 압축 해제
-            let tarball_path = self.install_dir.join("openclaw-*.tgz");
-            
-            // npm install로 tarball 설치
-            let install_output = Command::new(&self.bundled_npm)
-                .args([
-                    "install",
-                    "file:openclaw-*.tgz",
-                    "--prefix", self.install_dir.to_str().unwrap(),
-                    "--no-fund",
-                    "--no-audit",
-                ])
-                .output()
-                .map_err(|e| format!("tarball 설치 실패: {}", e))?;
-            
-            if install_output.status.success() {
-                Ok("OpenClaw가 tarball에서 설치되었습니다!".to_string())
-            } else {
-                Err("tarball 설치 실패".to_string())
-            }
+            Ok("OpenClaw가 tarball URL로 직접 설치되었습니다!".to_string())
         } else {
-            // 직접 URL 사용
-            self.install_from_npm_registry().await
+            // Windows에서 추가 fallback
+            #[cfg(windows)]
+            {
+                eprintln!("npm 설치 실패, PowerShell 다운로드 시도...");
+                return self.install_openclaw_windows_fallback().await;
+            }
+            
+            #[cfg(not(windows))]
+            {
+                // 직접 URL 사용
+                self.install_from_npm_registry().await
+            }
+        }
+    }
+    
+    #[cfg(windows)]
+    async fn install_openclaw_windows_fallback(&self) -> Result<String, String> {
+        eprintln!("Windows PowerShell fallback 설치 시도...");
+        
+        // PowerShell로 직접 다운로드
+        let ps_script = format!(
+            r#"
+            $ErrorActionPreference = 'Stop'
+            try {{
+                $tempDir = '{}'
+                $url = 'https://registry.npmjs.org/openclaw/-/openclaw-latest.tgz'
+                $tarPath = Join-Path $tempDir 'openclaw.tgz'
+                
+                Write-Host "Downloading OpenClaw..."
+                Invoke-WebRequest -Uri $url -OutFile $tarPath
+                
+                Write-Host "Download complete. Installing..."
+                & '{}' install $tarPath --prefix '{}' --no-fund --no-audit --ignore-scripts
+            }} catch {{
+                Write-Error $_.Exception.Message
+                exit 1
+            }}
+            "#,
+            self.install_dir.to_str().unwrap(),
+            self.bundled_npm.to_str().unwrap(),
+            self.install_dir.to_str().unwrap()
+        );
+        
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_script])
+            .output()
+            .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok("PowerShell을 통해 OpenClaw가 설치되었습니다!".to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(format!("PowerShell 설치 실패: {}", stderr))
         }
     }
     
