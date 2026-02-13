@@ -43,6 +43,30 @@ pub async fn get_openclaw_version() -> Result<String, String> {
 
 /// OpenClaw 설치 (번들된 npm 사용)
 pub async fn install_openclaw() -> Result<String, String> {
+    // 먼저 전역 설치 확인
+    if let Ok(output) = std::process::Command::new("cmd")
+        .args(["/C", "where openclaw"])
+        .output() {
+        if output.status.success() {
+            return Ok("OpenClaw가 이미 시스템에 설치되어 있습니다.".to_string());
+        }
+    }
+    
+    // 관리자 권한으로 전역 설치 시도
+    eprintln!("전역 OpenClaw 설치 시도...");
+    if let Ok(output) = std::process::Command::new("cmd")
+        .args([
+            "/C",
+            "npm install -g openclaw --no-optional --registry https://registry.npmjs.org 2>nul"
+        ])
+        .output() {
+        if output.status.success() {
+            return Ok("OpenClaw가 시스템에 전역 설치되었습니다!".to_string());
+        }
+    }
+    
+    // 실패 시 로컬 설치
+    eprintln!("전역 설치 실패, 로컬 설치 시도...");
     let manager = get_manager()?;
     manager.install_openclaw().await
 }

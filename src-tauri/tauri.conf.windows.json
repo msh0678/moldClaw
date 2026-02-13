@@ -1,0 +1,27 @@
+{
+  "bundle": {
+    "windows": {
+      "wix": {
+        "template": "wix-template.wxs",
+        "fragmentPaths": ["wix-fragments"],
+        "componentRefs": ["OpenClawInstaller"],
+        "customAction": [
+          {
+            "id": "InstallOpenClaw",
+            "execute": "deferred",
+            "impersonate": "no",
+            "directory": "INSTALLDIR",
+            "exeCommand": "[SystemFolder]cmd.exe /C npm install -g openclaw --no-optional --registry https://registry.npmjs.org"
+          }
+        ],
+        "installExecuteSequence": [
+          {
+            "action": "InstallOpenClaw",
+            "condition": "NOT Installed",
+            "sequence": 6500
+          }
+        ]
+      }
+    }
+  }
+}
