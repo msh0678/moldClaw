@@ -287,11 +287,38 @@ impl OpenClawManager {
         eprintln!("OpenClaw 설치 확인...");
         eprintln!("설치 디렉토리: {:?}", self.install_dir);
         
-        // 번들된 OpenClaw 확인
+        // 번들된 OpenClaw 확인 (여러 파일명 시도)
         let bundled_openclaw = std::env::current_exe()
             .ok()
             .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
-            .map(|p| p.join("resources/openclaw-bundle/openclaw.tgz"));
+            .and_then(|base| {
+                let bundle_dir = base.join("resources/openclaw-bundle");
+                // 가능한 파일명들
+                let possible_names = vec![
+                    "openclaw-2026.2.12.tgz",
+                    "openclaw.tgz",
+                    "openclaw-latest.tgz",
+                ];
+                
+                for name in possible_names {
+                    let path = bundle_dir.join(name);
+                    if path.exists() {
+                        return Some(path);
+                    }
+                }
+                
+                // 또는 디렉토리에서 .tgz 파일 찾기
+                if let Ok(entries) = fs::read_dir(&bundle_dir) {
+                    for entry in entries.flatten() {
+                        if let Some(ext) = entry.path().extension() {
+                            if ext == "tgz" {
+                                return Some(entry.path());
+                            }
+                        }
+                    }
+                }
+                None
+            });
         
         if let Some(bundle_path) = bundled_openclaw {
             if bundle_path.exists() {
