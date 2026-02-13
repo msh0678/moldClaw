@@ -287,38 +287,56 @@ impl OpenClawManager {
         eprintln!("OpenClaw 설치 확인...");
         eprintln!("설치 디렉토리: {:?}", self.install_dir);
         
-        // 번들된 OpenClaw 확인 (여러 파일명 시도)
-        let bundled_openclaw = std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
-            .and_then(|base| {
-                let bundle_dir = base.join("resources/openclaw-bundle");
-                // 가능한 파일명들
-                let possible_names = vec![
-                    "openclaw-2026.2.12.tgz",
-                    "openclaw.tgz",
-                    "openclaw-latest.tgz",
-                ];
-                
-                for name in possible_names {
-                    let path = bundle_dir.join(name);
-                    if path.exists() {
-                        return Some(path);
-                    }
-                }
-                
-                // 또는 디렉토리에서 .tgz 파일 찾기
-                if let Ok(entries) = fs::read_dir(&bundle_dir) {
-                    for entry in entries.flatten() {
-                        if let Some(ext) = entry.path().extension() {
-                            if ext == "tgz" {
-                                return Some(entry.path());
+        // 번들된 OpenClaw 확인 (여러 경로 시도)
+        let bundled_openclaw = {
+            // 1. 먼저 실행파일 기준 경로 시도
+            let exe_based = std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
+                .and_then(|base| {
+                    // Windows: .exe와 같은 디렉토리의 resources 폴더
+                    // Linux/Mac: AppImage/bundle 구조
+                    let paths_to_try = vec![
+                        base.join("resources/openclaw-bundle"),
+                        base.join("../resources/openclaw-bundle"), 
+                        base.join("_up_/resources/openclaw-bundle"), // Tauri Windows 구조
+                    ];
+                    
+                    for bundle_dir in paths_to_try {
+                        eprintln!("번들 디렉토리 확인: {:?}", bundle_dir);
+                        
+                        // 가능한 파일명들
+                        let possible_names = vec![
+                            "openclaw-2026.2.12.tgz",
+                            "openclaw.tgz",
+                            "openclaw-latest.tgz",
+                        ];
+                        
+                        for name in &possible_names {
+                            let path = bundle_dir.join(name);
+                            if path.exists() {
+                                eprintln!("✓ 번들 파일 발견: {:?}", path);
+                                return Some(path);
+                            }
+                        }
+                        
+                        // 디렉토리에서 .tgz 파일 찾기
+                        if let Ok(entries) = fs::read_dir(&bundle_dir) {
+                            for entry in entries.flatten() {
+                                if let Some(ext) = entry.path().extension() {
+                                    if ext == "tgz" {
+                                        eprintln!("✓ 번들 파일 발견 (자동): {:?}", entry.path());
+                                        return Some(entry.path());
+                                    }
+                                }
                             }
                         }
                     }
-                }
-                None
-            });
+                    None
+                });
+            
+            exe_based
+        };
         
         if let Some(bundle_path) = bundled_openclaw {
             if bundle_path.exists() {
@@ -377,7 +395,7 @@ impl OpenClawManager {
         let mut cmd = Command::new(&self.bundled_npm);
         cmd.args([
                 "install",
-                "https://registry.npmjs.org/openclaw/-/openclaw-latest.tgz",  // tarball URL로 직접 설치
+                "https://registry.npmjs.org/openclaw/-/openclaw-2026.2.12.tgz",  // 실제 버전의 tarball URL로 직접 설치
                 "--prefix", install_prefix,
                 "--no-fund",
                 "--no-audit",
@@ -634,7 +652,7 @@ impl OpenClawManager {
         eprintln!("Tarball에서 OpenClaw 직접 설치 시도...");
         
         // 방법 1: 직접 tarball URL 사용 (npm pack 대신)
-        let tarball_url = "https://registry.npmjs.org/openclaw/-/openclaw-latest.tgz";
+        let tarball_url = "https://registry.npmjs.org/openclaw/-/openclaw-2026.2.12.tgz";
         let output = Command::new(&self.bundled_npm)
             .args([
                 "install",
@@ -677,7 +695,7 @@ impl OpenClawManager {
             $ErrorActionPreference = 'Stop'
             try {{
                 $tempDir = '{}'
-                $url = 'https://registry.npmjs.org/openclaw/-/openclaw-latest.tgz'
+                $url = 'https://registry.npmjs.org/openclaw/-/openclaw-2026.2.12.tgz'
                 $tarPath = Join-Path $tempDir 'openclaw.tgz'
                 
                 Write-Host "Downloading OpenClaw..."
@@ -711,9 +729,8 @@ impl OpenClawManager {
     async fn install_from_npm_registry(&self) -> Result<String, String> {
         eprintln!("NPM 레지스트리에서 직접 다운로드...");
         
-        // https://registry.npmjs.org/openclaw 에서 최신 버전 정보를 가져와야 하지만,
-        // 간단히 latest를 사용
-        let tarball_url = "https://registry.npmjs.org/openclaw/-/openclaw-1.0.0.tgz"; // 버전 확인 필요
+        // 최신 버전 사용
+        let tarball_url = "https://registry.npmjs.org/openclaw/-/openclaw-2026.2.12.tgz";
         
         let output = Command::new(&self.bundled_npm)
             .args([
