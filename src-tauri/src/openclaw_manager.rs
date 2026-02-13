@@ -231,9 +231,13 @@ impl OpenClawManager {
                 }
             }
             
-            // where.exe로 PATH 검색 (에러 출력 억제)
+            // where.exe로 PATH 검색 (에러 출력 억제, 창 숨김)
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            
             if let Ok(output) = Command::new("cmd")
                 .args(["/C", "where openclaw 2>nul"])
+                .creation_flags(CREATE_NO_WINDOW)
                 .output() {
                 if output.status.success() {
                     let paths = String::from_utf8_lossy(&output.stdout);
@@ -491,6 +495,15 @@ impl OpenClawManager {
         } else {
             Command::new(&openclaw_bin)
         };
+        
+        // Windows에서 창 숨기기 (핵심!)
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        
         cmd.args(&args)
             .env("PATH", self.get_full_path())
             .env("OPENCLAW_CONFIG_DIR", &self.openclaw_home);
@@ -580,6 +593,21 @@ impl OpenClawManager {
     }
     
     pub async fn get_status(&self) -> Result<String, String> {
+        // 재시도 제한: OpenClaw 실행 파일이 없으면 바로 stopped 반환
+        let openclaw_bin = match self.find_openclaw_executable() {
+            Ok(path) => path,
+            Err(_) => {
+                // OpenClaw가 설치되지 않았으면 계속 시도하지 않음
+                return Ok("not_installed".to_string());
+            }
+        };
+        
+        // 실행 파일이 존재하는지 확인
+        if !openclaw_bin.exists() {
+            return Ok("not_installed".to_string());
+        }
+        
+        // 상태 확인 (실패 시 stopped 반환, 에러 던지지 않음)
         Ok(self.run_openclaw(vec!["gateway", "status"]).await
             .map(|output| {
                 if output.contains("online") || output.contains("running") {
@@ -839,6 +867,9 @@ impl OpenClawManager {
         // 2. Windows - 알려진 위치 확인
         #[cfg(windows)]
         {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            
             let known_locations = vec![
                 // npm 전역 설치 - dirs API 사용
                 dirs::data_dir().map(|d| d.join("npm\\openclaw.cmd")),
@@ -858,9 +889,10 @@ impl OpenClawManager {
                 }
             }
             
-            // cmd /C where 사용 (더 안정적)
+            // cmd /C where 사용 (더 안정적, 창 숨김)
             if let Ok(output) = Command::new("cmd")
                 .args(["/C", "where openclaw 2>nul"])
+                .creation_flags(CREATE_NO_WINDOW)
                 .output() {
                 if output.status.success() {
                     let paths = String::from_utf8_lossy(&output.stdout);

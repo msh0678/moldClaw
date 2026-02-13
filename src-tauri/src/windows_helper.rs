@@ -66,8 +66,12 @@ pub fn run_elevated_script(script: &str) -> Result<String, String> {
 
 /// Git 설치 여부 확인
 pub fn is_git_installed() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
     Command::new("cmd")
         .args(["/C", "where git"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
@@ -78,8 +82,12 @@ pub async fn install_git_with_winget() -> Result<String, String> {
     eprintln!("Git 설치 시작 (winget 사용)...");
     
     // 먼저 winget 사용 가능한지 확인
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
     let winget_check = Command::new("cmd")
         .args(["/C", "winget --version"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
     
     if winget_check.is_err() || !winget_check.unwrap().status.success() {
@@ -174,8 +182,12 @@ pub fn check_prerequisites() -> PrerequisiteStatus {
 }
 
 fn get_node_version() -> Option<String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
     Command::new("cmd")
         .args(["/C", "node --version"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -184,8 +196,12 @@ fn get_node_version() -> Option<String> {
 
 /// npm 캐시 정리 (권한 문제 해결에 도움)
 pub fn clear_npm_cache() -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
     let output = Command::new("cmd")
         .args(["/C", "npm cache clean --force"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("npm 캐시 정리 실패: {}", e))?;
     

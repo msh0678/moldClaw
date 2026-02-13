@@ -328,48 +328,21 @@ pub fn run() {
                 
                 #[cfg(windows)]
                 {
-                    // Windows: cmd를 통해 실행
-                    let stop_result = std::process::Command::new("cmd")
-                        .args(["/C", "openclaw", "gateway", "stop"])
-                        .output();
-                        
-                    if let Ok(output) = stop_result {
-                        if output.status.success() {
-                            println!("   ✓ Gateway 정상 종료 성공");
-                        } else {
-                            println!("   ✗ Gateway 정상 종료 실패");
-                        }
-                    }
+                    use std::os::windows::process::CommandExt;
+                    const CREATE_NO_WINDOW: u32 = 0x08000000;
                     
-                    // 2초 대기
-                    std::thread::sleep(std::time::Duration::from_millis(2000));
+                    // Windows: taskkill로 관련 프로세스 종료 (창 안 띄움)
+                    println!("Windows 프로세스 정리 중...");
                     
-                    // 2. Windows: taskkill 사용
-                    println!("2. 남은 프로세스 강제 종료...");
-                    
-                    // taskkill 시도 (관리자 권한 없어도 자신의 프로세스는 종료 가능)
-                    let _ = std::process::Command::new("cmd")
-                        .args(["/C", "taskkill /F /IM openclaw.exe 2>nul"])
-                        .output();
-                    
-                    let _ = std::process::Command::new("cmd")
-                        .args(["/C", "taskkill /F /IM openclaw-gateway.exe 2>nul"])
-                        .output();
-                    
+                    // node.exe 중 openclaw 관련 프로세스 종료
                     let _ = std::process::Command::new("cmd")
                         .args(["/C", "taskkill /F /IM node.exe /FI \"WINDOWTITLE eq *openclaw*\" 2>nul"])
+                        .creation_flags(CREATE_NO_WINDOW)
                         .output();
                     
-                    // wmic는 Windows 11에서 deprecated, 조건부 사용
-                    if let Ok(output) = std::process::Command::new("cmd")
-                        .args(["/C", "wmic /?"])
-                        .output() {
-                        if output.status.success() {
-                            let _ = std::process::Command::new("cmd")
-                                .args(["/C", "wmic process where \"name like '%openclaw%'\" delete"])
-                                .output();
-                        }
-                    }
+                    // 2초 대기
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                    println!("   ✓ 프로세스 정리 완료");
                 }
                 
                 #[cfg(not(windows))]
