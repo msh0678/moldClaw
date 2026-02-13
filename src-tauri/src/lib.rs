@@ -252,6 +252,57 @@ fn refresh_path() -> Result<(), String> {
     Ok(())
 }
 
+/// Git 설치 여부만 확인
+#[cfg(windows)]
+#[tauri::command]
+fn is_git_installed() -> bool {
+    windows_helper::is_git_installed()
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn is_git_installed() -> bool {
+    // Unix에서는 which git으로 확인
+    std::process::Command::new("which")
+        .arg("git")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// 필수 프로그램 설치 후 OpenClaw 설치 (전체 플로우)
+#[tauri::command]
+async fn install_with_prerequisites() -> Result<String, String> {
+    let mut messages: Vec<String> = Vec::new();
+    
+    // 1. Git 설치 확인 (Windows만)
+    #[cfg(windows)]
+    {
+        if !windows_helper::is_git_installed() {
+            messages.push("Git이 설치되어 있지 않습니다. 설치를 시작합니다...".to_string());
+            messages.push("⚠️ 관리자 권한 승인 창이 나타나면 '예'를 클릭해주세요.".to_string());
+            
+            match windows_helper::install_git_with_winget_visible() {
+                Ok(msg) => messages.push(format!("✓ {}", msg)),
+                Err(e) => return Err(format!("Git 설치 실패: {}", e)),
+            }
+            
+            // PATH 새로고침
+            windows_helper::refresh_environment_variables();
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        } else {
+            messages.push("✓ Git이 이미 설치되어 있습니다.".to_string());
+        }
+    }
+    
+    // 2. OpenClaw 설치
+    messages.push("OpenClaw 설치를 시작합니다...".to_string());
+    let result = openclaw::install_openclaw().await?;
+    messages.push(format!("✓ {}", result));
+    
+    Ok(messages.join("\n"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -303,6 +354,8 @@ pub fn run() {
             install_git,
             install_build_tools,
             refresh_path,
+            is_git_installed,
+            install_with_prerequisites,
         ])
         .setup(|app| {
             // OpenClaw 관리자 초기화 (실패해도 앱은 계속 실행)

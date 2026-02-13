@@ -77,9 +77,11 @@ pub fn is_git_installed() -> bool {
         .unwrap_or(false)
 }
 
-/// winget으로 Git 설치 (관리자 권한으로 UAC 프롬프트 표시)
-pub async fn install_git_with_winget() -> Result<String, String> {
-    eprintln!("Git 설치 시작 (winget 사용)...");
+/// winget으로 Git 설치 (UAC 프롬프트를 사용자에게 직접 보여줌)
+/// 
+/// 창을 숨기지 않고 사용자가 직접 UAC 승인 클릭하도록 함
+pub fn install_git_with_winget_visible() -> Result<String, String> {
+    eprintln!("Git 설치 시작 (winget 사용, UAC 프롬프트 표시)...");
     
     // 먼저 winget 사용 가능한지 확인
     use std::os::windows::process::CommandExt;
@@ -94,37 +96,39 @@ pub async fn install_git_with_winget() -> Result<String, String> {
         return Err("winget이 설치되어 있지 않습니다. Windows 10 1709+ 또는 Windows 11이 필요합니다.".to_string());
     }
     
-    // 관리자 권한으로 Git 설치
-    let install_script = r#"
-$ErrorActionPreference = 'Stop'
-try {
-    Write-Host "Git 설치 중..."
-    winget install --id Git.Git -e --source winget --silent --accept-source-agreements --accept-package-agreements
+    eprintln!("winget 확인됨. Git 설치를 위한 관리자 권한 요청...");
     
-    if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null) {
-        Write-Host "Git 설치 완료!"
-        # PATH 새로고침
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-    } else {
-        throw "Git 설치 실패 (종료 코드: $LASTEXITCODE)"
-    }
-} catch {
-    Write-Error $_.Exception.Message
-    exit 1
-}
-"#;
+    // PowerShell을 통해 관리자 권한으로 winget 실행
+    // -Wait: 설치 완료까지 대기
+    // -Verb RunAs: UAC 프롬프트 표시
+    // 창을 숨기지 않음 - 사용자가 UAC 프롬프트를 볼 수 있음
+    let ps_command = r#"
+        Start-Process -FilePath 'winget' -ArgumentList 'install --id Git.Git -e --source winget --silent --accept-source-agreements --accept-package-agreements' -Verb RunAs -Wait
+    "#;
     
-    run_elevated_script(install_script)?;
+    // 중요: CREATE_NO_WINDOW를 사용하지 않음 - 사용자가 UAC 창을 볼 수 있도록
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", ps_command])
+        .output()
+        .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
     
     // 설치 확인 (PATH 새로고침)
     refresh_environment_variables();
     std::thread::sleep(std::time::Duration::from_secs(2));
     
     if is_git_installed() {
+        eprintln!("✓ Git 설치 확인됨");
         Ok("Git이 성공적으로 설치되었습니다!".to_string())
     } else {
+        // 설치는 됐지만 PATH가 아직 안 잡힌 경우
+        eprintln!("Git 설치 완료 (PATH 새로고침 필요할 수 있음)");
         Ok("Git 설치 완료. 앱을 재시작하면 인식됩니다.".to_string())
     }
+}
+
+/// winget으로 Git 설치 (async 버전 - 기존 호환성)
+pub async fn install_git_with_winget() -> Result<String, String> {
+    install_git_with_winget_visible()
 }
 
 /// Visual Studio Build Tools 설치 여부 확인
