@@ -634,6 +634,7 @@ impl OpenClawManager {
                 "--prefix", self.install_dir.to_str().unwrap(),
                 "--no-fund",
                 "--no-audit",
+                "--ignore-scripts",  // prepare 스크립트(Git 호출) 무시 - 중요!
                 "--offline",  // 오프라인 모드
             ])
             .env("PATH", self.get_full_path())
