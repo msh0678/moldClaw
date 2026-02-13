@@ -2,40 +2,45 @@ use std::process::Command;
 use std::path::PathBuf;
 use std::fs;
 use serde_json::{json, Value};
-use crate::openclaw_manager::get_manager;
 
-/// OpenClaw 명령 실행 헬퍼 (번들된 경로 사용)
-async fn run_openclaw_command(args: Vec<&str>) -> Result<String, String> {
-    let manager = get_manager()?;
-    manager.run_openclaw(args).await
-}
-
-/// Node.js 설치 여부 확인 (번들된 Node.js 사용)
-pub async fn is_node_installed() -> Result<bool, String> {
-    match get_manager() {
-        Ok(manager) => Ok(manager.check_node_bundled().await),
-        Err(e) => {
-            eprintln!("Manager 초기화 실패: {}", e);
-            Ok(false)
+/// OpenClaw 명령 실행 헬퍼 (시스템 PATH 사용)
+fn run_openclaw_command(args: &[&str]) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let output = Command::new("cmd")
+            .args(["/C", &format!("openclaw {}", args.join(" "))])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("openclaw 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            Err(format!("openclaw 오류: {}", String::from_utf8_lossy(&output.stderr)))
+        }
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let output = Command::new("openclaw")
+            .args(args)
+            .output()
+            .map_err(|e| format!("openclaw 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            Err(format!("openclaw 오류: {}", String::from_utf8_lossy(&output.stderr)))
         }
     }
 }
 
-/// Node.js 버전 확인
-pub async fn get_node_version() -> Result<String, String> {
-    let manager = get_manager()?;
-    manager.get_node_version().await
-}
-
-/// OpenClaw 설치 여부 확인
-pub async fn is_openclaw_installed() -> Result<bool, String> {
-    let manager = get_manager()?;
-    Ok(manager.check_openclaw_installed().await)
-}
-
 /// OpenClaw 버전 확인
-pub async fn get_openclaw_version() -> Result<String, String> {
-    run_openclaw_command(vec!["--version"]).await
+pub fn get_openclaw_version_sync() -> Option<String> {
+    run_openclaw_command(&["--version"]).ok()
 }
 
 /// Windows CMD 실행 헬퍼 (CREATE_NO_WINDOW 플래그 포함)
@@ -56,11 +61,39 @@ fn run_cmd_silent(args: &[&str]) -> std::io::Result<std::process::Output> {
         .output()
 }
 
-/// OpenClaw 설치 (번들된 npm 사용)
+/// OpenClaw 설치 (npm install -g openclaw)
 pub async fn install_openclaw() -> Result<String, String> {
-    // 번들된 OpenClaw Manager 사용 (전역 설치 시도 안 함)
-    let manager = get_manager()?;
-    manager.install_openclaw().await
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let output = Command::new("cmd")
+            .args(["/C", "npm install -g openclaw"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("npm 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok("OpenClaw 설치 완료!".to_string())
+        } else {
+            Err(format!("설치 실패: {}", String::from_utf8_lossy(&output.stderr)))
+        }
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let output = Command::new("npm")
+            .args(["install", "-g", "openclaw"])
+            .output()
+            .map_err(|e| format!("npm 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok("OpenClaw 설치 완료!".to_string())
+        } else {
+            Err(format!("설치 실패: {}", String::from_utf8_lossy(&output.stderr)))
+        }
+    }
 }
 
 /// OpenClaw 설정 디렉토리
@@ -540,16 +573,16 @@ pub async fn configure_whatsapp_full(
     Ok(())
 }
 
-/// Gateway 시작 (번들된 OpenClaw 사용)
+/// Gateway 시작
 pub async fn start_gateway() -> Result<(), String> {
-    let manager = get_manager()?;
-    manager.start_gateway().await
+    run_openclaw_command(&["gateway", "start"])?;
+    Ok(())
 }
 
 /// Gateway 시작 (daemon 모드 - 서비스 설치)
 pub async fn install_and_start_service() -> Result<String, String> {
-    // 번들된 OpenClaw로 gateway start 시도
-    match run_openclaw_command(vec!["gateway", "start"]).await {
+    // gateway start 시도
+    match run_openclaw_command(&["gateway", "start"]) {
         Ok(_) => return Ok("Gateway가 시작되었습니다".to_string()),
         Err(e) => eprintln!("첫 시도 실패: {}", e),
     }
@@ -567,8 +600,14 @@ pub async fn install_and_start_service() -> Result<String, String> {
 
 /// Gateway 상태 확인
 pub async fn get_status() -> Result<String, String> {
-    match get_manager() {
-        Ok(manager) => manager.get_status().await,
+    match run_openclaw_command(&["gateway", "status"]) {
+        Ok(output) => {
+            if output.contains("online") || output.contains("running") {
+                Ok("running".to_string())
+            } else {
+                Ok("stopped".to_string())
+            }
+        }
         Err(_) => Ok("stopped".to_string()),
     }
 }
@@ -576,7 +615,7 @@ pub async fn get_status() -> Result<String, String> {
 /// WhatsApp 페어링 시작 (onboard 명령 사용)
 pub async fn start_whatsapp_pairing() -> Result<String, String> {
     // OpenClaw onboard를 non-interactive로 실행하고 WhatsApp 설정
-    run_openclaw_command(vec![
+    run_openclaw_command(&[
         "onboard",
         "--non-interactive",
         "--accept-risk",
@@ -584,7 +623,7 @@ pub async fn start_whatsapp_pairing() -> Result<String, String> {
         "--skip-channels",
         "--skip-skills",
         "--skip-health",
-    ]).await
+    ])
     .map(|_| "WhatsApp 연결 준비 완료. QR 코드를 확인하세요.".to_string())
 }
 
@@ -622,7 +661,7 @@ pub async fn run_full_onboard(
         "--install-daemon",
     ];
     
-    run_openclaw_command(args).await
+    run_openclaw_command(&args)
         .map(|output| format!("OpenClaw 설정 완료!\n{}", output))
 }
 
@@ -645,8 +684,8 @@ pub async fn validate_config() -> Result<bool, String> {
         }
     }
 
-    // OpenClaw doctor 실행 (번들된 경로 사용)
-    match run_openclaw_command(vec!["doctor"]).await {
+    // OpenClaw doctor 실행
+    match run_openclaw_command(&["doctor"]) {
         Ok(_) => Ok(true),
         Err(e) => Err(format!("Configuration validation failed: {}", e)),
     }
@@ -760,8 +799,8 @@ pub async fn stop_gateway() -> Result<(), String> {
         return Ok(());
     }
 
-    // 1. openclaw gateway stop 시도 (번들된 경로 사용)
-    if run_openclaw_command(vec!["gateway", "stop"]).await.is_ok() {
+    // 1. openclaw gateway stop 시도
+    if run_openclaw_command(&["gateway", "stop"]).is_ok() {
         // 2초 대기 후 확인
         std::thread::sleep(std::time::Duration::from_millis(2000));
         let new_status = get_status().await?;
@@ -950,20 +989,51 @@ pub async fn apply_default_security_settings() -> Result<(), String> {
 }
 
 
-/// 실제 설치 경로 반환
+/// 실제 설치 경로 반환 (npm global)
 pub async fn get_install_path() -> Result<String, String> {
-    let manager = get_manager()?;
-    Ok(manager.get_install_dir().to_string_lossy().to_string())
+    #[cfg(windows)]
+    {
+        // Windows: npm global prefix 확인
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let output = Command::new("cmd")
+            .args(["/C", "npm config get prefix"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("npm 경로 확인 실패: {}", e))?;
+        
+        if output.status.success() {
+            let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            Ok(format!("{}\\node_modules\\openclaw", prefix))
+        } else {
+            // 기본 경로 반환
+            Ok(r"C:\Users\%USERNAME%\AppData\Roaming\npm\node_modules\openclaw".to_string())
+        }
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let output = Command::new("npm")
+            .args(["config", "get", "prefix"])
+            .output()
+            .map_err(|e| format!("npm 경로 확인 실패: {}", e))?;
+        
+        if output.status.success() {
+            let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            Ok(format!("{}/lib/node_modules/openclaw", prefix))
+        } else {
+            Ok("/usr/local/lib/node_modules/openclaw".to_string())
+        }
+    }
 }
 
 /// 브라우저 컨트롤 설치
 pub async fn install_browser_control() -> Result<String, String> {
-    let manager = get_manager()?;
-    
     eprintln!("브라우저 컨트롤 설정 시작...");
     
     // 먼저 OpenClaw가 브라우저 제어를 지원하는지 확인
-    let browser_check = manager.run_openclaw(vec!["browser", "status"]).await;
+    let browser_check = run_openclaw_command(&["browser", "status"]);
     
     match browser_check {
         Ok(status_output) => {
@@ -972,12 +1042,12 @@ pub async fn install_browser_control() -> Result<String, String> {
             // browser control server 설치 시도
             let install_result = if status_output.contains("not found") || status_output.contains("error") {
                 // browser control server가 없으면 설치 시도
-                match manager.run_openclaw(vec!["browser", "control", "install"]).await {
+                match run_openclaw_command(&["browser", "control", "install"]) {
                     Ok(output) => Ok(output),
                     Err(_) => {
                         // 대체 명령: browser start
                         eprintln!("browser control install 실패, browser start 시도");
-                        manager.run_openclaw(vec!["browser", "start"]).await
+                        run_openclaw_command(&["browser", "start"])
                     }
                 }
             } else {
@@ -988,7 +1058,7 @@ pub async fn install_browser_control() -> Result<String, String> {
             let mut config = read_existing_config();
             
             // browser 섹션이 없으면 생성
-            if !config.get("browser").is_some() {
+            if config.get("browser").is_none() {
                 set_nested_value(&mut config, &["browser"], json!({}));
             }
             
@@ -1021,7 +1091,7 @@ pub async fn install_browser_control() -> Result<String, String> {
             
             // 그래도 설정은 저장
             let mut config = read_existing_config();
-            if !config.get("browser").is_some() {
+            if config.get("browser").is_none() {
                 set_nested_value(&mut config, &["browser"], json!({}));
             }
             set_nested_value(&mut config, &["browser", "target"], json!("host"));

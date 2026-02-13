@@ -173,24 +173,179 @@ try {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PrerequisiteStatus {
     pub git_installed: bool,
-    pub build_tools_installed: bool,
+    pub node_installed: bool,
     pub node_version: Option<String>,
+    pub node_compatible: bool,  // >= 22.12.0
+    pub npm_installed: bool,
 }
 
 pub fn check_prerequisites() -> PrerequisiteStatus {
+    let node_version = get_node_version();
+    let node_compatible = node_version.as_ref()
+        .map(|v| is_node_version_compatible(v))
+        .unwrap_or(false);
+    
     PrerequisiteStatus {
         git_installed: is_git_installed(),
-        build_tools_installed: is_build_tools_installed(),
-        node_version: get_node_version(),
+        node_installed: node_version.is_some(),
+        node_version,
+        node_compatible,
+        npm_installed: is_npm_installed(),
     }
 }
 
-fn get_node_version() -> Option<String> {
+/// Node.js 버전 확인
+pub fn get_node_version() -> Option<String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     
     Command::new("cmd")
         .args(["/C", "node --version"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+}
+
+/// npm 설치 여부 확인
+pub fn is_npm_installed() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    Command::new("cmd")
+        .args(["/C", "npm --version"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Node.js 버전이 >= 22.12.0 인지 확인
+pub fn is_node_version_compatible(version: &str) -> bool {
+    // "v22.14.0" 형태에서 버전 파싱
+    let version = version.trim_start_matches('v');
+    let parts: Vec<&str> = version.split('.').collect();
+    
+    if parts.len() < 2 {
+        return false;
+    }
+    
+    let major: u32 = parts[0].parse().unwrap_or(0);
+    let minor: u32 = parts[1].parse().unwrap_or(0);
+    
+    // 22.12.0 이상 필요
+    major > 22 || (major == 22 && minor >= 12)
+}
+
+/// winget으로 Node.js LTS 설치 (UAC 프롬프트 표시)
+pub fn install_nodejs_with_winget_visible() -> Result<String, String> {
+    eprintln!("Node.js LTS 설치 시작 (winget 사용)...");
+    
+    // winget 사용 가능한지 확인
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    let winget_check = Command::new("cmd")
+        .args(["/C", "winget --version"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    
+    if winget_check.is_err() || !winget_check.unwrap().status.success() {
+        return Err("winget이 설치되어 있지 않습니다. Windows 10 1709+ 또는 Windows 11이 필요합니다.".to_string());
+    }
+    
+    eprintln!("winget 확인됨. Node.js 설치를 위한 관리자 권한 요청...");
+    
+    // PowerShell을 통해 관리자 권한으로 winget 실행
+    let ps_command = r#"
+        Start-Process -FilePath 'winget' -ArgumentList 'install --id OpenJS.NodeJS.LTS -e --source winget --silent --accept-source-agreements --accept-package-agreements' -Verb RunAs -Wait
+    "#;
+    
+    // UAC 창이 보이도록 CREATE_NO_WINDOW 사용하지 않음
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", ps_command])
+        .output()
+        .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
+    
+    // 설치 확인
+    refresh_environment_variables();
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    
+    if let Some(version) = get_node_version() {
+        eprintln!("✓ Node.js 설치 확인됨: {}", version);
+        Ok(format!("Node.js {}가 설치되었습니다!", version))
+    } else {
+        eprintln!("Node.js 설치 완료 (앱 재시작 필요)");
+        Ok("Node.js 설치 완료. 앱을 재시작하면 인식됩니다.".to_string())
+    }
+}
+
+/// 전역으로 OpenClaw 설치 (npm install -g openclaw)
+pub fn install_openclaw_global() -> Result<String, String> {
+    eprintln!("OpenClaw 전역 설치 시작 (npm install -g openclaw)...");
+    
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    // npm이 있는지 확인
+    if !is_npm_installed() {
+        return Err("npm이 설치되어 있지 않습니다. Node.js를 먼저 설치해주세요.".to_string());
+    }
+    
+    // npm install -g openclaw 실행
+    let output = Command::new("cmd")
+        .args(["/C", "npm install -g openclaw"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("npm 실행 실패: {}", e))?;
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    
+    eprintln!("npm stdout: {}", stdout);
+    eprintln!("npm stderr: {}", stderr);
+    
+    if output.status.success() {
+        // 설치 확인
+        let check = Command::new("cmd")
+            .args(["/C", "openclaw --version"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        
+        if let Ok(check_output) = check {
+            if check_output.status.success() {
+                let version = String::from_utf8_lossy(&check_output.stdout).trim().to_string();
+                return Ok(format!("OpenClaw {} 설치 완료!", version));
+            }
+        }
+        
+        Ok("OpenClaw 설치 완료!".to_string())
+    } else {
+        Err(format!("OpenClaw 설치 실패:\n{}\n{}", stdout, stderr))
+    }
+}
+
+/// OpenClaw 설치 여부 확인
+pub fn is_openclaw_installed() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    Command::new("cmd")
+        .args(["/C", "openclaw --version"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// OpenClaw 버전 확인
+pub fn get_openclaw_version() -> Option<String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    Command::new("cmd")
+        .args(["/C", "openclaw --version"])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok()

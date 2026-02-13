@@ -1,37 +1,101 @@
 mod openclaw;
-mod openclaw_manager;
-mod resource_resolver;
-mod openclaw_installer_alt;
-mod openclaw_global_installer;
-mod openclaw_extractor;
 
 #[cfg(windows)]
 mod windows_helper;
 
+// ===== 환경 체크 =====
+
 #[tauri::command]
-async fn check_node_installed() -> Result<bool, String> {
-    openclaw::is_node_installed().await
+fn check_node_installed() -> bool {
+    #[cfg(windows)]
+    {
+        windows_helper::get_node_version().is_some()
+    }
+    #[cfg(not(windows))]
+    {
+        std::process::Command::new("node")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
 }
 
 #[tauri::command]
-async fn get_node_version() -> Result<String, String> {
-    openclaw::get_node_version().await
+fn get_node_version() -> Option<String> {
+    #[cfg(windows)]
+    {
+        windows_helper::get_node_version()
+    }
+    #[cfg(not(windows))]
+    {
+        std::process::Command::new("node")
+            .arg("--version")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    }
 }
 
 #[tauri::command]
-async fn check_openclaw_installed() -> Result<bool, String> {
-    openclaw::is_openclaw_installed().await
+fn check_openclaw_installed() -> bool {
+    #[cfg(windows)]
+    {
+        windows_helper::is_openclaw_installed()
+    }
+    #[cfg(not(windows))]
+    {
+        std::process::Command::new("openclaw")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
 }
 
 #[tauri::command]
-async fn get_openclaw_version() -> Result<String, String> {
-    openclaw::get_openclaw_version().await
+fn get_openclaw_version() -> Option<String> {
+    #[cfg(windows)]
+    {
+        windows_helper::get_openclaw_version()
+    }
+    #[cfg(not(windows))]
+    {
+        std::process::Command::new("openclaw")
+            .arg("--version")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    }
 }
 
+// ===== 설치 =====
+
+/// OpenClaw 설치 (npm install -g openclaw)
 #[tauri::command]
 async fn install_openclaw() -> Result<String, String> {
-    openclaw::install_openclaw().await
+    #[cfg(windows)]
+    {
+        windows_helper::install_openclaw_global()
+    }
+    #[cfg(not(windows))]
+    {
+        let output = std::process::Command::new("npm")
+            .args(["install", "-g", "openclaw"])
+            .output()
+            .map_err(|e| format!("npm 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok("OpenClaw 설치 완료!".to_string())
+        } else {
+            Err(format!("설치 실패: {}", String::from_utf8_lossy(&output.stderr)))
+        }
+    }
 }
+
+// ===== 설정 =====
 
 #[tauri::command]
 async fn configure_model(provider: String, model: String, api_key: String) -> Result<(), String> {
@@ -98,6 +162,8 @@ async fn configure_whatsapp_full(
     openclaw::configure_whatsapp_full(&dm_policy, allow_from, &group_policy, group_allow_from, require_mention).await
 }
 
+// ===== Gateway 제어 =====
+
 #[tauri::command]
 async fn start_gateway() -> Result<(), String> {
     openclaw::start_gateway().await
@@ -117,6 +183,18 @@ async fn get_gateway_status() -> Result<String, String> {
 async fn start_whatsapp_pairing() -> Result<String, String> {
     openclaw::start_whatsapp_pairing().await
 }
+
+#[tauri::command]
+async fn stop_gateway() -> Result<(), String> {
+    openclaw::stop_gateway().await
+}
+
+#[tauri::command]
+async fn restart_gateway() -> Result<String, String> {
+    openclaw::restart_gateway().await
+}
+
+// ===== Onboard =====
 
 #[tauri::command]
 async fn run_full_onboard(
@@ -144,6 +222,13 @@ fn generate_token() -> String {
 }
 
 #[tauri::command]
+async fn is_onboarding_completed() -> Result<bool, String> {
+    openclaw::is_onboarding_completed().await
+}
+
+// ===== 유틸 =====
+
+#[tauri::command]
 fn get_os_type() -> String {
     openclaw::get_os_type()
 }
@@ -161,21 +246,6 @@ async fn set_env_config(key: String, value: String) -> Result<(), String> {
 #[tauri::command]
 async fn get_configured_integrations() -> Result<Vec<String>, String> {
     openclaw::get_configured_integrations().await
-}
-
-#[tauri::command]
-async fn is_onboarding_completed() -> Result<bool, String> {
-    openclaw::is_onboarding_completed().await
-}
-
-#[tauri::command]
-async fn stop_gateway() -> Result<(), String> {
-    openclaw::stop_gateway().await
-}
-
-#[tauri::command]
-async fn restart_gateway() -> Result<String, String> {
-    openclaw::restart_gateway().await
 }
 
 #[tauri::command]
@@ -198,61 +268,23 @@ async fn install_browser_control() -> Result<String, String> {
 /// Windows 필수 프로그램 상태 확인
 #[cfg(windows)]
 #[tauri::command]
-fn check_windows_prerequisites() -> Result<windows_helper::PrerequisiteStatus, String> {
-    Ok(windows_helper::check_prerequisites())
+fn check_prerequisites() -> windows_helper::PrerequisiteStatus {
+    windows_helper::check_prerequisites()
 }
 
 #[cfg(not(windows))]
 #[tauri::command]
-fn check_windows_prerequisites() -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({
+fn check_prerequisites() -> serde_json::Value {
+    serde_json::json!({
         "git_installed": true,
-        "build_tools_installed": true,
-        "node_version": null
-    }))
+        "node_installed": true,
+        "node_version": null,
+        "node_compatible": true,
+        "npm_installed": true
+    })
 }
 
-/// Git 설치 (winget 사용, 관리자 권한 필요)
-#[cfg(windows)]
-#[tauri::command]
-async fn install_git() -> Result<String, String> {
-    windows_helper::install_git_with_winget().await
-}
-
-#[cfg(not(windows))]
-#[tauri::command]
-async fn install_git() -> Result<String, String> {
-    Err("이 기능은 Windows에서만 사용 가능합니다".to_string())
-}
-
-/// Visual Studio Build Tools 설치
-#[cfg(windows)]
-#[tauri::command]
-async fn install_build_tools() -> Result<String, String> {
-    windows_helper::install_build_tools().await
-}
-
-#[cfg(not(windows))]
-#[tauri::command]
-async fn install_build_tools() -> Result<String, String> {
-    Err("이 기능은 Windows에서만 사용 가능합니다".to_string())
-}
-
-/// 환경 변수 새로고침
-#[cfg(windows)]
-#[tauri::command]
-fn refresh_path() -> Result<(), String> {
-    windows_helper::refresh_environment_variables();
-    Ok(())
-}
-
-#[cfg(not(windows))]
-#[tauri::command]
-fn refresh_path() -> Result<(), String> {
-    Ok(())
-}
-
-/// Git 설치 여부만 확인
+/// Git 설치 여부 확인
 #[cfg(windows)]
 #[tauri::command]
 fn is_git_installed() -> bool {
@@ -262,7 +294,6 @@ fn is_git_installed() -> bool {
 #[cfg(not(windows))]
 #[tauri::command]
 fn is_git_installed() -> bool {
-    // Unix에서는 which git으로 확인
     std::process::Command::new("which")
         .arg("git")
         .output()
@@ -270,37 +301,109 @@ fn is_git_installed() -> bool {
         .unwrap_or(false)
 }
 
-/// 필수 프로그램 설치 후 OpenClaw 설치 (전체 플로우)
+/// Git 설치 (winget 사용)
+#[cfg(windows)]
 #[tauri::command]
-async fn install_with_prerequisites() -> Result<String, String> {
+fn install_git() -> Result<String, String> {
+    windows_helper::install_git_with_winget_visible()
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn install_git() -> Result<String, String> {
+    Err("이 기능은 Windows에서만 사용 가능합니다".to_string())
+}
+
+/// Node.js 설치 (winget 사용)
+#[cfg(windows)]
+#[tauri::command]
+fn install_nodejs() -> Result<String, String> {
+    windows_helper::install_nodejs_with_winget_visible()
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn install_nodejs() -> Result<String, String> {
+    Err("이 기능은 Windows에서만 사용 가능합니다".to_string())
+}
+
+/// 환경 변수 새로고침
+#[cfg(windows)]
+#[tauri::command]
+fn refresh_path() {
+    windows_helper::refresh_environment_variables();
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn refresh_path() {
+    // Unix에서는 필요 없음
+}
+
+/// 필수 프로그램 설치 + 재시작 필요 여부 확인
+/// 반환: { needs_restart: bool, message: String }
+#[tauri::command]
+fn install_prerequisites() -> Result<serde_json::Value, String> {
+    let mut installed_something = false;
     let mut messages: Vec<String> = Vec::new();
     
-    // 1. Git 설치 확인 (Windows만)
     #[cfg(windows)]
     {
+        // 1. Git 확인 및 설치
         if !windows_helper::is_git_installed() {
-            messages.push("Git이 설치되어 있지 않습니다. 설치를 시작합니다...".to_string());
-            messages.push("⚠️ 관리자 권한 승인 창이 나타나면 '예'를 클릭해주세요.".to_string());
-            
+            messages.push("Git 설치 중... (관리자 권한 승인 창이 나타나면 '예'를 클릭하세요)".to_string());
             match windows_helper::install_git_with_winget_visible() {
-                Ok(msg) => messages.push(format!("✓ {}", msg)),
+                Ok(msg) => {
+                    messages.push(format!("✓ {}", msg));
+                    installed_something = true;
+                }
                 Err(e) => return Err(format!("Git 설치 실패: {}", e)),
             }
-            
-            // PATH 새로고침
-            windows_helper::refresh_environment_variables();
-            std::thread::sleep(std::time::Duration::from_secs(2));
         } else {
             messages.push("✓ Git이 이미 설치되어 있습니다.".to_string());
         }
+        
+        // 2. Node.js 확인 및 설치
+        let node_status = windows_helper::check_prerequisites();
+        if !node_status.node_compatible {
+            if node_status.node_installed {
+                messages.push(format!(
+                    "⚠️ Node.js {}가 설치되어 있지만, 22.12.0 이상이 필요합니다.",
+                    node_status.node_version.unwrap_or_default()
+                ));
+            }
+            messages.push("Node.js LTS 설치 중... (관리자 권한 승인 창이 나타나면 '예'를 클릭하세요)".to_string());
+            match windows_helper::install_nodejs_with_winget_visible() {
+                Ok(msg) => {
+                    messages.push(format!("✓ {}", msg));
+                    installed_something = true;
+                }
+                Err(e) => return Err(format!("Node.js 설치 실패: {}", e)),
+            }
+        } else {
+            messages.push(format!(
+                "✓ Node.js {}가 이미 설치되어 있습니다.",
+                node_status.node_version.unwrap_or_default()
+            ));
+        }
     }
     
-    // 2. OpenClaw 설치
-    messages.push("OpenClaw 설치를 시작합니다...".to_string());
-    let result = openclaw::install_openclaw().await?;
-    messages.push(format!("✓ {}", result));
+    #[cfg(not(windows))]
+    {
+        // Unix에서는 시스템 패키지 매니저 사용 안내
+        if !is_git_installed() {
+            return Err("Git이 설치되어 있지 않습니다. 시스템 패키지 매니저로 설치해주세요.".to_string());
+        }
+        if !check_node_installed() {
+            return Err("Node.js가 설치되어 있지 않습니다. 시스템 패키지 매니저로 설치해주세요.".to_string());
+        }
+        messages.push("✓ Git과 Node.js가 설치되어 있습니다.".to_string());
+    }
     
-    Ok(messages.join("\n"))
+    Ok(serde_json::json!({
+        "needs_restart": installed_something,
+        "message": messages.join("\n")
+    }))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -313,7 +416,9 @@ pub fn run() {
             get_node_version,
             check_openclaw_installed,
             get_openclaw_version,
+            // 설치
             install_openclaw,
+            install_prerequisites,
             // 설정
             configure_model,
             configure_gateway,
@@ -340,103 +445,47 @@ pub fn run() {
             // 유틸
             get_os_type,
             get_node_install_url,
-            // 통합 설정
             set_env_config,
             get_configured_integrations,
-            // 보안 설정
             apply_default_security_settings,
-            // 경로 정보
             get_install_path,
-            // 브라우저 컨트롤
             install_browser_control,
             // Windows 전용
-            check_windows_prerequisites,
-            install_git,
-            install_build_tools,
-            refresh_path,
+            check_prerequisites,
             is_git_installed,
-            install_with_prerequisites,
+            install_git,
+            install_nodejs,
+            refresh_path,
         ])
-        .setup(|app| {
-            // OpenClaw 관리자 초기화 (실패해도 앱은 계속 실행)
-            match openclaw_manager::init_manager(&app.handle()) {
-                Ok(_) => {
-                    eprintln!("✓ OpenClaw 관리자 초기화 성공");
-                }
-                Err(e) => {
-                    // 초기화 실패해도 앱은 실행 - 나중에 수동 설치 가능
-                    eprintln!("⚠️ OpenClaw 관리자 초기화 실패: {}", e);
-                    eprintln!("   Node.js Portable이 없을 수 있습니다.");
-                    eprintln!("   앱에서 '설치' 버튼을 눌러 설치해주세요.");
-                }
-            }
+        .setup(|_app| {
+            eprintln!("moldClaw 시작됨");
+            eprintln!("winget 기반 설치 모드 (node-portable 번들 없음)");
             Ok(())
         })
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
-                println!("moldClaw 종료 중... OpenClaw Gateway 정리 시작");
-                
-                // 1. 정상 종료 시도 (먼저)
-                println!("1. OpenClaw Gateway 정상 종료 시도...");
+                eprintln!("moldClaw 종료 중...");
                 
                 #[cfg(windows)]
                 {
                     use std::os::windows::process::CommandExt;
                     const CREATE_NO_WINDOW: u32 = 0x08000000;
                     
-                    // Windows: taskkill로 관련 프로세스 종료 (창 안 띄움)
-                    println!("Windows 프로세스 정리 중...");
-                    
-                    // node.exe 중 openclaw 관련 프로세스 종료
+                    // OpenClaw Gateway 종료
                     let _ = std::process::Command::new("cmd")
-                        .args(["/C", "taskkill /F /IM node.exe /FI \"WINDOWTITLE eq *openclaw*\" 2>nul"])
+                        .args(["/C", "openclaw gateway stop"])
                         .creation_flags(CREATE_NO_WINDOW)
                         .output();
-                    
-                    // 2초 대기
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
-                    println!("   ✓ 프로세스 정리 완료");
                 }
                 
                 #[cfg(not(windows))]
                 {
-                    let stop_result = std::process::Command::new("openclaw")
+                    let _ = std::process::Command::new("openclaw")
                         .args(["gateway", "stop"])
-                        .output();
-                        
-                    if let Ok(output) = stop_result {
-                        if output.status.success() {
-                            println!("   ✓ Gateway 정상 종료 성공");
-                        } else {
-                            println!("   ✗ Gateway 정상 종료 실패");
-                        }
-                    }
-                    
-                    // 2초 대기
-                    std::thread::sleep(std::time::Duration::from_millis(2000));
-                    
-                    // 2. 강제 종료 (fallback)
-                    println!("2. 남은 프로세스 강제 종료...");
-                    let _ = std::process::Command::new("pkill")
-                        .args(["-9", "-f", "openclaw-gateway"])
-                        .output();
-                    
-                    let _ = std::process::Command::new("pkill")
-                        .args(["-f", "openclaw$"])
-                        .output();
-                    
-                    // 3. systemd 서비스도 중지 (자동 재시작 방지)
-                    println!("3. systemd 서비스 중지...");
-                    let _ = std::process::Command::new("systemctl")
-                        .args(["--user", "stop", "openclaw-gateway.service"])
-                        .output();
-                        
-                    let _ = std::process::Command::new("systemctl")
-                        .args(["--user", "disable", "openclaw-gateway.service"])
                         .output();
                 }
                 
-                println!("OpenClaw Gateway 완전 정리 완료");
+                eprintln!("moldClaw 종료 완료");
             }
         })
         .run(tauri::generate_context!())
