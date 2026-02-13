@@ -480,8 +480,17 @@ impl OpenClawManager {
         
         eprintln!("OpenClaw 실행: {:?} {:?}", openclaw_bin, args);
         
-        // OpenClaw 실행
-        let mut cmd = Command::new(&openclaw_bin);
+        // .mjs 파일인 경우 Node.js로 실행, 그 외는 직접 실행
+        let mut cmd = if openclaw_bin.extension().and_then(|s| s.to_str()) == Some("mjs") {
+            eprintln!("Node.js로 .mjs 파일 실행: {} {}", 
+                self.bundled_node.to_str().unwrap(), 
+                openclaw_bin.to_str().unwrap());
+            let mut c = Command::new(&self.bundled_node);
+            c.arg(&openclaw_bin);
+            c
+        } else {
+            Command::new(&openclaw_bin)
+        };
         cmd.args(&args)
             .env("PATH", self.get_full_path())
             .env("OPENCLAW_CONFIG_DIR", &self.openclaw_home);
@@ -583,6 +592,24 @@ impl OpenClawManager {
     }
     
     fn get_openclaw_bin(&self) -> PathBuf {
+        // 1. 직접 압축 해제한 경우 먼저 확인 (openclaw.mjs가 최상위에 있음)
+        let direct_mjs = self.install_dir.join("openclaw.mjs");
+        if direct_mjs.exists() {
+            eprintln!("직접 압축 해제된 OpenClaw 발견: {:?}", direct_mjs);
+            
+            #[cfg(windows)]
+            {
+                // Windows에서는 .bat 파일 우선 (생성했다면)
+                let bat_path = self.install_dir.join("openclaw.bat");
+                if bat_path.exists() {
+                    return bat_path;
+                }
+            }
+            
+            return direct_mjs;
+        }
+        
+        // 2. npm install로 설치한 경우 (기존 로직)
         let bin_dir = self.install_dir.join("node_modules/.bin");
         
         if cfg!(windows) {
@@ -624,28 +651,38 @@ impl OpenClawManager {
     }
     
     async fn install_from_bundle(&self, bundle_path: &PathBuf) -> Result<String, String> {
-        eprintln!("번들에서 OpenClaw 설치 시작...");
+        eprintln!("번들에서 OpenClaw 직접 압축 해제 시작...");
+        eprintln!("npm install 없이 순수 압축 해제!");
         
-        // 번들된 tarball에서 직접 설치 (Git 불필요)
-        let output = Command::new(&self.bundled_npm)
-            .args([
-                "install",
-                bundle_path.to_str().unwrap(),
-                "--prefix", self.install_dir.to_str().unwrap(),
-                "--no-fund",
-                "--no-audit",
-                "--ignore-scripts",  // prepare 스크립트(Git 호출) 무시 - 중요!
-                "--offline",  // 오프라인 모드
-            ])
-            .env("PATH", self.get_full_path())
-            .env("npm_config_cache", self.install_dir.join(".npm-cache"))
-            .output()
-            .map_err(|e| format!("번들 설치 실패: {}", e))?;
+        // npm install 대신 직접 압축 해제 사용!
+        use crate::openclaw_extractor;
+        let result = openclaw_extractor::extract_openclaw_bundle(
+            bundle_path, 
+            &self.install_dir
+        ).await?;
         
-        if output.status.success() {
-            Ok("OpenClaw가 번들에서 설치되었습니다! (Git 불필요)".to_string())
+        // 압축 해제 후 실행 파일 확인
+        let openclaw_exe = self.install_dir.join("openclaw.mjs");
+        if openclaw_exe.exists() {
+            eprintln!("✓ OpenClaw 실행 파일 확인: {:?}", openclaw_exe);
+            
+            // Windows에서 .bat 파일 생성 (편의를 위해)
+            #[cfg(windows)]
+            {
+                let bat_content = format!(
+                    "@echo off\n\"{}\" \"{}\" %*",
+                    self.bundled_node.to_str().unwrap(),
+                    openclaw_exe.to_str().unwrap()
+                );
+                let bat_path = self.install_dir.join("openclaw.bat");
+                fs::write(&bat_path, bat_content)
+                    .map_err(|e| format!("bat 파일 생성 실패: {}", e))?;
+                eprintln!("✓ openclaw.bat 생성 완료");
+            }
+            
+            Ok(format!("OpenClaw 번들 압축 해제 완료! npm install 없이 성공!\n{}", result))
         } else {
-            Err(format!("번들 설치 실패: {}", String::from_utf8_lossy(&output.stderr)))
+            Err("압축 해제는 성공했지만 openclaw.mjs를 찾을 수 없습니다".to_string())
         }
     }
     
