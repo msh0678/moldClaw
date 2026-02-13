@@ -49,10 +49,26 @@ async fn install_dependencies(
     node_path: &PathBuf,
     npm_path: &PathBuf,
 ) -> Result<(), String> {
+    eprintln!("=== npm install 시작 ===");
+    eprintln!("Node 경로: {:?}", node_path);
+    eprintln!("NPM 경로: {:?}", npm_path);
+    eprintln!("설치 디렉토리: {:?}", install_dir);
+    
     // npm 실행 경로 확인
     if !npm_path.exists() {
         return Err(format!("npm을 찾을 수 없습니다: {:?}", npm_path));
     }
+    
+    if !node_path.exists() {
+        return Err(format!("node를 찾을 수 없습니다: {:?}", node_path));
+    }
+    
+    // package.json 확인
+    let package_json = install_dir.join("package.json");
+    if !package_json.exists() {
+        return Err(format!("package.json을 찾을 수 없습니다: {:?}", package_json));
+    }
+    eprintln!("✓ package.json 확인됨");
     
     // PATH에 node 디렉토리 추가
     let node_dir = node_path.parent()
@@ -65,43 +81,69 @@ async fn install_dependencies(
     let full_path = format!("{}:{}", node_dir.to_string_lossy(), system_path);
     
     eprintln!("npm install 실행 중...");
-    eprintln!("작업 디렉토리: {:?}", install_dir);
     
-    let mut cmd = Command::new(npm_path);
-    cmd.args([
-            "install",
-            "--ignore-scripts",    // prepare 스크립트가 Git 호출하므로 무시
-            "--no-fund",
-            "--no-audit",
-            "--no-optional",       // 선택적 의존성 제외 (빌드 속도)
-            "--prefer-offline",    // 캐시 우선
-            "--progress=false",
-        ])
-        .current_dir(install_dir)
-        .env("PATH", &full_path)
-        .env("NODE_ENV", "production");
-    
-    // Windows 추가 설정
+    // Windows에서는 cmd /c를 통해 npm.cmd 실행 (더 안정적)
     #[cfg(windows)]
-    {
+    let output = {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+        
+        let npm_path_str = npm_path.to_string_lossy();
+        let install_dir_str = install_dir.to_string_lossy();
+        
+        Command::new("cmd")
+            .args([
+                "/C",
+                &format!(
+                    "cd /d \"{}\" && \"{}\" install --ignore-scripts --no-fund --no-audit --no-optional --progress=false",
+                    install_dir_str,
+                    npm_path_str
+                )
+            ])
+            .env("PATH", &full_path)
+            .env("NODE_ENV", "production")
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("npm 실행 실패: {}", e))?
+    };
     
-    let output = cmd.output()
-        .map_err(|e| format!("npm 실행 실패: {}", e))?;
+    #[cfg(not(windows))]
+    let output = {
+        Command::new(npm_path)
+            .args([
+                "install",
+                "--ignore-scripts",
+                "--no-fund",
+                "--no-audit",
+                "--no-optional",
+                "--progress=false",
+            ])
+            .current_dir(install_dir)
+            .env("PATH", &full_path)
+            .env("NODE_ENV", "production")
+            .output()
+            .map_err(|e| format!("npm 실행 실패: {}", e))?
+    };
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    
+    eprintln!("npm stdout: {}", stdout);
+    eprintln!("npm stderr: {}", stderr);
+    eprintln!("npm exit code: {:?}", output.status.code());
     
     if output.status.success() {
-        eprintln!("✓ npm install 완료!");
-        Ok(())
+        // node_modules 생성 확인
+        let node_modules = install_dir.join("node_modules");
+        if node_modules.exists() {
+            eprintln!("✓ npm install 완료! node_modules 생성됨");
+            Ok(())
+        } else {
+            Err("npm install은 성공했지만 node_modules가 생성되지 않았습니다".to_string())
+        }
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        eprintln!("✗ npm install 실패");
-        eprintln!("stdout: {}", stdout);
-        eprintln!("stderr: {}", stderr);
-        Err(format!("npm install 실패:\n{}\n{}", stdout, stderr))
+        Err(format!("npm install 실패 (exit code: {:?}):\nstdout: {}\nstderr: {}", 
+            output.status.code(), stdout, stderr))
     }
 }
 
