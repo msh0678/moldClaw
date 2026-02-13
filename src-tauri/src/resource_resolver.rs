@@ -29,8 +29,9 @@ pub fn find_node_portable(app_handle: &AppHandle) -> Result<PathBuf, String> {
         let exe_dir = exe_path.parent().unwrap();
         eprintln!("[Exe-based] Executable at: {:?}", exe_path);
         
+        #[cfg(not(windows))]
         let relative_paths = vec![
-            // Windows 설치 구조
+            // macOS/Linux 설치 구조
             "resources/node-portable",
             "../resources/node-portable",
             
@@ -41,8 +42,24 @@ pub fn find_node_portable(app_handle: &AppHandle) -> Result<PathBuf, String> {
             // Linux AppImage (런타임 마운트)
             "../../usr/lib/moldclaw/resources/node-portable",
             
-            // 개발 환경
+            // 개발 환경 (npm run tauri:dev)
             "../../../src-tauri/resources/node-portable",
+            "../../src-tauri/resources/node-portable",
+            "../src-tauri/resources/node-portable",
+            "src-tauri/resources/node-portable",
+        ];
+        
+        // Windows: 백슬래시 사용
+        #[cfg(windows)]
+        let relative_paths = vec![
+            // Windows 설치 구조
+            "resources\\node-portable",
+            "..\\resources\\node-portable",
+            
+            // 개발 환경 (target\debug 기준)
+            "..\\..\\resources\\node-portable",
+            "..\\..\\src-tauri\\resources\\node-portable",
+            "..\\..\\..\\src-tauri\\resources\\node-portable",
         ];
         
         for rel_path in &relative_paths {

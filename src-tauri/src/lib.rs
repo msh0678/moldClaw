@@ -305,9 +305,18 @@ pub fn run() {
             refresh_path,
         ])
         .setup(|app| {
-            // OpenClaw 관리자 초기화
-            openclaw_manager::init_manager(&app.handle())
-                .map_err(|e| format!("OpenClaw 관리자 초기화 실패: {}", e))?;
+            // OpenClaw 관리자 초기화 (실패해도 앱은 계속 실행)
+            match openclaw_manager::init_manager(&app.handle()) {
+                Ok(_) => {
+                    eprintln!("✓ OpenClaw 관리자 초기화 성공");
+                }
+                Err(e) => {
+                    // 초기화 실패해도 앱은 실행 - 나중에 수동 설치 가능
+                    eprintln!("⚠️ OpenClaw 관리자 초기화 실패: {}", e);
+                    eprintln!("   Node.js Portable이 없을 수 있습니다.");
+                    eprintln!("   앱에서 '설치' 버튼을 눌러 설치해주세요.");
+                }
+            }
             Ok(())
         })
         .on_window_event(|_window, event| {
