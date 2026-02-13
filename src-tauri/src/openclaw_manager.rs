@@ -393,22 +393,21 @@ impl OpenClawManager {
             .to_str()
             .ok_or("캐시 경로 변환 실패")?;
         
-        eprintln!("npm install 명령: tarball URL로 직접 설치 (Git 없이)");
+        eprintln!("npm install -g 명령: 전역 설치");
+        eprintln!("전역 설치 경로: {:?}", install_prefix);
         
-        // Git 없이 tarball URL로 직접 설치 시도
+        // 전역 설치 (npm install -g openclaw)
+        // --prefix로 전역 설치 위치 지정
         let mut cmd = Command::new(&self.bundled_npm);
         cmd.args([
                 "install",
-                "https://registry.npmjs.org/openclaw/-/openclaw-2026.2.12.tgz",  // 실제 버전의 tarball URL로 직접 설치
-                "--prefix", install_prefix,
+                "-g",  // 전역 설치
+                "openclaw",  // 패키지 이름으로 직접 설치
+                "--prefix", install_prefix,  // 전역 설치 위치 지정
                 "--no-fund",
                 "--no-audit",
                 "--no-update-notifier",
-                "--no-optional",  // 선택적 의존성 제외
-                "--ignore-scripts",  // Git을 호출할 수 있는 스크립트 무시
-                "--prefer-offline",  // 오프라인 우선
-                "--no-save",  // package.json 수정 안 함
-                "--registry", "https://registry.npmjs.org",  // 공식 레지스트리만 사용
+                "--registry", "https://registry.npmjs.org",
                 "--progress=false",
             ])
             .env("PATH", self.get_full_path())  
@@ -754,26 +753,22 @@ impl OpenClawManager {
     }
     
     async fn install_openclaw_from_tarball(&self) -> Result<String, String> {
-        eprintln!("Tarball에서 OpenClaw 직접 설치 시도...");
+        eprintln!("전역 설치 재시도...");
         
-        // 방법 1: 직접 tarball URL 사용 (npm pack 대신)
-        let tarball_url = "https://registry.npmjs.org/openclaw/-/openclaw-2026.2.12.tgz";
+        // 전역 설치 재시도
         let output = Command::new(&self.bundled_npm)
             .args([
                 "install",
-                tarball_url,
-                "--prefix", self.install_dir.to_str().unwrap(),
+                "-g",
+                "openclaw",
                 "--no-fund",
                 "--no-audit",
-                "--no-optional",
-                "--ignore-scripts",
-                "--no-save",
             ])
             .output()
-            .map_err(|e| format!("tarball URL 설치 실패: {}", e))?;
+            .map_err(|e| format!("전역 설치 실패: {}", e))?;
         
         if output.status.success() {
-            Ok("OpenClaw가 tarball URL로 직접 설치되었습니다!".to_string())
+            Ok("OpenClaw가 전역으로 설치되었습니다!".to_string())
         } else {
             // Windows에서 추가 fallback
             #[cfg(windows)]
@@ -832,27 +827,23 @@ impl OpenClawManager {
     }
     
     async fn install_from_npm_registry(&self) -> Result<String, String> {
-        eprintln!("NPM 레지스트리에서 직접 다운로드...");
-        
-        // 최신 버전 사용
-        let tarball_url = "https://registry.npmjs.org/openclaw/-/openclaw-2026.2.12.tgz";
+        eprintln!("NPM 레지스트리에서 전역 설치...");
         
         let output = Command::new(&self.bundled_npm)
             .args([
                 "install",
-                tarball_url,
-                "--prefix", self.install_dir.to_str().unwrap(),
+                "-g",
+                "openclaw",
                 "--no-fund",
                 "--no-audit",
-                "--no-optional",
             ])
             .output()
-            .map_err(|e| format!("레지스트리 설치 실패: {}", e))?;
+            .map_err(|e| format!("전역 설치 실패: {}", e))?;
         
         if output.status.success() {
-            Ok("OpenClaw가 NPM 레지스트리에서 설치되었습니다!".to_string())
+            Ok("OpenClaw가 전역으로 설치되었습니다!".to_string())
         } else {
-            Err(format!("NPM 레지스트리 설치 실패: {}", 
+            Err(format!("전역 설치 실패: {}", 
                 String::from_utf8_lossy(&output.stderr)))
         }
     }
