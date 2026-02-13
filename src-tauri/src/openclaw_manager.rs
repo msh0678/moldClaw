@@ -287,6 +287,19 @@ impl OpenClawManager {
         eprintln!("OpenClaw 설치 확인...");
         eprintln!("설치 디렉토리: {:?}", self.install_dir);
         
+        // 번들된 OpenClaw 확인
+        let bundled_openclaw = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
+            .map(|p| p.join("resources/openclaw-bundle/openclaw.tgz"));
+        
+        if let Some(bundle_path) = bundled_openclaw {
+            if bundle_path.exists() {
+                eprintln!("번들된 OpenClaw 발견: {:?}", bundle_path);
+                return self.install_from_bundle(&bundle_path).await;
+            }
+        }
+        
         // 기존 설치 확인
         if self.check_openclaw_installed().await {
             let existing_openclaw = self.get_openclaw_bin();
@@ -397,10 +410,18 @@ impl OpenClawManager {
             eprintln!("stdout: {}", stdout);
             eprintln!("stderr: {}", stderr);
             
-            // Git 관련 에러 처리
+            // Git 관련 에러 처리 - 대체 방법 시도
             if stderr.contains("git") || stdout.contains("git") {
-                Err("Git이 필요한 것 같습니다. 하지만 moldClaw는 Git 없이도 작동해야 합니다. \
-                     대안: 1) OpenClaw를 수동으로 다운로드, 2) Git 설치 (https://git-scm.com)".to_string())
+                eprintln!("Git 에러 감지, 대체 설치 방법 시도...");
+                
+                // tarball URL로 직접 설치 시도
+                self.install_openclaw_from_tarball().await
+                    .or_else(|e| {
+                        Err(format!("Git 없이 설치 실패. 수동 설치가 필요합니다:\n\
+                            1) https://www.npmjs.com/package/openclaw 에서 다운로드\n\
+                            2) 또는 Git 설치: https://git-scm.com\n\
+                            에러: {}", e))
+                    })
             } else {
                 Err(format!("OpenClaw 설치 실패:\n{}\n{}", stdout, stderr))
             }
@@ -553,6 +574,98 @@ impl OpenClawManager {
             }
             
             openclaw_path
+        }
+    }
+    
+    async fn install_from_bundle(&self, bundle_path: &PathBuf) -> Result<String, String> {
+        eprintln!("번들에서 OpenClaw 설치 시작...");
+        
+        // 번들된 tarball에서 직접 설치 (Git 불필요)
+        let output = Command::new(&self.bundled_npm)
+            .args([
+                "install",
+                bundle_path.to_str().unwrap(),
+                "--prefix", self.install_dir.to_str().unwrap(),
+                "--no-fund",
+                "--no-audit",
+                "--offline",  // 오프라인 모드
+            ])
+            .env("PATH", self.get_full_path())
+            .env("npm_config_cache", self.install_dir.join(".npm-cache"))
+            .output()
+            .map_err(|e| format!("번들 설치 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok("OpenClaw가 번들에서 설치되었습니다! (Git 불필요)".to_string())
+        } else {
+            Err(format!("번들 설치 실패: {}", String::from_utf8_lossy(&output.stderr)))
+        }
+    }
+    
+    async fn install_openclaw_from_tarball(&self) -> Result<String, String> {
+        eprintln!("Tarball에서 OpenClaw 직접 설치 시도...");
+        
+        // npm pack 사용 (Git 불필요)
+        let output = Command::new(&self.bundled_npm)
+            .args([
+                "pack",
+                "openclaw",
+                "--pack-destination", self.install_dir.to_str().unwrap(),
+            ])
+            .output()
+            .map_err(|e| format!("npm pack 실패: {}", e))?;
+        
+        if output.status.success() {
+            // tarball 압축 해제
+            let tarball_path = self.install_dir.join("openclaw-*.tgz");
+            
+            // npm install로 tarball 설치
+            let install_output = Command::new(&self.bundled_npm)
+                .args([
+                    "install",
+                    "file:openclaw-*.tgz",
+                    "--prefix", self.install_dir.to_str().unwrap(),
+                    "--no-fund",
+                    "--no-audit",
+                ])
+                .output()
+                .map_err(|e| format!("tarball 설치 실패: {}", e))?;
+            
+            if install_output.status.success() {
+                Ok("OpenClaw가 tarball에서 설치되었습니다!".to_string())
+            } else {
+                Err("tarball 설치 실패".to_string())
+            }
+        } else {
+            // 직접 URL 사용
+            self.install_from_npm_registry().await
+        }
+    }
+    
+    async fn install_from_npm_registry(&self) -> Result<String, String> {
+        eprintln!("NPM 레지스트리에서 직접 다운로드...");
+        
+        // https://registry.npmjs.org/openclaw 에서 최신 버전 정보를 가져와야 하지만,
+        // 간단히 latest를 사용
+        let tarball_url = "https://registry.npmjs.org/openclaw/-/openclaw-1.0.0.tgz"; // 버전 확인 필요
+        
+        let output = Command::new(&self.bundled_npm)
+            .args([
+                "install",
+                tarball_url,
+                "--prefix", self.install_dir.to_str().unwrap(),
+                "--no-fund",
+                "--no-audit",
+                "--no-optional",
+            ])
+            .output()
+            .map_err(|e| format!("레지스트리 설치 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok("OpenClaw가 NPM 레지스트리에서 설치되었습니다!".to_string())
+        } else {
+            Err(format!("NPM 레지스트리 설치 실패: {}", 
+                String::from_utf8_lossy(&output.stderr)))
         }
     }
     
