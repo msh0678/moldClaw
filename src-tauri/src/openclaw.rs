@@ -1007,8 +1007,14 @@ pub async fn get_install_path() -> Result<String, String> {
             let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
             Ok(format!("{}\\node_modules\\openclaw", prefix))
         } else {
-            // 기본 경로 반환
-            Ok(r"C:\Users\%USERNAME%\AppData\Roaming\npm\node_modules\openclaw".to_string())
+            // 기본 경로 반환 (APPDATA 환경변수 사용)
+            let appdata = std::env::var("APPDATA")
+                .unwrap_or_else(|_| {
+                    let userprofile = std::env::var("USERPROFILE")
+                        .unwrap_or_else(|_| "C:\\Users\\Default".to_string());
+                    format!("{}\\AppData\\Roaming", userprofile)
+                });
+            Ok(format!("{}\\npm\\node_modules\\openclaw", appdata))
         }
     }
     

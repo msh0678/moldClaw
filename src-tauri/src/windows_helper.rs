@@ -92,8 +92,9 @@ pub fn install_git_with_winget_visible() -> Result<String, String> {
         .creation_flags(CREATE_NO_WINDOW)
         .output();
     
-    if winget_check.is_err() || !winget_check.unwrap().status.success() {
-        return Err("winget이 설치되어 있지 않습니다. Windows 10 1709+ 또는 Windows 11이 필요합니다.".to_string());
+    match winget_check {
+        Ok(output) if output.status.success() => {},
+        _ => return Err("winget이 설치되어 있지 않습니다. Windows 10 1709+ 또는 Windows 11이 필요합니다.".to_string()),
     }
     
     eprintln!("winget 확인됨. Git 설치를 위한 관리자 권한 요청...");
@@ -251,8 +252,9 @@ pub fn install_nodejs_with_winget_visible() -> Result<String, String> {
         .creation_flags(CREATE_NO_WINDOW)
         .output();
     
-    if winget_check.is_err() || !winget_check.unwrap().status.success() {
-        return Err("winget이 설치되어 있지 않습니다. Windows 10 1709+ 또는 Windows 11이 필요합니다.".to_string());
+    match winget_check {
+        Ok(output) if output.status.success() => {},
+        _ => return Err("winget이 설치되어 있지 않습니다. Windows 10 1709+ 또는 Windows 11이 필요합니다.".to_string()),
     }
     
     eprintln!("winget 확인됨. Node.js 설치를 위한 관리자 권한 요청...");
