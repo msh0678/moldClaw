@@ -42,15 +42,6 @@
     "windows": {
       "webviewInstallMode": {
         "type": "embedBootstrapper"
-      },
-      "wix": {
-        "template": null,
-        "fragmentPath": null,
-        "customAction": null
-      },
-      "nsis": {
-        "installerHooks": "./nsis-hooks.nsh",
-        "license": null
       }
     }
   },
