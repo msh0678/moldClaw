@@ -651,39 +651,123 @@ impl OpenClawManager {
     }
     
     async fn install_from_bundle(&self, bundle_path: &PathBuf) -> Result<String, String> {
-        eprintln!("번들에서 OpenClaw 직접 압축 해제 시작...");
-        eprintln!("npm install 없이 순수 압축 해제!");
+        eprintln!("번들에서 OpenClaw 설치 시작...");
+        eprintln!("압축 해제 + npm install (의존성 설치)");
         
-        // npm install 대신 직접 압축 해제 사용!
+        // 압축 해제 + npm install 실행
         use crate::openclaw_extractor;
         let result = openclaw_extractor::extract_openclaw_bundle(
             bundle_path, 
-            &self.install_dir
+            &self.install_dir,
+            &self.bundled_node,
+            &self.bundled_npm,
         ).await?;
         
-        // 압축 해제 후 실행 파일 확인
-        let openclaw_exe = self.install_dir.join("openclaw.mjs");
-        if openclaw_exe.exists() {
-            eprintln!("✓ OpenClaw 실행 파일 확인: {:?}", openclaw_exe);
-            
-            // Windows에서 .bat 파일 생성 (편의를 위해)
-            #[cfg(windows)]
-            {
-                let bat_content = format!(
-                    "@echo off\n\"{}\" \"{}\" %*",
-                    self.bundled_node.to_str().unwrap(),
-                    openclaw_exe.to_str().unwrap()
-                );
-                let bat_path = self.install_dir.join("openclaw.bat");
-                fs::write(&bat_path, bat_content)
-                    .map_err(|e| format!("bat 파일 생성 실패: {}", e))?;
-                eprintln!("✓ openclaw.bat 생성 완료");
-            }
-            
-            Ok(format!("OpenClaw 번들 압축 해제 완료! npm install 없이 성공!\n{}", result))
-        } else {
-            Err("압축 해제는 성공했지만 openclaw.mjs를 찾을 수 없습니다".to_string())
+        // 설치 후 실행 파일 확인
+        let openclaw_mjs = self.install_dir.join("openclaw.mjs");
+        let node_modules = self.install_dir.join("node_modules");
+        
+        if !openclaw_mjs.exists() {
+            return Err("openclaw.mjs를 찾을 수 없습니다".to_string());
         }
+        
+        if !node_modules.exists() {
+            return Err("node_modules가 설치되지 않았습니다".to_string());
+        }
+        
+        eprintln!("✓ OpenClaw 설치 확인: {:?}", openclaw_mjs);
+        eprintln!("✓ node_modules 확인: {:?}", node_modules);
+        
+        // Windows에서 .cmd 파일 생성 (npm 표준 방식)
+        #[cfg(windows)]
+        {
+            self.create_windows_scripts()?;
+        }
+        
+        Ok(format!("OpenClaw 설치 완료!\n{}", result))
+    }
+    
+    /// Windows용 실행 스크립트 생성 (.cmd, .ps1)
+    #[cfg(windows)]
+    fn create_windows_scripts(&self) -> Result<(), String> {
+        let openclaw_mjs = self.install_dir.join("openclaw.mjs");
+        let node_exe = self.bundled_node.to_str()
+            .ok_or("Node.js 경로 변환 실패")?;
+        let mjs_path = openclaw_mjs.to_str()
+            .ok_or("openclaw.mjs 경로 변환 실패")?;
+        
+        // openclaw.cmd (Windows 표준 방식)
+        let cmd_content = format!(
+            r#"@ECHO off
+GOTO start
+:find_dp0
+SET dp0=%~dp0
+EXIT /b
+:start
+SETLOCAL
+CALL :find_dp0
+
+IF EXIST "%dp0%\node.exe" (
+  SET "_prog=%dp0%\node.exe"
+) ELSE (
+  SET "_prog={}"
+  SET PATHEXT=%PATHEXT:;.JS;=;%
+)
+
+endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%" "{}" %*
+"#,
+            node_exe.replace('\\', "\\\\"),
+            mjs_path.replace('\\', "\\\\")
+        );
+        
+        let cmd_path = self.install_dir.join("openclaw.cmd");
+        fs::write(&cmd_path, &cmd_content)
+            .map_err(|e| format!("openclaw.cmd 생성 실패: {}", e))?;
+        eprintln!("✓ openclaw.cmd 생성 완료");
+        
+        // openclaw.ps1 (PowerShell 버전)
+        let ps1_content = format!(
+            r#"#!/usr/bin/env pwsh
+$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent
+
+$exe=""
+if ($PSVersionTable.PSVersion -lt "6.0" -or $IsWindows) {{
+  $exe=".exe"
+}}
+$ret=0
+if (Test-Path "$basedir/node$exe") {{
+  # Support pipeline input
+  if ($MyInvocation.ExpectingInput) {{
+    $input | & "$basedir/node$exe" "$basedir/{}" $args
+  }} else {{
+    & "$basedir/node$exe" "$basedir/{}" $args
+  }}
+  $ret=$LASTEXITCODE
+}} else {{
+  # Support pipeline input
+  if ($MyInvocation.ExpectingInput) {{
+    $input | & "{}" "{}" $args
+  }} else {{
+    & "{}" "{}" $args
+  }}
+  $ret=$LASTEXITCODE
+}}
+exit $ret
+"#,
+            "openclaw.mjs",
+            "openclaw.mjs",
+            node_exe,
+            mjs_path,
+            node_exe,
+            mjs_path
+        );
+        
+        let ps1_path = self.install_dir.join("openclaw.ps1");
+        fs::write(&ps1_path, &ps1_content)
+            .map_err(|e| format!("openclaw.ps1 생성 실패: {}", e))?;
+        eprintln!("✓ openclaw.ps1 생성 완료");
+        
+        Ok(())
     }
     
     async fn install_openclaw_from_tarball(&self) -> Result<String, String> {
