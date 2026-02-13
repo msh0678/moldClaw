@@ -4,6 +4,12 @@ use std::fs;
 use serde_json::{json, Value};
 use crate::openclaw_manager::get_manager;
 
+/// OpenClaw 명령 실행 헬퍼 (번들된 경로 사용)
+async fn run_openclaw_command(args: Vec<&str>) -> Result<String, String> {
+    let manager = get_manager()?;
+    manager.run_openclaw(args).await
+}
+
 /// Node.js 설치 여부 확인 (번들된 Node.js 사용)
 pub async fn is_node_installed() -> Result<bool, String> {
     match get_manager() {
@@ -29,16 +35,7 @@ pub async fn is_openclaw_installed() -> Result<bool, String> {
 
 /// OpenClaw 버전 확인
 pub async fn get_openclaw_version() -> Result<String, String> {
-    let output = Command::new("openclaw")
-        .arg("--version")
-        .output()
-        .map_err(|e| format!("OpenClaw 확인 실패: {}", e))?;
-    
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        Err("OpenClaw이 설치되어 있지 않습니다".to_string())
-    }
+    run_openclaw_command(vec!["--version"]).await
 }
 
 /// OpenClaw 설치 (번들된 npm 사용)
@@ -447,51 +444,48 @@ pub async fn configure_telegram_full(
 }
 
 /// Discord 설정 (token + 정책)
+/// 공식 문서: channels.discord.dm.policy, channels.discord.dm.allowFrom
 pub async fn configure_discord(token: &str, dm_policy: &str) -> Result<(), String> {
     let mut config = read_existing_config();
 
     set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
-    set_nested_value(&mut config, &["channels", "discord", "dmPolicy"], json!(dm_policy));
+    set_nested_value(&mut config, &["channels", "discord", "dm", "policy"], json!(dm_policy));
     
     // allowFrom 설정 (open일 때는 ["*"])
     if dm_policy == "open" {
-        set_nested_value(&mut config, &["channels", "discord", "allowFrom"], json!(["*"]));
+        set_nested_value(&mut config, &["channels", "discord", "dm", "allowFrom"], json!(["*"]));
     }
 
     write_config(&config)?;
     Ok(())
 }
 
-/// Discord 전체 설정 (allowFrom, groupPolicy 등 포함)
+/// Discord 전체 설정
+/// 공식 문서 형식:
+/// - channels.discord.dm.policy
+/// - channels.discord.dm.allowFrom
+/// - channels.discord.guilds.*
 pub async fn configure_discord_full(
     token: &str,
     dm_policy: &str,
     allow_from: Vec<String>,
-    group_policy: &str,
-    group_allow_from: Vec<String>,
+    _group_policy: &str,  // Discord는 guilds로 관리
+    _group_allow_from: Vec<String>,  // 미사용
     require_mention: bool,
 ) -> Result<(), String> {
     let mut config = read_existing_config();
 
     set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
-    set_nested_value(&mut config, &["channels", "discord", "dmPolicy"], json!(dm_policy));
+    set_nested_value(&mut config, &["channels", "discord", "dm", "policy"], json!(dm_policy));
     
-    // allowFrom 설정
+    // dm.allowFrom 설정
     if dm_policy == "open" {
-        set_nested_value(&mut config, &["channels", "discord", "allowFrom"], json!(["*"]));
+        set_nested_value(&mut config, &["channels", "discord", "dm", "allowFrom"], json!(["*"]));
     } else if !allow_from.is_empty() {
-        set_nested_value(&mut config, &["channels", "discord", "allowFrom"], json!(allow_from));
+        set_nested_value(&mut config, &["channels", "discord", "dm", "allowFrom"], json!(allow_from));
     }
     
-    // 그룹 정책
-    set_nested_value(&mut config, &["channels", "discord", "groupPolicy"], json!(group_policy));
-    
-    // groupAllowFrom (Discord는 최상위 레벨)
-    if !group_allow_from.is_empty() {
-        set_nested_value(&mut config, &["channels", "discord", "groupAllowFrom"], json!(group_allow_from));
-    }
-    
-    // guilds 설정
+    // guilds 설정 (Discord 그룹은 guilds로 관리)
     set_nested_value(&mut config, &["channels", "discord", "guilds", "*", "requireMention"], json!(require_mention));
 
     write_config(&config)?;
@@ -559,21 +553,11 @@ pub async fn start_gateway() -> Result<(), String> {
 
 /// Gateway 시작 (daemon 모드 - 서비스 설치)
 pub async fn install_and_start_service() -> Result<String, String> {
-    // 먼저 일반 gateway start 시도
-    let start_output = Command::new("openclaw")
-        .args(["gateway", "start"])
-        .output()
-        .map_err(|e| format!("Gateway 시작 명령 실패: {}", e))?;
-
-    if start_output.status.success() {
-        return Ok("Gateway가 시작되었습니다".to_string());
+    // 번들된 OpenClaw로 gateway start 시도
+    match run_openclaw_command(vec!["gateway", "start"]).await {
+        Ok(_) => return Ok("Gateway가 시작되었습니다".to_string()),
+        Err(e) => eprintln!("첫 시도 실패: {}", e),
     }
-
-    // 실패 시 백그라운드로 실행
-    Command::new("openclaw")
-        .args(["gateway", "start"])
-        .spawn()
-        .map_err(|e| format!("Gateway 백그라운드 시작 실패: {}", e))?;
 
     // 잠시 대기 후 상태 확인
     std::thread::sleep(std::time::Duration::from_millis(2000));
@@ -597,25 +581,16 @@ pub async fn get_status() -> Result<String, String> {
 /// WhatsApp 페어링 시작 (onboard 명령 사용)
 pub async fn start_whatsapp_pairing() -> Result<String, String> {
     // OpenClaw onboard를 non-interactive로 실행하고 WhatsApp 설정
-    let output = Command::new("openclaw")
-        .args([
-            "onboard",
-            "--non-interactive",
-            "--accept-risk",
-            "--flow", "quickstart",
-            "--skip-channels",  // 채널은 별도 설정
-            "--skip-skills",
-            "--skip-health",
-        ])
-        .output()
-        .map_err(|e| format!("onboard 실행 실패: {}", e))?;
-
-    if output.status.success() {
-        Ok("WhatsApp 연결 준비 완료. QR 코드를 확인하세요.".to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("onboard 실패: {}", stderr))
-    }
+    run_openclaw_command(vec![
+        "onboard",
+        "--non-interactive",
+        "--accept-risk",
+        "--flow", "quickstart",
+        "--skip-channels",
+        "--skip-skills",
+        "--skip-health",
+    ]).await
+    .map(|_| "WhatsApp 연결 준비 완료. QR 코드를 확인하세요.".to_string())
 }
 
 /// 전체 onboard 실행 (non-interactive)
@@ -636,32 +611,24 @@ pub async fn run_full_onboard(
 
     let port_str = gateway_port.to_string();
     
-    let output = Command::new("openclaw")
-        .args([
-            "onboard",
-            "--non-interactive",
-            "--accept-risk",
-            "--flow", "quickstart",
-            api_key_flag, api_key,
-            "--gateway-port", &port_str,
-            "--gateway-bind", gateway_bind,
-            "--gateway-auth", "token",
-            "--skip-channels",
-            "--skip-skills",
-            "--skip-health",
-            "--install-daemon",
-        ])
-        .output()
-        .map_err(|e| format!("onboard 실행 실패: {}", e))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(format!("OpenClaw 설정 완료!\n{}", stdout))
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        // onboard가 실패해도 수동 설정으로 fallback
-        Err(format!("onboard 실패 (수동 설정 시도): {}", stderr))
-    }
+    // 동적 인자 빌드
+    let args: Vec<&str> = vec![
+        "onboard",
+        "--non-interactive",
+        "--accept-risk",
+        "--flow", "quickstart",
+        api_key_flag, api_key,
+        "--gateway-port", &port_str,
+        "--gateway-bind", gateway_bind,
+        "--gateway-auth", "token",
+        "--skip-channels",
+        "--skip-skills",
+        "--skip-health",
+        "--install-daemon",
+    ];
+    
+    run_openclaw_command(args).await
+        .map(|output| format!("OpenClaw 설정 완료!\n{}", output))
 }
 
 /// 설정 검증
@@ -683,18 +650,11 @@ pub async fn validate_config() -> Result<bool, String> {
         }
     }
 
-    // OpenClaw doctor 실행
-    let output = Command::new("openclaw")
-        .args(["doctor"])
-        .output()
-        .map_err(|e| format!("doctor 실행 실패: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Configuration validation failed: {}", stderr));
+    // OpenClaw doctor 실행 (번들된 경로 사용)
+    match run_openclaw_command(vec!["doctor"]).await {
+        Ok(_) => Ok(true),
+        Err(e) => Err(format!("Configuration validation failed: {}", e)),
     }
-
-    Ok(output.status.success())
 }
 
 /// 현재 설정 요약 가져오기
@@ -805,19 +765,13 @@ pub async fn stop_gateway() -> Result<(), String> {
         return Ok(());
     }
 
-    // 1. openclaw gateway stop 시도
-    let stop_output = Command::new("openclaw")
-        .args(["gateway", "stop"])
-        .output();
-
-    if let Ok(output) = stop_output {
-        if output.status.success() {
-            // 2초 대기 후 확인
-            std::thread::sleep(std::time::Duration::from_millis(2000));
-            let new_status = get_status().await?;
-            if new_status != "running" {
-                return Ok(());
-            }
+    // 1. openclaw gateway stop 시도 (번들된 경로 사용)
+    if run_openclaw_command(vec!["gateway", "stop"]).await.is_ok() {
+        // 2초 대기 후 확인
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+        let new_status = get_status().await?;
+        if new_status != "running" {
+            return Ok(());
         }
     }
 
