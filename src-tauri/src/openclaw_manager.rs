@@ -333,7 +333,7 @@ impl OpenClawManager {
         
         eprintln!("npm install 명령: npm install openclaw --prefix \"{}\"", install_prefix);
         
-        // npm으로 OpenClaw 설치
+        // npm으로 OpenClaw 설치 (Git 없이도 설치 가능하도록)
         let mut cmd = Command::new(&self.bundled_npm);
         cmd.args([
                 "install",
@@ -342,6 +342,10 @@ impl OpenClawManager {
                 "--no-fund",
                 "--no-audit",
                 "--no-update-notifier",
+                "--no-optional",  // 선택적 의존성 제외
+                "--prefer-offline",  // 오프라인 우선
+                "--no-save",  // package.json 수정 안 함
+                "--registry", "https://registry.npmjs.org",  // 공식 레지스트리만 사용
                 "--progress=false",
             ])
             .env("PATH", self.get_full_path())  
@@ -392,7 +396,14 @@ impl OpenClawManager {
             eprintln!("✗ npm install 실패");
             eprintln!("stdout: {}", stdout);
             eprintln!("stderr: {}", stderr);
-            Err(format!("OpenClaw 설치 실패:\n{}\n{}", stdout, stderr))
+            
+            // Git 관련 에러 처리
+            if stderr.contains("git") || stdout.contains("git") {
+                Err("Git이 필요한 것 같습니다. 하지만 moldClaw는 Git 없이도 작동해야 합니다. \
+                     대안: 1) OpenClaw를 수동으로 다운로드, 2) Git 설치 (https://git-scm.com)".to_string())
+            } else {
+                Err(format!("OpenClaw 설치 실패:\n{}\n{}", stdout, stderr))
+            }
         }
     }
     
