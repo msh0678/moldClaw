@@ -817,6 +817,38 @@ pub fn generate_token() -> String {
     format!("moldclaw-{:x}", timestamp)
 }
 
+/// Config에서 Gateway 토큰 읽기
+pub fn get_gateway_token() -> Option<String> {
+    let config = read_existing_config();
+    config.get("gateway")
+        .and_then(|g| g.get("auth"))
+        .and_then(|a| a.get("token"))
+        .and_then(|t| t.as_str())
+        .map(|s| s.to_string())
+}
+
+/// Gateway 포트 읽기 (기본값: 18789)
+pub fn get_gateway_port() -> u16 {
+    let config = read_existing_config();
+    config.get("gateway")
+        .and_then(|g| g.get("port"))
+        .and_then(|p| p.as_u64())
+        .map(|p| p as u16)
+        .unwrap_or(18789)
+}
+
+/// Dashboard URL 생성 (토큰 포함)
+pub fn get_dashboard_url() -> String {
+    let port = get_gateway_port();
+    let base_url = format!("http://127.0.0.1:{}", port);
+    
+    if let Some(token) = get_gateway_token() {
+        format!("{}/#token={}", base_url, token)
+    } else {
+        base_url
+    }
+}
+
 /// OS 타입 반환
 pub fn get_os_type() -> String {
     if cfg!(target_os = "windows") {

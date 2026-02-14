@@ -360,6 +360,12 @@ async fn install_browser_control() -> Result<String, String> {
     openclaw::install_browser_control().await
 }
 
+/// Dashboard URL 가져오기 (토큰 포함)
+#[tauri::command]
+fn get_dashboard_url() -> String {
+    openclaw::get_dashboard_url()
+}
+
 // ===== Windows 전용 명령어 =====
 
 /// Windows 필수 프로그램 상태 확인
@@ -548,6 +554,7 @@ pub fn run() {
             apply_default_security_settings,
             get_install_path,
             install_browser_control,
+            get_dashboard_url,
             // Windows 전용
             check_prerequisites,
             is_git_installed,

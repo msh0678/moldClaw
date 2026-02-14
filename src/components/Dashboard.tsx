@@ -281,7 +281,15 @@ export default function Dashboard({ onStartOnboarding }: DashboardProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <button
-              onClick={() => window.open('http://localhost:18789', '_blank')}
+              onClick={async () => {
+                try {
+                  const url = await invoke<string>('get_dashboard_url')
+                  window.open(url, '_blank')
+                } catch {
+                  // fallback
+                  window.open('http://localhost:18789', '_blank')
+                }
+              }}
               className="py-3 glass hover:bg-white/10 rounded-xl text-sm transition-colors text-steel-bright"
             >
               🌐 웹 인터페이스
