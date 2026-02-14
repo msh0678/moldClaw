@@ -7,7 +7,9 @@ import Connect from './components/Connect'
 import Summary from './components/Summary'
 import Loading from './components/Loading'
 import Dashboard from './components/Dashboard'
+import ExpiredScreen from './components/ExpiredScreen'
 import { BrowserControl } from './pages/BrowserControl'
+import { useAppStatus } from './hooks/useAppStatus'
 
 type Step = 'loading' | 'dashboard' | 'welcome' | 'model' | 'messenger' | 'integrations' | 'browsercontrol' | 'summary' | 'connect'
 type Messenger = 'telegram' | 'discord' | 'whatsapp' | null
@@ -71,6 +73,20 @@ const initialConfig: FullConfig = {
 function App() {
   const [step, setStep] = useState<Step>('loading')
   const [config, setConfig] = useState<FullConfig>(initialConfig)
+  const { appStatus, loading: statusLoading } = useAppStatus()
+
+  // 앱 상태 체크 (테스트 종료 여부)
+  if (statusLoading) {
+    return (
+      <div className="gradient-bg min-h-screen flex items-center justify-center">
+        <div className="text-white">상태 확인 중...</div>
+      </div>
+    )
+  }
+
+  if (appStatus?.status === 'expired') {
+    return <ExpiredScreen message={appStatus.message} />
+  }
 
   // 모델 설정 업데이트 (메모리만)
   const handleModelUpdate = (modelConfig: ModelConfig) => {
