@@ -1318,44 +1318,52 @@ pub async fn get_install_path() -> Result<String, String> {
 pub async fn install_browser_control() -> Result<String, String> {
     eprintln!("브라우저 컨트롤 설정 시작...");
     
-    // 설정 파일에 브라우저 설정 추가 (올바른 스키마)
+    // OpenClaw CLI로 프로필 생성 (cdpPort 자동 할당)
+    // 직접 config 수정하지 않고 CLI 사용이 가장 안전
+    
+    // 1. chrome 프로필 생성 시도 (extension 드라이버)
+    let chrome_result = run_openclaw_command(&[
+        "browser", "create-profile", 
+        "--name", "chrome",
+        "--color", "#4285F4"
+    ]);
+    
+    match &chrome_result {
+        Ok(output) => eprintln!("chrome 프로필 생성: {}", output),
+        Err(e) => {
+            // 이미 존재하면 OK
+            if !e.contains("exists") && !e.contains("already") {
+                eprintln!("chrome 프로필 생성 실패: {}", e);
+            }
+        }
+    }
+    
+    // 2. clawd 프로필 생성 시도 (OpenClaw 관리 브라우저)
+    let clawd_result = run_openclaw_command(&[
+        "browser", "create-profile",
+        "--name", "clawd", 
+        "--color", "#FF4500"
+    ]);
+    
+    match &clawd_result {
+        Ok(output) => eprintln!("clawd 프로필 생성: {}", output),
+        Err(e) => {
+            if !e.contains("exists") && !e.contains("already") {
+                eprintln!("clawd 프로필 생성 실패: {}", e);
+            }
+        }
+    }
+    
+    // 3. browser.enabled, defaultProfile 설정
     let mut config = read_existing_config();
-    
-    // browser.enabled = true
     set_nested_value(&mut config, &["browser", "enabled"], json!(true));
-    
-    // browser.defaultProfile = "chrome" (Chrome 릴레이 기본)
     set_nested_value(&mut config, &["browser", "defaultProfile"], json!("chrome"));
-    
-    // browser.profiles.chrome (Chrome 확장 릴레이용)
-    // color: 필수 필드
-    // driver: "extension" (Chrome 릴레이)
-    set_nested_value(
-        &mut config,
-        &["browser", "profiles", "chrome", "color"],
-        json!("#4285F4"),  // Google Blue
-    );
-    set_nested_value(
-        &mut config,
-        &["browser", "profiles", "chrome", "driver"],
-        json!("extension"),
-    );
-    
-    // browser.profiles.openclaw (OpenClaw 관리 브라우저용)
-    set_nested_value(
-        &mut config,
-        &["browser", "profiles", "openclaw", "color"],
-        json!("#FF4500"),  // OpenClaw Orange
-    );
-    set_nested_value(
-        &mut config,
-        &["browser", "profiles", "openclaw", "driver"],
-        json!("openclaw"),
-    );
-    
     write_config(&config)?;
     
-    // Chrome 확장 프로그램 설치 경로 확인
+    // 4. Chrome 확장 프로그램 설치
+    let _ = run_openclaw_command(&["browser", "extension", "install"]);
+    
+    // 5. 확장 프로그램 경로 확인
     match run_openclaw_command(&["browser", "extension", "path"]) {
         Ok(path) => {
             Ok(format!(
@@ -1364,20 +1372,7 @@ pub async fn install_browser_control() -> Result<String, String> {
             ))
         }
         Err(_) => {
-            // 확장 프로그램 먼저 설치 시도
-            let _ = run_openclaw_command(&["browser", "extension", "install"]);
-            
-            match run_openclaw_command(&["browser", "extension", "path"]) {
-                Ok(path) => {
-                    Ok(format!(
-                        "브라우저 설정 완료!\n\nChrome 확장 프로그램 설치:\n1. Chrome에서 chrome://extensions 열기\n2. '개발자 모드' 활성화\n3. '압축 해제된 확장 프로그램 로드' 클릭\n4. 경로 선택: {}\n\n설치 후 탭에서 OpenClaw 아이콘 클릭하여 연결",
-                        path.trim()
-                    ))
-                }
-                Err(_) => {
-                    Ok("브라우저 설정 완료! Chrome 확장 프로그램은 'openclaw browser extension install' 명령으로 설치할 수 있습니다.".to_string())
-                }
-            }
+            Ok("브라우저 설정 완료! Chrome 확장 프로그램은 'openclaw browser extension install' 명령으로 설치할 수 있습니다.".to_string())
         }
     }
 }
