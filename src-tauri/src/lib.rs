@@ -3,6 +3,8 @@ mod openclaw;
 #[cfg(windows)]
 mod windows_helper;
 
+use tauri::Emitter;
+
 // ===== 환경 체크 =====
 
 #[tauri::command]
@@ -192,6 +194,63 @@ async fn stop_gateway() -> Result<(), String> {
 #[tauri::command]
 async fn restart_gateway() -> Result<String, String> {
     openclaw::restart_gateway().await
+}
+
+/// OpenClaw 삭제 (npm uninstall -g openclaw)
+#[tauri::command]
+async fn uninstall_openclaw() -> Result<String, String> {
+    eprintln!("OpenClaw 삭제 시작...");
+    
+    // 먼저 Gateway 종료
+    let _ = openclaw::stop_gateway().await;
+    
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let output = std::process::Command::new("cmd")
+            .args(["/C", "npm uninstall -g openclaw"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("npm 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            eprintln!("OpenClaw 삭제 완료");
+            Ok("OpenClaw가 성공적으로 삭제되었습니다.".to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(format!("삭제 실패: {}", stderr))
+        }
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let output = std::process::Command::new("npm")
+            .args(["uninstall", "-g", "openclaw"])
+            .output()
+            .map_err(|e| format!("npm 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            eprintln!("OpenClaw 삭제 완료");
+            Ok("OpenClaw가 성공적으로 삭제되었습니다.".to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(format!("삭제 실패: {}", stderr))
+        }
+    }
+}
+
+/// 앱 종료 전 정리 작업
+#[tauri::command]
+async fn cleanup_before_exit() -> Result<(), String> {
+    eprintln!("moldClaw 종료 준비 중...");
+    
+    // Gateway 종료
+    let _ = openclaw::stop_gateway().await;
+    
+    eprintln!("정리 완료, 앱 종료 가능");
+    Ok(())
 }
 
 // ===== Onboard =====
@@ -410,6 +469,7 @@ fn install_prerequisites() -> Result<serde_json::Value, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             // 환경 체크
             check_node_installed,
@@ -456,36 +516,24 @@ pub fn run() {
             install_git,
             install_nodejs,
             refresh_path,
+            // 삭제/종료
+            uninstall_openclaw,
+            cleanup_before_exit,
         ])
         .setup(|_app| {
             eprintln!("moldClaw 시작됨");
             eprintln!("winget 기반 설치 모드 (node-portable 번들 없음)");
             Ok(())
         })
-        .on_window_event(|_window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                eprintln!("moldClaw 종료 중...");
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                eprintln!("종료 요청 감지 - 프론트엔드에 종료 화면 표시 요청");
                 
-                #[cfg(windows)]
-                {
-                    use std::os::windows::process::CommandExt;
-                    const CREATE_NO_WINDOW: u32 = 0x08000000;
-                    
-                    // OpenClaw Gateway 종료
-                    let _ = std::process::Command::new("cmd")
-                        .args(["/C", "openclaw gateway stop"])
-                        .creation_flags(CREATE_NO_WINDOW)
-                        .output();
-                }
+                // 기본 종료 동작 방지
+                api.prevent_close();
                 
-                #[cfg(not(windows))]
-                {
-                    let _ = std::process::Command::new("openclaw")
-                        .args(["gateway", "stop"])
-                        .output();
-                }
-                
-                eprintln!("moldClaw 종료 완료");
+                // 프론트엔드에 종료 이벤트 전송
+                let _ = window.emit("shutdown-requested", ());
             }
         })
         .run(tauri::generate_context!())

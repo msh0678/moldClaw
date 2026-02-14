@@ -94,6 +94,37 @@ export default function Dashboard({ onStartOnboarding }: DashboardProps) {
     }
   }
 
+  const handleUninstall = async () => {
+    // 확인 다이얼로그
+    const confirmed = window.confirm(
+      'OpenClaw를 삭제하시겠습니까?\n\n' +
+      '• OpenClaw 프로그램이 삭제됩니다\n' +
+      '• API 키가 포함된 설정 파일도 삭제됩니다\n' +
+      '• moldClaw는 유지됩니다 (나중에 재설치 가능)\n\n' +
+      '이 작업은 되돌릴 수 없습니다.'
+    )
+
+    if (!confirmed) return
+
+    setLoading(true)
+    setStatusMessage('OpenClaw 삭제 중...')
+    setError(null)
+
+    try {
+      const result = await invoke<string>('uninstall_openclaw')
+      setStatusMessage(result)
+      // 설정 요약 새로고침
+      await loadConfigSummary()
+      await checkGatewayStatus()
+      alert('OpenClaw가 성공적으로 삭제되었습니다.\n\n다시 설치하려면 "설정 변경"을 클릭하세요.')
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setLoading(false)
+      setTimeout(() => setStatusMessage(''), 3000)
+    }
+  }
+
   const getStatusIcon = () => {
     switch (gatewayStatus) {
       case 'running': return '🟢'
@@ -264,8 +295,32 @@ export default function Dashboard({ onStartOnboarding }: DashboardProps) {
           </div>
         </div>
 
+        {/* 위험 영역 - 삭제 */}
+        <div className="mt-8 pt-6 border-t border-white/10">
+          <details className="group">
+            <summary className="cursor-pointer text-sm text-steel-warm hover:text-red-400 transition-colors list-none flex items-center gap-2">
+              <span className="text-xs">▶</span>
+              <span className="group-open:hidden">위험 영역 표시</span>
+              <span className="hidden group-open:inline">위험 영역 숨기기</span>
+            </summary>
+            <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+              <h3 className="text-red-400 font-semibold mb-2">⚠️ OpenClaw 삭제</h3>
+              <p className="text-xs text-steel-warm mb-4">
+                OpenClaw와 모든 설정 파일이 삭제됩니다. API 키가 포함된 설정 파일도 함께 삭제되어 보안이 유지됩니다.
+              </p>
+              <button
+                onClick={handleUninstall}
+                disabled={loading}
+                className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-xl font-semibold transition-colors"
+              >
+                {loading ? '삭제 중...' : '🗑️ OpenClaw 삭제'}
+              </button>
+            </div>
+          </details>
+        </div>
+
         {/* 하단 정보 */}
-        <div className="mt-8 text-center">
+        <div className="mt-6 text-center">
           <p className="text-xs text-steel-warm">
             moldClaw를 종료하면 Gateway도 자동 중지됩니다
           </p>
