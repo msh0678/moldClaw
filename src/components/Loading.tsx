@@ -7,7 +7,7 @@ interface LoadingProps {
   onDashboard: () => void
 }
 
-type SetupStep = 'checking' | 'node-missing' | 'installing-openclaw' | 'ready' | 'error'
+type SetupStep = 'checking' | 'node-missing' | 'installing-prerequisites' | 'restart-required' | 'installing-openclaw' | 'ready' | 'error'
 
 export default function Loading({ onReady, onDashboard }: LoadingProps) {
   const [step, setStep] = useState<SetupStep>('checking')
@@ -21,15 +21,42 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
 
   const checkEnvironment = async () => {
     try {
+      // 0. OS 확인
+      const osType = await invoke<string>('get_os_type')
+      const isWindows = osType === 'windows'
+
       // 1. Node.js 확인
       setStatus('Node.js 확인 중...')
       const nodeInstalled = await invoke<boolean>('check_node_installed')
       
       if (!nodeInstalled) {
-        const url = await invoke<string>('get_node_install_url')
-        setNodeUrl(url)
-        setStep('node-missing')
-        return
+        if (isWindows) {
+          // Windows: winget으로 자동 설치 시도
+          setStep('installing-prerequisites')
+          setStatus('필수 프로그램 설치 중...')
+          
+          try {
+            const result = await invoke<{ needs_restart: boolean; message: string }>('install_prerequisites')
+            
+            if (result.needs_restart) {
+              setStep('restart-required')
+              return
+            }
+          } catch (installErr) {
+            // winget 실패 시 수동 설치 안내
+            console.error('자동 설치 실패:', installErr)
+            const url = await invoke<string>('get_node_install_url')
+            setNodeUrl(url)
+            setStep('node-missing')
+            return
+          }
+        } else {
+          // Linux/Mac: 수동 설치 안내
+          const url = await invoke<string>('get_node_install_url')
+          setNodeUrl(url)
+          setStep('node-missing')
+          return
+        }
       }
 
       const nodeVersion = await invoke<string>('get_node_version')
@@ -83,6 +110,70 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
     setStep('checking')
     setError(null)
     checkEnvironment()
+  }
+
+  // 재시작 필요 화면 (Windows winget 설치 후)
+  if (step === 'restart-required') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6">
+        <div className="glass rounded-2xl p-8 max-w-sm text-center">
+          <div className="text-6xl mb-4">✅</div>
+          <h2 className="text-xl font-bold mb-2">설치 완료!</h2>
+          <p className="text-steel-light text-sm mb-6">
+            Node.js가 설치되었습니다.<br />
+            <strong className="text-white">moldClaw를 재시작</strong>해주세요.
+          </p>
+          
+          <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg mb-4">
+            <p className="text-yellow-400 text-sm">
+              ⚠️ 새로 설치된 프로그램을 인식하려면<br />
+              앱을 다시 시작해야 합니다.
+            </p>
+          </div>
+          
+          <button
+            onClick={handleRetry}
+            className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl font-semibold hover:opacity-90"
+          >
+            🔄 다시 확인
+          </button>
+          
+          <p className="text-xs text-gray-500 mt-4">
+            버튼을 눌러도 안 되면 앱을 완전히 종료 후 다시 실행하세요
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // 필수 프로그램 설치 중 화면
+  if (step === 'installing-prerequisites') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6">
+        <div className="glass rounded-2xl p-8 max-w-sm text-center">
+          <div className="text-6xl mb-4 animate-bounce">📦</div>
+          <h2 className="text-xl font-bold mb-2">설치 중...</h2>
+          <p className="text-steel-light text-sm mb-6">
+            필수 프로그램을 설치하고 있습니다.<br />
+            <strong className="text-white">관리자 권한 창이 뜨면 승인</strong>해주세요.
+          </p>
+          
+          <div className="flex justify-center gap-1 mb-4">
+            <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+            <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }} />
+            <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+          </div>
+          
+          <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-left">
+            <p className="text-xs text-blue-400">
+              설치 중인 항목:<br />
+              • Git (버전 관리)<br />
+              • Node.js (런타임)
+            </p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // Node.js 미설치 화면
