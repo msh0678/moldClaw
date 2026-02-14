@@ -595,15 +595,22 @@ pub fn run() {
                             .creation_flags(CREATE_NO_WINDOW)
                             .output();
                         
-                        // 2. 강제 종료: 포트 18789 사용하는 프로세스 종료
+                        // 2. 강제 종료: 포트 18789 사용하는 프로세스 종료 (정확한 매칭)
                         let kill_cmd = r#"
                             $port = 18789
-                            $connections = netstat -ano | Select-String "LISTENING" | Select-String "$port"
-                            foreach ($line in $connections) {
-                                $parts = $line -split '\s+'
-                                $pid = $parts[-1]
-                                if ($pid -match '^\d+$' -and $pid -ne '0') {
-                                    taskkill /F /PID $pid 2>$null
+                            # 방법 1: Get-NetTCPConnection (정확함)
+                            $connections = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+                            foreach ($conn in $connections) {
+                                Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+                            }
+                            # 방법 2: netstat fallback (정규식으로 정확히 매칭)
+                            $lines = netstat -ano | Select-String 'LISTENING'
+                            foreach ($line in $lines) {
+                                if ($line -match ":$port\s+.*?(\d+)\s*$") {
+                                    $pid = $Matches[1]
+                                    if ($pid -gt 0) {
+                                        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                                    }
                                 }
                             }
                         "#;
