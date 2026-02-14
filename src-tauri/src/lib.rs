@@ -563,15 +563,47 @@ pub fn run() {
             eprintln!("winget 기반 설치 모드 (node-portable 번들 없음)");
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                eprintln!("종료 요청 감지 - 프론트엔드에 종료 화면 표시 요청");
+        .on_window_event(|_window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                eprintln!("moldClaw 종료 중...");
                 
-                // 기본 종료 동작 방지
-                api.prevent_close();
+                // OpenClaw 설치 여부 확인 후 Gateway 종료 (동기적)
+                #[cfg(windows)]
+                {
+                    use std::os::windows::process::CommandExt;
+                    const CREATE_NO_WINDOW: u32 = 0x08000000;
+                    
+                    // openclaw 설치 여부 빠른 체크
+                    let check = std::process::Command::new("cmd")
+                        .args(["/C", "where openclaw"])
+                        .creation_flags(CREATE_NO_WINDOW)
+                        .output();
+                    
+                    if check.is_ok() && check.unwrap().status.success() {
+                        // Gateway 종료 시도 (최대 2초 대기)
+                        let _ = std::process::Command::new("cmd")
+                            .args(["/C", "openclaw gateway stop"])
+                            .creation_flags(CREATE_NO_WINDOW)
+                            .output();
+                    }
+                }
                 
-                // 프론트엔드에 종료 이벤트 전송
-                let _ = window.emit("shutdown-requested", ());
+                #[cfg(not(windows))]
+                {
+                    // Linux/Mac: openclaw 설치 여부 체크
+                    let check = std::process::Command::new("which")
+                        .arg("openclaw")
+                        .output();
+                    
+                    if check.is_ok() && check.unwrap().status.success() {
+                        let _ = std::process::Command::new("openclaw")
+                            .args(["gateway", "stop"])
+                            .output();
+                    }
+                }
+                
+                eprintln!("moldClaw 종료 완료");
+                // 창이 정상적으로 닫힘 (prevent_close 안 함)
             }
         })
         .run(tauri::generate_context!())

@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { listen } from '@tauri-apps/api/event'
+import { useState } from 'react'
 import Welcome from './components/Welcome'
 import ModelSetup from './components/ModelSetup'
 import MessengerSelect from './components/MessengerSelect'
@@ -8,10 +7,9 @@ import Connect from './components/Connect'
 import Summary from './components/Summary'
 import Loading from './components/Loading'
 import Dashboard from './components/Dashboard'
-import ShuttingDown from './components/ShuttingDown'
 import { BrowserControl } from './pages/BrowserControl'
 
-type Step = 'loading' | 'dashboard' | 'welcome' | 'model' | 'messenger' | 'integrations' | 'browsercontrol' | 'summary' | 'connect' | 'shutting-down'
+type Step = 'loading' | 'dashboard' | 'welcome' | 'model' | 'messenger' | 'integrations' | 'browsercontrol' | 'summary' | 'connect'
 type Messenger = 'telegram' | 'discord' | 'whatsapp' | null
 
 export interface ModelConfig {
@@ -73,18 +71,6 @@ const initialConfig: FullConfig = {
 function App() {
   const [step, setStep] = useState<Step>('loading')
   const [config, setConfig] = useState<FullConfig>(initialConfig)
-
-  // 종료 이벤트 리스너
-  useEffect(() => {
-    const unlisten = listen('shutdown-requested', () => {
-      console.log('종료 요청 수신')
-      setStep('shutting-down')
-    })
-
-    return () => {
-      unlisten.then(fn => fn())
-    }
-  }, [])
 
   // 모델 설정 업데이트 (메모리만)
   const handleModelUpdate = (modelConfig: ModelConfig) => {
@@ -156,10 +142,6 @@ function App() {
 
   return (
     <div className="gradient-bg min-h-screen">
-      {step === 'shutting-down' && (
-        <ShuttingDown />
-      )}
-      
       {step === 'loading' && (
         <Loading 
           onReady={() => setStep('welcome')} 
