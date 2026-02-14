@@ -246,10 +246,48 @@ async fn uninstall_openclaw() -> Result<String, String> {
 async fn cleanup_before_exit() -> Result<(), String> {
     eprintln!("moldClaw 종료 준비 중...");
     
-    // Gateway 종료
-    let _ = openclaw::stop_gateway().await;
+    // OpenClaw 설치 여부 먼저 확인 (빠른 체크)
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let check = std::process::Command::new("cmd")
+            .args(["/C", "where openclaw"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        
+        // openclaw가 없으면 바로 종료
+        if check.is_err() || !check.unwrap().status.success() {
+            eprintln!("OpenClaw 미설치 - 바로 종료");
+            return Ok(());
+        }
+    }
     
-    eprintln!("정리 완료, 앱 종료 가능");
+    #[cfg(not(windows))]
+    {
+        let check = std::process::Command::new("which")
+            .arg("openclaw")
+            .output();
+        
+        if check.is_err() || !check.unwrap().status.success() {
+            eprintln!("OpenClaw 미설치 - 바로 종료");
+            return Ok(());
+        }
+    }
+    
+    // Gateway 종료 시도 (타임아웃 3초)
+    eprintln!("Gateway 종료 시도...");
+    let cleanup = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        openclaw::stop_gateway()
+    ).await;
+    
+    match cleanup {
+        Ok(_) => eprintln!("Gateway 종료 완료"),
+        Err(_) => eprintln!("Gateway 종료 타임아웃 - 무시하고 종료"),
+    }
+    
     Ok(())
 }
 
