@@ -653,13 +653,21 @@ pub async fn get_status() -> Result<String, String> {
     let port = get_gateway_port();
     let addr = format!("127.0.0.1:{}", port);
     
+    eprintln!("[get_status] Checking port {} with addr: {}", port, addr);
+    
     // TCP 연결 시도 (타임아웃 1초)
     match TcpStream::connect_timeout(
         &addr.parse().unwrap(),
         Duration::from_secs(1)
     ) {
-        Ok(_) => Ok("running".to_string()),
-        Err(_) => Ok("stopped".to_string()),
+        Ok(_) => {
+            eprintln!("[get_status] Connection SUCCESS -> running");
+            Ok("running".to_string())
+        },
+        Err(e) => {
+            eprintln!("[get_status] Connection FAILED: {} -> stopped", e);
+            Ok("stopped".to_string())
+        },
     }
 }
 
