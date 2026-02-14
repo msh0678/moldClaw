@@ -1032,11 +1032,10 @@ pub async fn stop_gateway() -> Result<(), String> {
             .output();
         
         if let Ok(out) = output {
-            let pids: Vec<&str> = String::from_utf8_lossy(&out.stdout)
+            let stdout_str = String::from_utf8_lossy(&out.stdout).to_string();
+            let pids: Vec<&str> = stdout_str
                 .lines()
                 .filter(|line| !line.is_empty())
-                .collect::<Vec<_>>()
-                .into_iter()
                 .collect();
             
             for pid in pids {
