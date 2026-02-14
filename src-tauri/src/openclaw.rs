@@ -903,15 +903,16 @@ pub async fn stop_gateway() -> Result<(), String> {
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
         // 방법 1: Get-NetTCPConnection으로 PID 찾아서 종료
+        // 주의: $pid는 PowerShell 예약 변수이므로 $processId 사용
         let ps_cmd = format!(
             r#"
             $found = $false
             $connections = Get-NetTCPConnection -LocalPort {} -State Listen -ErrorAction SilentlyContinue
             foreach ($conn in $connections) {{
-                $pid = $conn.OwningProcess
-                if ($pid -gt 0) {{
-                    Write-Host "Killing PID: $pid"
-                    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                $processId = $conn.OwningProcess
+                if ($processId -gt 0) {{
+                    Write-Host "Killing PID: $processId"
+                    Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
                     $found = $true
                 }}
             }}
@@ -920,10 +921,10 @@ pub async fn stop_gateway() -> Result<(), String> {
                 $output = netstat -ano | findstr "LISTENING" | findstr ":{} "
                 foreach ($line in $output -split "`n") {{
                     if ($line -match '\s+(\d+)\s*$') {{
-                        $pid = $Matches[1]
-                        if ($pid -gt 0) {{
-                            Write-Host "Killing PID from netstat: $pid"
-                            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                        $processId = $Matches[1]
+                        if ($processId -gt 0) {{
+                            Write-Host "Killing PID from netstat: $processId"
+                            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
                         }}
                     }}
                 }}
