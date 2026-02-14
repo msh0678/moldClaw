@@ -654,76 +654,56 @@ pub async fn install_and_start_service() -> Result<String, String> {
     Err("Gateway 시작에 실패했습니다. 다시 시도해주세요.".to_string())
 }
 
-/// Gateway 상태 확인 (단순화: TCP 연결만 확인)
+/// Gateway 상태 확인 (netstat 사용 - 가장 빠르고 신뢰성 높음)
 pub async fn get_status() -> Result<String, String> {
     let port = get_gateway_port();
-    eprintln!("Checking gateway status on port {}...", port);
     
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
-        // 단순하게: Test-NetConnection 사용 (가장 신뢰성 높음)
-        let ps_cmd = format!(
-            "(Test-NetConnection -ComputerName 127.0.0.1 -Port {} -WarningAction SilentlyContinue).TcpTestSucceeded",
-            port
-        );
-        
-        let output = Command::new("powershell")
-            .args(["-NoProfile", "-Command", &ps_cmd])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
-        
-        if let Ok(out) = output {
-            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
-            eprintln!("Test-NetConnection result: '{}'", stdout);
-            if stdout == "true" {
-                eprintln!("Gateway port {} is listening", port);
-                return Ok("running".to_string());
-            }
-        }
-        
-        // Fallback: netstat으로 직접 확인
+        // netstat으로 직접 확인 (가장 빠름)
+        // 포트 패턴: ":18789 " (공백 포함해서 정확히 매칭)
         let netstat_cmd = format!(
-            "netstat -ano | findstr \"LISTENING\" | findstr \":{} \"",
+            "netstat -ano | findstr \"LISTENING\" | findstr \":{}\"",
             port
         );
         
-        let output2 = Command::new("cmd")
+        let output = Command::new("cmd")
             .args(["/C", &netstat_cmd])
             .creation_flags(CREATE_NO_WINDOW)
             .output();
         
-        if let Ok(out) = output2 {
-            if out.status.success() && !out.stdout.is_empty() {
-                let stdout = String::from_utf8_lossy(&out.stdout);
-                eprintln!("netstat found: {}", stdout.trim());
+        if let Ok(out) = output {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            // 출력이 있고, 실제로 우리 포트가 포함되어 있으면 running
+            if !stdout.trim().is_empty() && stdout.contains(&format!(":{}", port)) {
                 return Ok("running".to_string());
             }
         }
         
-        eprintln!("Gateway not running on port {}", port);
         return Ok("stopped".to_string());
     }
     
     #[cfg(not(windows))]
     {
-        // Unix: nc로 확인
-        let nc_cmd = format!("nc -z 127.0.0.1 {} 2>/dev/null", port);
+        // Unix: ss 또는 nc로 확인
+        let check_cmd = format!(
+            "ss -tlnp 2>/dev/null | grep -q ':{} ' || nc -z 127.0.0.1 {} 2>/dev/null",
+            port, port
+        );
         
         let output = Command::new("sh")
-            .args(["-c", &nc_cmd])
+            .args(["-c", &check_cmd])
             .output();
         
         if let Ok(out) = output {
             if out.status.success() {
-                eprintln!("Gateway port {} is responding", port);
                 return Ok("running".to_string());
             }
         }
         
-        eprintln!("Gateway not running on port {}", port);
         return Ok("stopped".to_string());
     }
 }
