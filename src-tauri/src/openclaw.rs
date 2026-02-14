@@ -585,20 +585,82 @@ pub async fn start_gateway() -> Result<(), String> {
 
 /// Gateway 시작 (daemon 모드 - 서비스 설치)
 pub async fn install_and_start_service() -> Result<String, String> {
-    // gateway start 시도
+    // 1. gateway start 시도
     match run_openclaw_command(&["gateway", "start"]) {
-        Ok(_) => return Ok("Gateway가 시작되었습니다".to_string()),
-        Err(e) => eprintln!("첫 시도 실패: {}", e),
+        Ok(output) => {
+            // "service missing" 체크
+            if output.contains("service missing") || output.contains("missing") {
+                eprintln!("Gateway 서비스 미설치 - 설치 필요");
+            } else {
+                return Ok("Gateway가 시작되었습니다".to_string());
+            }
+        },
+        Err(e) => {
+            eprintln!("gateway start 실패: {}", e);
+            // service missing 에러인지 확인
+            if !e.contains("missing") && !e.contains("service") {
+                // 다른 에러면 그대로 반환
+                // 단, 상태 확인 후 실행 중이면 OK
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                if let Ok(status) = get_status().await {
+                    if status == "running" {
+                        return Ok("Gateway가 시작되었습니다".to_string());
+                    }
+                }
+            }
+        }
     }
 
-    // 잠시 대기 후 상태 확인
-    std::thread::sleep(std::time::Duration::from_millis(2000));
-    
-    let status = get_status().await?;
-    if status == "running" {
-        Ok("Gateway가 시작되었습니다".to_string())
-    } else {
-        Err("Gateway 시작에 실패했습니다".to_string())
+    // 2. 상태 확인 - 이미 실행 중이면 OK
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+    if let Ok(status) = get_status().await {
+        if status == "running" {
+            return Ok("Gateway가 이미 실행 중입니다".to_string());
+        }
+    }
+
+    // 3. Windows: Scheduled Task 설치 필요 (관리자 권한)
+    #[cfg(windows)]
+    {
+        use crate::windows_helper;
+        
+        // Task가 이미 설치되어 있는지 확인
+        if windows_helper::is_gateway_task_installed() {
+            // Task는 있는데 실행 안 됨 - 그냥 시작
+            eprintln!("Gateway Task 존재함 - 시작 시도");
+            let _ = run_openclaw_command(&["gateway", "start"]);
+        } else {
+            // Task 설치 필요 (UAC 프롬프트)
+            eprintln!("Gateway Task 미설치 - 관리자 권한으로 설치");
+            windows_helper::install_gateway_with_uac()?;
+        }
+        
+        // 잠시 대기 후 상태 확인
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+        let status = get_status().await?;
+        if status == "running" {
+            return Ok("Gateway가 설치 및 시작되었습니다".to_string());
+        } else {
+            return Err("Gateway 설치는 완료되었지만 시작에 실패했습니다. 다시 시도해주세요.".to_string());
+        }
+    }
+
+    // 4. Linux/Mac: gateway install 시도
+    #[cfg(not(windows))]
+    {
+        eprintln!("Gateway 서비스 설치 시도...");
+        match run_openclaw_command(&["gateway", "install"]) {
+            Ok(_) => {
+                std::thread::sleep(std::time::Duration::from_millis(2000));
+                let status = get_status().await?;
+                if status == "running" {
+                    Ok("Gateway가 설치 및 시작되었습니다".to_string())
+                } else {
+                    Err("Gateway 설치 후 시작에 실패했습니다".to_string())
+                }
+            },
+            Err(e) => Err(format!("Gateway 설치 실패: {}", e)),
+        }
     }
 }
 

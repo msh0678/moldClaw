@@ -416,3 +416,48 @@ pub fn get_npm_user_config() -> Vec<(String, String)> {
         ("npm_config_prefix".to_string(), get_user_install_dir().to_string_lossy().to_string()),
     ]
 }
+
+/// Gateway Scheduled Task 설치 여부 확인
+pub fn is_gateway_task_installed() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    // schtasks로 OpenClaw Gateway 태스크 확인
+    let output = Command::new("schtasks")
+        .args(["/Query", "/TN", "OpenClaw Gateway"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    
+    output.map(|o| o.status.success()).unwrap_or(false)
+}
+
+/// Gateway 설치 (관리자 권한으로 - UAC 프롬프트)
+pub fn install_gateway_with_uac() -> Result<String, String> {
+    eprintln!("OpenClaw Gateway 설치 시작 (관리자 권한 필요)...");
+    
+    // PowerShell을 통해 관리자 권한으로 openclaw gateway install 실행
+    let ps_command = r#"
+        Start-Process -FilePath 'openclaw' -ArgumentList 'gateway install' -Verb RunAs -Wait
+    "#;
+    
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", ps_command])
+        .output()
+        .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
+    
+    // 설치 확인 (잠시 대기 후)
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    
+    if is_gateway_task_installed() {
+        eprintln!("✓ Gateway Scheduled Task 설치 확인됨");
+        Ok("Gateway가 성공적으로 설치되었습니다!".to_string())
+    } else {
+        // 사용자가 UAC를 거부했거나 설치 실패
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("canceled") || stderr.contains("취소") {
+            Err("사용자가 관리자 권한을 거부했습니다.".to_string())
+        } else {
+            Err(format!("Gateway 설치 실패: {}", stderr))
+        }
+    }
+}
