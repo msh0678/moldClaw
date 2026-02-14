@@ -595,9 +595,17 @@ pub fn run() {
                             .creation_flags(CREATE_NO_WINDOW)
                             .output();
                         
-                        // 2. 강제 종료: 포트 18789 사용하는 프로세스 종료 (정확한 매칭)
+                        // 2. 강제 종료: Gateway 포트 사용하는 프로세스 종료
+                        // 설정 파일에서 포트 읽기, 없으면 기본값 18789
                         let kill_cmd = r#"
+                            $configPath = "$env:USERPROFILE\.openclaw\openclaw.json"
                             $port = 18789
+                            if (Test-Path $configPath) {
+                                try {
+                                    $config = Get-Content $configPath | ConvertFrom-Json
+                                    if ($config.gateway.port) { $port = $config.gateway.port }
+                                } catch { }
+                            }
                             # 방법 1: Get-NetTCPConnection (정확함)
                             $connections = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
                             foreach ($conn in $connections) {
