@@ -587,9 +587,29 @@ pub fn run() {
                         .output();
                     
                     if check.is_ok() && check.unwrap().status.success() {
-                        // Gateway 종료 시도 (최대 2초 대기)
+                        eprintln!("OpenClaw 발견 - Gateway 종료 시도");
+                        
+                        // 1. openclaw gateway stop 시도
                         let _ = std::process::Command::new("cmd")
                             .args(["/C", "openclaw gateway stop"])
+                            .creation_flags(CREATE_NO_WINDOW)
+                            .output();
+                        
+                        // 2. 강제 종료: 포트 18789 사용하는 프로세스 종료
+                        let kill_cmd = r#"
+                            $port = 18789
+                            $connections = netstat -ano | Select-String "LISTENING" | Select-String "$port"
+                            foreach ($line in $connections) {
+                                $parts = $line -split '\s+'
+                                $pid = $parts[-1]
+                                if ($pid -match '^\d+$' -and $pid -ne '0') {
+                                    taskkill /F /PID $pid 2>$null
+                                }
+                            }
+                        "#;
+                        
+                        let _ = std::process::Command::new("powershell")
+                            .args(["-NoProfile", "-Command", kill_cmd])
                             .creation_flags(CREATE_NO_WINDOW)
                             .output();
                     }
@@ -605,6 +625,11 @@ pub fn run() {
                     if check.is_ok() && check.unwrap().status.success() {
                         let _ = std::process::Command::new("openclaw")
                             .args(["gateway", "stop"])
+                            .output();
+                        
+                        // 강제 종료
+                        let _ = std::process::Command::new("pkill")
+                            .args(["-9", "-f", "openclaw.*gateway"])
                             .output();
                     }
                 }

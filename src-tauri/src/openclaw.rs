@@ -577,77 +577,117 @@ pub async fn configure_whatsapp_full(
     Ok(())
 }
 
-/// Gateway 시작
+/// Gateway 시작 (Windows: 숨김 창으로 실행)
 pub async fn start_gateway() -> Result<(), String> {
-    run_openclaw_command(&["gateway", "start"])?;
-    Ok(())
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        const DETACHED_PROCESS: u32 = 0x00000008;
+        
+        // PowerShell로 숨김 창 실행
+        let ps_command = r#"
+            Start-Process -FilePath 'openclaw' -ArgumentList 'gateway start' -WindowStyle Hidden -PassThru | Out-Null
+        "#;
+        
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-Command", ps_command])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("Gateway 시작 실패: {}", e))?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Gateway 시작 실패: {}", stderr));
+        }
+        
+        Ok(())
+    }
+    
+    #[cfg(not(windows))]
+    {
+        run_openclaw_command(&["gateway", "start"])?;
+        Ok(())
+    }
 }
 
 /// Gateway 시작 (daemon 모드 - 서비스 설치)
 pub async fn install_and_start_service() -> Result<String, String> {
-    // 1. gateway start 시도
-    match run_openclaw_command(&["gateway", "start"]) {
-        Ok(output) => {
-            // "service missing" 체크
-            if output.contains("service missing") || output.contains("missing") {
-                eprintln!("Gateway 서비스 미설치 - 설치 필요");
-            } else {
-                return Ok("Gateway가 시작되었습니다".to_string());
-            }
-        },
-        Err(e) => {
-            eprintln!("gateway start 실패: {}", e);
-            // service missing 에러인지 확인
-            if !e.contains("missing") && !e.contains("service") {
-                // 다른 에러면 그대로 반환
-                // 단, 상태 확인 후 실행 중이면 OK
-                std::thread::sleep(std::time::Duration::from_millis(1000));
-                if let Ok(status) = get_status().await {
-                    if status == "running" {
-                        return Ok("Gateway가 시작되었습니다".to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    // 2. 상태 확인 - 이미 실행 중이면 OK
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    eprintln!("install_and_start_service() 호출됨");
+    
+    // 1. 먼저 상태 확인 - 이미 실행 중이면 OK
     if let Ok(status) = get_status().await {
         if status == "running" {
+            eprintln!("Gateway가 이미 실행 중");
             return Ok("Gateway가 이미 실행 중입니다".to_string());
         }
     }
-
-    // 3. Windows: Scheduled Task 설치 필요 (관리자 권한)
+    
+    // 2. Windows 전용 로직
     #[cfg(windows)]
     {
         use crate::windows_helper;
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
         
         // Task가 이미 설치되어 있는지 확인
-        if windows_helper::is_gateway_task_installed() {
-            // Task는 있는데 실행 안 됨 - 그냥 시작
-            eprintln!("Gateway Task 존재함 - 시작 시도");
-            let _ = run_openclaw_command(&["gateway", "start"]);
-        } else {
+        if !windows_helper::is_gateway_task_installed() {
             // Task 설치 필요 (UAC 프롬프트)
             eprintln!("Gateway Task 미설치 - 관리자 권한으로 설치");
             windows_helper::install_gateway_with_uac()?;
+            std::thread::sleep(std::time::Duration::from_millis(2000));
         }
         
-        // 잠시 대기 후 상태 확인
-        std::thread::sleep(std::time::Duration::from_millis(2000));
+        // Gateway 시작 (숨김 창으로)
+        eprintln!("Gateway 시작 시도 (숨김 창)...");
+        let ps_command = r#"
+            Start-Process -FilePath 'openclaw' -ArgumentList 'gateway start' -WindowStyle Hidden -PassThru | Out-Null
+        "#;
+        
+        let _ = Command::new("powershell")
+            .args(["-NoProfile", "-Command", ps_command])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        
+        // 3초 대기 후 상태 확인
+        std::thread::sleep(std::time::Duration::from_millis(3000));
         let status = get_status().await?;
         if status == "running" {
-            return Ok("Gateway가 설치 및 시작되었습니다".to_string());
+            return Ok("Gateway가 시작되었습니다".to_string());
         } else {
-            return Err("Gateway 설치는 완료되었지만 시작에 실패했습니다. 다시 시도해주세요.".to_string());
+            // 한 번 더 시도
+            let _ = Command::new("powershell")
+                .args(["-NoProfile", "-Command", ps_command])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+            
+            std::thread::sleep(std::time::Duration::from_millis(2000));
+            let status2 = get_status().await?;
+            if status2 == "running" {
+                return Ok("Gateway가 시작되었습니다".to_string());
+            }
+            return Err("Gateway 시작에 실패했습니다. 다시 시도해주세요.".to_string());
         }
     }
 
-    // 4. Linux/Mac: gateway install 시도
+    // 3. Linux/Mac 로직
     #[cfg(not(windows))]
     {
+        // gateway start 시도
+        match run_openclaw_command(&["gateway", "start"]) {
+            Ok(_) => {
+                std::thread::sleep(std::time::Duration::from_millis(2000));
+                let status = get_status().await?;
+                if status == "running" {
+                    return Ok("Gateway가 시작되었습니다".to_string());
+                }
+            },
+            Err(e) => {
+                eprintln!("gateway start 실패: {}", e);
+            }
+        }
+        
+        // gateway install 시도
         eprintln!("Gateway 서비스 설치 시도...");
         match run_openclaw_command(&["gateway", "install"]) {
             Ok(_) => {
@@ -666,16 +706,78 @@ pub async fn install_and_start_service() -> Result<String, String> {
 
 /// Gateway 상태 확인
 pub async fn get_status() -> Result<String, String> {
+    // 방법 1: openclaw gateway status 명령
     match run_openclaw_command(&["gateway", "status"]) {
         Ok(output) => {
-            if output.contains("online") || output.contains("running") {
-                Ok("running".to_string())
-            } else {
-                Ok("stopped".to_string())
+            let output_lower = output.to_lowercase();
+            eprintln!("Gateway status output: {}", output);
+            
+            // 다양한 "실행 중" 표현 체크
+            if output_lower.contains("online") 
+                || output_lower.contains("running") 
+                || output_lower.contains("started")
+                || output_lower.contains("active")
+                || output_lower.contains("healthy")
+                || output_lower.contains("listening")
+            {
+                return Ok("running".to_string());
+            }
+            
+            // "stopped" 관련 표현 체크
+            if output_lower.contains("stopped") 
+                || output_lower.contains("offline")
+                || output_lower.contains("not running")
+                || output_lower.contains("inactive")
+            {
+                return Ok("stopped".to_string());
             }
         }
-        Err(_) => Ok("stopped".to_string()),
+        Err(e) => {
+            eprintln!("Gateway status command failed: {}", e);
+        }
     }
+    
+    // 방법 2: 프로세스 직접 확인 (Windows)
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        // Gateway 프로세스 확인 (node.exe가 gateway 관련 포트 리스닝)
+        let port = get_gateway_port();
+        let netstat_cmd = format!("netstat -ano | findstr \"LISTENING\" | findstr \"{}\"", port);
+        
+        let output = Command::new("cmd")
+            .args(["/C", &netstat_cmd])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        
+        if let Ok(out) = output {
+            if out.status.success() && !out.stdout.is_empty() {
+                eprintln!("Gateway port {} is listening", port);
+                return Ok("running".to_string());
+            }
+        }
+    }
+    
+    // 방법 2: 프로세스 직접 확인 (Unix)
+    #[cfg(not(windows))]
+    {
+        let port = get_gateway_port();
+        let lsof_cmd = format!("lsof -i :{} -sTCP:LISTEN", port);
+        
+        let output = Command::new("sh")
+            .args(["-c", &lsof_cmd])
+            .output();
+        
+        if let Ok(out) = output {
+            if out.status.success() && !out.stdout.is_empty() {
+                return Ok("running".to_string());
+            }
+        }
+    }
+    
+    Ok("stopped".to_string())
 }
 
 /// WhatsApp 페어링 시작 (onboard 명령 사용)
@@ -894,8 +996,11 @@ pub async fn stop_gateway() -> Result<(), String> {
     // gateway status로 실행 중인지 확인
     let status = get_status().await?;
     if status != "running" {
+        eprintln!("Gateway already stopped");
         return Ok(());
     }
+
+    eprintln!("Stopping gateway...");
 
     // 1. openclaw gateway stop 시도
     if run_openclaw_command(&["gateway", "stop"]).is_ok() {
@@ -903,32 +1008,77 @@ pub async fn stop_gateway() -> Result<(), String> {
         std::thread::sleep(std::time::Duration::from_millis(2000));
         let new_status = get_status().await?;
         if new_status != "running" {
+            eprintln!("Gateway stopped via command");
             return Ok(());
         }
     }
 
-    // 2. 강제 종료: openclaw-gateway 프로세스 직접 종료
-    let kill_gateway = Command::new("pkill")
-        .args(["-9", "-f", "openclaw-gateway"])
-        .output();
-
-    // 3. openclaw 메인 프로세스도 종료 (필요시)
-    let _ = Command::new("pkill")
-        .args(["-f", "openclaw$"])
-        .output();
-
-    match kill_gateway {
-        Ok(_) => {
-            // 1초 대기 후 다시 확인
-            std::thread::sleep(std::time::Duration::from_millis(1000));
-            let final_status = get_status().await?;
-            if final_status != "running" {
-                Ok(())
-            } else {
-                Err("Gateway 강제 종료 실패".to_string())
+    // 2. 강제 종료
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        // 포트 사용 중인 PID 찾기
+        let port = get_gateway_port();
+        let find_pid_cmd = format!(
+            "for /f \"tokens=5\" %a in ('netstat -ano ^| findstr LISTENING ^| findstr {}') do @echo %a",
+            port
+        );
+        
+        let output = Command::new("cmd")
+            .args(["/C", &find_pid_cmd])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        
+        if let Ok(out) = output {
+            let pids: Vec<&str> = String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter(|line| !line.is_empty())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .collect();
+            
+            for pid in pids {
+                if let Ok(pid_num) = pid.trim().parse::<u32>() {
+                    if pid_num > 0 {
+                        eprintln!("Killing PID {}", pid_num);
+                        let _ = Command::new("taskkill")
+                            .args(["/F", "/PID", &pid_num.to_string()])
+                            .creation_flags(CREATE_NO_WINDOW)
+                            .output();
+                    }
+                }
             }
-        },
-        Err(e) => Err(format!("Gateway 중지 실패: {}", e)),
+        }
+        
+        // node.exe 중에 openclaw 관련 프로세스 종료
+        let _ = Command::new("cmd")
+            .args(["/C", "taskkill /F /IM node.exe /FI \"WINDOWTITLE eq *openclaw*\""])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+    }
+    
+    #[cfg(not(windows))]
+    {
+        // Unix: pkill 사용
+        let _ = Command::new("pkill")
+            .args(["-9", "-f", "openclaw-gateway"])
+            .output();
+        
+        let _ = Command::new("pkill")
+            .args(["-f", "openclaw.*gateway"])
+            .output();
+    }
+
+    // 1초 대기 후 확인
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+    let final_status = get_status().await?;
+    if final_status != "running" {
+        eprintln!("Gateway stopped");
+        Ok(())
+    } else {
+        Err("Gateway 강제 종료 실패".to_string())
     }
 }
 
