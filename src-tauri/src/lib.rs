@@ -589,14 +589,8 @@ pub fn run() {
                     if check.is_ok() && check.unwrap().status.success() {
                         eprintln!("OpenClaw 발견 - Gateway 종료 시도");
                         
-                        // 1. openclaw gateway stop 시도
-                        let _ = std::process::Command::new("cmd")
-                            .args(["/C", "openclaw gateway stop"])
-                            .creation_flags(CREATE_NO_WINDOW)
-                            .output();
-                        
-                        // 2. 강제 종료: Gateway 포트 사용하는 프로세스 종료
-                        // 설정 파일에서 포트 읽기, 없으면 기본값 18789
+                        // foreground 프로세스는 gateway stop으로 안 멈춤
+                        // 직접 포트 사용 프로세스 종료
                         let kill_cmd = r#"
                             $configPath = "$env:USERPROFILE\.openclaw\openclaw.json"
                             $port = 18789
@@ -606,20 +600,10 @@ pub fn run() {
                                     if ($config.gateway.port) { $port = $config.gateway.port }
                                 } catch { }
                             }
-                            # 방법 1: Get-NetTCPConnection (정확함)
+                            # Get-NetTCPConnection으로 PID 찾아서 종료
                             $connections = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
                             foreach ($conn in $connections) {
                                 Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
-                            }
-                            # 방법 2: netstat fallback (정규식으로 정확히 매칭)
-                            $lines = netstat -ano | Select-String 'LISTENING'
-                            foreach ($line in $lines) {
-                                if ($line -match ":$port\s+.*?(\d+)\s*$") {
-                                    $pid = $Matches[1]
-                                    if ($pid -gt 0) {
-                                        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-                                    }
-                                }
                             }
                         "#;
                         

@@ -654,118 +654,19 @@ pub async fn install_and_start_service() -> Result<String, String> {
     Err("Gateway 시작에 실패했습니다. 다시 시도해주세요.".to_string())
 }
 
-/// Gateway 상태 확인
+/// Gateway 상태 확인 (단순화: TCP 연결만 확인)
 pub async fn get_status() -> Result<String, String> {
     let port = get_gateway_port();
+    eprintln!("Checking gateway status on port {}...", port);
     
-    // 방법 1 (가장 확실): HTTP 요청으로 Gateway 직접 확인
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
-        // PowerShell로 HTTP 요청 (타임아웃 2초)
+        // 단순하게: Test-NetConnection 사용 (가장 신뢰성 높음)
         let ps_cmd = format!(
-            r#"
-            try {{
-                $response = Invoke-WebRequest -Uri 'http://127.0.0.1:{}/health' -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
-                if ($response.StatusCode -eq 200) {{ Write-Output 'OK' }}
-            }} catch {{
-                # health 엔드포인트가 없을 수 있으니 포트만 확인
-                try {{
-                    $tcp = New-Object System.Net.Sockets.TcpClient
-                    $tcp.Connect('127.0.0.1', {})
-                    $tcp.Close()
-                    Write-Output 'OK'
-                }} catch {{
-                    Write-Output 'FAIL'
-                }}
-            }}
-            "#,
-            port, port
-        );
-        
-        let output = Command::new("powershell")
-            .args(["-NoProfile", "-Command", &ps_cmd])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
-        
-        if let Ok(out) = output {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            if stdout.trim() == "OK" {
-                eprintln!("Gateway port {} is responding", port);
-                return Ok("running".to_string());
-            }
-        }
-    }
-    
-    #[cfg(not(windows))]
-    {
-        // Unix: nc 또는 curl로 확인
-        let nc_cmd = format!("nc -z 127.0.0.1 {} 2>/dev/null && echo OK || echo FAIL", port);
-        
-        let output = Command::new("sh")
-            .args(["-c", &nc_cmd])
-            .output();
-        
-        if let Ok(out) = output {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            if stdout.trim() == "OK" {
-                eprintln!("Gateway port {} is responding", port);
-                return Ok("running".to_string());
-            }
-        }
-    }
-    
-    // 방법 2: openclaw gateway status 명령 (fallback)
-    match run_openclaw_command(&["gateway", "status"]) {
-        Ok(output) => {
-            let output_lower = output.to_lowercase();
-            eprintln!("Gateway status output: {}", output);
-            
-            // 다양한 "실행 중" 표현 체크
-            if output_lower.contains("online") 
-                || output_lower.contains("running") 
-                || output_lower.contains("started")
-                || output_lower.contains("active")
-                || output_lower.contains("healthy")
-                || output_lower.contains("listening")
-            {
-                return Ok("running".to_string());
-            }
-            
-            // "stopped" 관련 표현 체크
-            if output_lower.contains("stopped") 
-                || output_lower.contains("offline")
-                || output_lower.contains("not running")
-                || output_lower.contains("inactive")
-            {
-                return Ok("stopped".to_string());
-            }
-        }
-        Err(e) => {
-            eprintln!("Gateway status command failed: {}", e);
-        }
-    }
-    
-    // 방법 3: netstat로 포트 리스닝 확인 (정확한 패턴 사용)
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        
-        // 정확한 포트 패턴: ":18789 " (공백으로 끝나야 PID와 구분)
-        let ps_cmd = format!(
-            r#"
-            $lines = netstat -ano | Select-String 'LISTENING'
-            foreach ($line in $lines) {{
-                if ($line -match ':{}(\s|$)') {{
-                    Write-Output 'FOUND'
-                    exit
-                }}
-            }}
-            Write-Output 'NOTFOUND'
-            "#,
+            "(Test-NetConnection -ComputerName 127.0.0.1 -Port {} -WarningAction SilentlyContinue).TcpTestSucceeded",
             port
         );
         
@@ -775,31 +676,56 @@ pub async fn get_status() -> Result<String, String> {
             .output();
         
         if let Ok(out) = output {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            if stdout.trim() == "FOUND" {
-                eprintln!("Gateway port {} found in netstat", port);
+            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
+            eprintln!("Test-NetConnection result: '{}'", stdout);
+            if stdout == "true" {
+                eprintln!("Gateway port {} is listening", port);
                 return Ok("running".to_string());
             }
         }
+        
+        // Fallback: netstat으로 직접 확인
+        let netstat_cmd = format!(
+            "netstat -ano | findstr \"LISTENING\" | findstr \":{} \"",
+            port
+        );
+        
+        let output2 = Command::new("cmd")
+            .args(["/C", &netstat_cmd])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        
+        if let Ok(out) = output2 {
+            if out.status.success() && !out.stdout.is_empty() {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                eprintln!("netstat found: {}", stdout.trim());
+                return Ok("running".to_string());
+            }
+        }
+        
+        eprintln!("Gateway not running on port {}", port);
+        return Ok("stopped".to_string());
     }
     
     #[cfg(not(windows))]
     {
-        // Unix: ss 또는 lsof 사용 (더 정확한 패턴)
-        let ss_cmd = format!("ss -tlnp 2>/dev/null | grep -E ':{}\\s' || lsof -i :{} -sTCP:LISTEN 2>/dev/null", port, port);
+        // Unix: nc로 확인
+        let nc_cmd = format!("nc -z 127.0.0.1 {} 2>/dev/null", port);
         
         let output = Command::new("sh")
-            .args(["-c", &ss_cmd])
+            .args(["-c", &nc_cmd])
             .output();
         
         if let Ok(out) = output {
-            if out.status.success() && !out.stdout.is_empty() {
+            if out.status.success() {
+                eprintln!("Gateway port {} is responding", port);
                 return Ok("running".to_string());
             }
         }
+        
+        eprintln!("Gateway not running on port {}", port);
+        return Ok("stopped".to_string());
     }
-    
-    Ok("stopped".to_string())
 }
 
 /// WhatsApp 페어링 시작 (onboard 명령 사용)
@@ -1013,7 +939,7 @@ pub async fn is_onboarding_completed() -> Result<bool, String> {
     Ok(has_model && has_api_key && has_gateway && has_workspace)
 }
 
-/// Gateway 중지
+/// Gateway 중지 (foreground 프로세스 직접 종료)
 pub async fn stop_gateway() -> Result<(), String> {
     // gateway status로 실행 중인지 확인
     let status = get_status().await?;
@@ -1022,40 +948,45 @@ pub async fn stop_gateway() -> Result<(), String> {
         return Ok(());
     }
 
-    eprintln!("Stopping gateway...");
+    let port = get_gateway_port();
+    eprintln!("Stopping gateway on port {}...", port);
 
-    // 1. openclaw gateway stop 시도
-    if run_openclaw_command(&["gateway", "stop"]).is_ok() {
-        // 2초 대기 후 확인
-        std::thread::sleep(std::time::Duration::from_millis(2000));
-        let new_status = get_status().await?;
-        if new_status != "running" {
-            eprintln!("Gateway stopped via command");
-            return Ok(());
-        }
-    }
+    // foreground 프로세스는 `gateway stop`으로 안 멈춤
+    // 직접 포트 사용 프로세스를 종료해야 함
 
-    // 2. 강제 종료
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
-        let port = get_gateway_port();
-        
-        // PowerShell로 정확한 포트의 PID 찾아서 종료
+        // 방법 1: Get-NetTCPConnection으로 PID 찾아서 종료
         let ps_cmd = format!(
             r#"
+            $found = $false
             $connections = Get-NetTCPConnection -LocalPort {} -State Listen -ErrorAction SilentlyContinue
             foreach ($conn in $connections) {{
                 $pid = $conn.OwningProcess
                 if ($pid -gt 0) {{
                     Write-Host "Killing PID: $pid"
                     Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                    $found = $true
+                }}
+            }}
+            if (-not $found) {{
+                # Fallback: netstat로 PID 찾기
+                $output = netstat -ano | findstr "LISTENING" | findstr ":{} "
+                foreach ($line in $output -split "`n") {{
+                    if ($line -match '\s+(\d+)\s*$') {{
+                        $pid = $Matches[1]
+                        if ($pid -gt 0) {{
+                            Write-Host "Killing PID from netstat: $pid"
+                            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                        }}
+                    }}
                 }}
             }}
             "#,
-            port
+            port, port
         );
         
         let output = Command::new("powershell")
@@ -1065,52 +996,35 @@ pub async fn stop_gateway() -> Result<(), String> {
         
         if let Ok(out) = output {
             let stdout = String::from_utf8_lossy(&out.stdout);
-            eprintln!("Kill output: {}", stdout);
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            eprintln!("Stop output: {}", stdout);
+            if !stderr.is_empty() {
+                eprintln!("Stop stderr: {}", stderr);
+            }
         }
-        
-        // Fallback: netstat 파싱 (Get-NetTCPConnection이 없는 경우)
-        let ps_fallback = format!(
-            r#"
-            $lines = netstat -ano | Select-String 'LISTENING'
-            foreach ($line in $lines) {{
-                if ($line -match ':{}(\s+).*?(\d+)\s*$') {{
-                    $pid = $Matches[2]
-                    if ($pid -gt 0) {{
-                        Write-Host "Killing PID from netstat: $pid"
-                        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-                    }}
-                }}
-            }}
-            "#,
-            port
-        );
-        
-        let _ = Command::new("powershell")
-            .args(["-NoProfile", "-Command", &ps_fallback])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
     }
     
     #[cfg(not(windows))]
     {
-        // Unix: pkill 사용
-        let _ = Command::new("pkill")
-            .args(["-9", "-f", "openclaw-gateway"])
-            .output();
+        // Unix: 포트 사용 프로세스 찾아서 종료
+        let kill_cmd = format!(
+            "lsof -ti :{} | xargs -r kill -9 2>/dev/null || fuser -k {}/tcp 2>/dev/null",
+            port, port
+        );
         
-        let _ = Command::new("pkill")
-            .args(["-f", "openclaw.*gateway"])
+        let _ = Command::new("sh")
+            .args(["-c", &kill_cmd])
             .output();
     }
 
-    // 1초 대기 후 확인
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    // 2초 대기 후 확인
+    std::thread::sleep(std::time::Duration::from_millis(2000));
     let final_status = get_status().await?;
     if final_status != "running" {
-        eprintln!("Gateway stopped");
+        eprintln!("Gateway stopped successfully");
         Ok(())
     } else {
-        Err("Gateway 강제 종료 실패".to_string())
+        Err("Gateway 종료 실패".to_string())
     }
 }
 
