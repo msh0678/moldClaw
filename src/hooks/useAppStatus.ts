@@ -5,7 +5,7 @@ interface AppStatus {
   message?: string;
 }
 
-const STATUS_URL = 'https://raw.githubusercontent.com/msh0678/moldClaw/main/config/app-status.json';
+const STATUS_URL = 'https://gist.githubusercontent.com/msh0678/642977e6182c8288e850f097f069f3ee/raw/app-status.json';
 
 export function useAppStatus() {
   const [appStatus, setAppStatus] = useState<AppStatus | null>(null);
