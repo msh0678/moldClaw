@@ -6,13 +6,12 @@ import MessengerSelect from './components/MessengerSelect'
 import Integrations from './components/Integrations'
 import Connect from './components/Connect'
 import Summary from './components/Summary'
-import Success from './components/Success'
 import Loading from './components/Loading'
 import Dashboard from './components/Dashboard'
 import ShuttingDown from './components/ShuttingDown'
 import { BrowserControl } from './pages/BrowserControl'
 
-type Step = 'loading' | 'dashboard' | 'welcome' | 'model' | 'messenger' | 'integrations' | 'browsercontrol' | 'summary' | 'connect' | 'success' | 'shutting-down'
+type Step = 'loading' | 'dashboard' | 'welcome' | 'model' | 'messenger' | 'integrations' | 'browsercontrol' | 'summary' | 'connect' | 'shutting-down'
 type Messenger = 'telegram' | 'discord' | 'whatsapp' | null
 
 export interface ModelConfig {
@@ -227,13 +226,9 @@ function App() {
           config={config}
           onMessengerConfigUpdate={handleMessengerConfigUpdate}
           onGatewayConfigUpdate={handleGatewayConfigUpdate}
-          onComplete={() => setStep('success')}
+          onComplete={() => setStep('dashboard')}
           onBack={handleBack}
         />
-      )}
-      
-      {step === 'success' && config.messenger.type && (
-        <Success messenger={config.messenger.type} />
       )}
     </div>
   )
