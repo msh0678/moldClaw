@@ -577,17 +577,17 @@ pub async fn configure_whatsapp_full(
     Ok(())
 }
 
-/// Gateway 시작 (Windows: 숨김 창으로 실행)
+/// Gateway 시작 (Windows: 숨김 창으로 foreground 실행)
 pub async fn start_gateway() -> Result<(), String> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-        const DETACHED_PROCESS: u32 = 0x00000008;
         
-        // PowerShell로 숨김 창 실행
+        // `openclaw gateway` (foreground 모드, 숨김 창으로)
+        // `gateway start`는 service 필요하지만, `gateway`는 직접 실행
         let ps_command = r#"
-            Start-Process -FilePath 'openclaw' -ArgumentList 'gateway start' -WindowStyle Hidden -PassThru | Out-Null
+            Start-Process -FilePath 'openclaw' -ArgumentList 'gateway' -WindowStyle Hidden
         "#;
         
         let output = Command::new("powershell")
@@ -601,17 +601,30 @@ pub async fn start_gateway() -> Result<(), String> {
             return Err(format!("Gateway 시작 실패: {}", stderr));
         }
         
+        // Gateway 시작 대기
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+        
         Ok(())
     }
     
     #[cfg(not(windows))]
     {
-        run_openclaw_command(&["gateway", "start"])?;
+        // Unix도 foreground 모드로 (nohup 사용)
+        let output = Command::new("sh")
+            .args(["-c", "nohup openclaw gateway > /dev/null 2>&1 &"])
+            .output()
+            .map_err(|e| format!("Gateway 시작 실패: {}", e))?;
+        
+        if !output.status.success() {
+            return Err("Gateway 시작 실패".to_string());
+        }
+        
+        std::thread::sleep(std::time::Duration::from_millis(2000));
         Ok(())
     }
 }
 
-/// Gateway 시작 (daemon 모드 - 서비스 설치)
+/// Gateway 시작 (foreground 모드 - service 불필요)
 pub async fn install_and_start_service() -> Result<String, String> {
     eprintln!("install_and_start_service() 호출됨");
     
@@ -623,85 +636,22 @@ pub async fn install_and_start_service() -> Result<String, String> {
         }
     }
     
-    // 2. Windows 전용 로직
-    #[cfg(windows)]
-    {
-        use crate::windows_helper;
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        
-        // Task가 이미 설치되어 있는지 확인
-        if !windows_helper::is_gateway_task_installed() {
-            // Task 설치 필요 (UAC 프롬프트)
-            eprintln!("Gateway Task 미설치 - 관리자 권한으로 설치");
-            windows_helper::install_gateway_with_uac()?;
-            std::thread::sleep(std::time::Duration::from_millis(2000));
-        }
-        
-        // Gateway 시작 (숨김 창으로)
-        eprintln!("Gateway 시작 시도 (숨김 창)...");
-        let ps_command = r#"
-            Start-Process -FilePath 'openclaw' -ArgumentList 'gateway start' -WindowStyle Hidden -PassThru | Out-Null
-        "#;
-        
-        let _ = Command::new("powershell")
-            .args(["-NoProfile", "-Command", ps_command])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
-        
-        // 3초 대기 후 상태 확인
-        std::thread::sleep(std::time::Duration::from_millis(3000));
-        let status = get_status().await?;
-        if status == "running" {
-            return Ok("Gateway가 시작되었습니다".to_string());
-        } else {
-            // 한 번 더 시도
-            let _ = Command::new("powershell")
-                .args(["-NoProfile", "-Command", ps_command])
-                .creation_flags(CREATE_NO_WINDOW)
-                .output();
-            
-            std::thread::sleep(std::time::Duration::from_millis(2000));
-            let status2 = get_status().await?;
-            if status2 == "running" {
+    // 2. Gateway 직접 시작 (`openclaw gateway` - foreground 모드)
+    start_gateway().await?;
+    
+    // 3. 상태 확인 (최대 5초 대기)
+    for i in 0..5 {
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        if let Ok(status) = get_status().await {
+            if status == "running" {
+                eprintln!("Gateway 시작 확인 ({}초)", i + 1);
                 return Ok("Gateway가 시작되었습니다".to_string());
             }
-            return Err("Gateway 시작에 실패했습니다. 다시 시도해주세요.".to_string());
         }
+        eprintln!("Gateway 시작 대기 중... ({}초)", i + 1);
     }
-
-    // 3. Linux/Mac 로직
-    #[cfg(not(windows))]
-    {
-        // gateway start 시도
-        match run_openclaw_command(&["gateway", "start"]) {
-            Ok(_) => {
-                std::thread::sleep(std::time::Duration::from_millis(2000));
-                let status = get_status().await?;
-                if status == "running" {
-                    return Ok("Gateway가 시작되었습니다".to_string());
-                }
-            },
-            Err(e) => {
-                eprintln!("gateway start 실패: {}", e);
-            }
-        }
-        
-        // gateway install 시도
-        eprintln!("Gateway 서비스 설치 시도...");
-        match run_openclaw_command(&["gateway", "install"]) {
-            Ok(_) => {
-                std::thread::sleep(std::time::Duration::from_millis(2000));
-                let status = get_status().await?;
-                if status == "running" {
-                    Ok("Gateway가 설치 및 시작되었습니다".to_string())
-                } else {
-                    Err("Gateway 설치 후 시작에 실패했습니다".to_string())
-                }
-            },
-            Err(e) => Err(format!("Gateway 설치 실패: {}", e)),
-        }
-    }
+    
+    Err("Gateway 시작에 실패했습니다. 다시 시도해주세요.".to_string())
 }
 
 /// Gateway 상태 확인
