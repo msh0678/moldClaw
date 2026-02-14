@@ -316,6 +316,8 @@ pub async fn configure_model(provider: &str, model: &str, api_key: &str) -> Resu
 pub async fn configure_gateway(port: u16, bind: &str, auth_token: &str) -> Result<(), String> {
     let mut config = read_existing_config();
 
+    // gateway.mode: local (로컬 실행 모드 - 필수!)
+    set_nested_value(&mut config, &["gateway", "mode"], json!("local"));
     set_nested_value(&mut config, &["gateway", "port"], json!(port));
     set_nested_value(&mut config, &["gateway", "bind"], json!(bind));
     
@@ -336,6 +338,8 @@ pub async fn configure_gateway_full(
 ) -> Result<(), String> {
     let mut config = read_existing_config();
 
+    // gateway.mode: local (로컬 실행 모드 - 필수!)
+    set_nested_value(&mut config, &["gateway", "mode"], json!("local"));
     set_nested_value(&mut config, &["gateway", "port"], json!(port));
     set_nested_value(&mut config, &["gateway", "bind"], json!(bind));
     

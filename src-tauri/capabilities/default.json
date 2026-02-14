@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schemas.tauri.app/v2/capabilities",
+  "identifier": "default",
+  "description": "Default capabilities for moldClaw",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open",
+    "process:allow-exit"
+  ]
+}
