@@ -431,17 +431,67 @@ pub fn is_gateway_task_installed() -> bool {
     output.map(|o| o.status.success()).unwrap_or(false)
 }
 
+/// OpenClaw 실행 파일 경로 찾기
+fn find_openclaw_path() -> Option<String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    // where openclaw으로 경로 찾기
+    let output = Command::new("cmd")
+        .args(["/C", "where openclaw"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()?;
+    
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .next()?
+            .trim()
+            .to_string();
+        if !path.is_empty() {
+            return Some(path);
+        }
+    }
+    
+    // npm prefix로 경로 추론
+    let npm_output = Command::new("cmd")
+        .args(["/C", "npm config get prefix"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()?;
+    
+    if npm_output.status.success() {
+        let prefix = String::from_utf8_lossy(&npm_output.stdout).trim().to_string();
+        let openclaw_cmd = format!("{}\\openclaw.cmd", prefix);
+        if std::path::Path::new(&openclaw_cmd).exists() {
+            return Some(openclaw_cmd);
+        }
+    }
+    
+    None
+}
+
 /// Gateway 설치 (관리자 권한으로 - UAC 프롬프트)
 pub fn install_gateway_with_uac() -> Result<String, String> {
     eprintln!("OpenClaw Gateway 설치 시작 (관리자 권한 필요)...");
     
+    // OpenClaw 경로 찾기
+    let openclaw_path = find_openclaw_path()
+        .ok_or("OpenClaw 실행 파일을 찾을 수 없습니다. npm install -g openclaw이 완료되었는지 확인하세요.".to_string())?;
+    
+    eprintln!("OpenClaw 경로: {}", openclaw_path);
+    
     // PowerShell을 통해 관리자 권한으로 openclaw gateway install 실행
-    let ps_command = r#"
-        Start-Process -FilePath 'openclaw' -ArgumentList 'gateway install' -Verb RunAs -Wait
-    "#;
+    // 전체 경로 사용 + 경로에 공백이 있을 수 있으므로 이스케이프
+    let escaped_path = openclaw_path.replace("'", "''");
+    let ps_command = format!(
+        "Start-Process -FilePath '{}' -ArgumentList 'gateway install' -Verb RunAs -Wait",
+        escaped_path
+    );
     
     let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command", ps_command])
+        .args(["-NoProfile", "-Command", &ps_command])
         .output()
         .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
     
