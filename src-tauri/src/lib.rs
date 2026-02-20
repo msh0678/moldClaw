@@ -478,24 +478,37 @@ fn install_prerequisites() -> Result<serde_json::Value, String> {
                 Ok(msg) => {
                     messages.push(format!("✓ {}", msg));
                     
-                    // 설치 후 환경변수 새로고침하고 인식 확인
+                    // 설치 후 환경변수 새로고침하고 인식 확인 (최대 10초, 1초마다 체크)
                     messages.push("환경변수 새로고침 중...".to_string());
-                    windows_helper::refresh_environment_variables();
-                    std::thread::sleep(std::time::Duration::from_secs(3));
                     
-                    // Node.js 인식 확인
-                    if let Some(version) = windows_helper::get_node_version() {
-                        if windows_helper::is_node_version_compatible(&version) {
-                            // ✅ 인식 성공 → 재시작 불필요
-                            messages.push(format!("✓ Node.js {} 정상 인식됨", version));
-                        } else {
-                            // 버전 호환 안 됨 (드문 케이스)
-                            messages.push(format!("⚠️ Node.js {} 인식됨, 하지만 22.12.0 이상 필요", version));
-                            needs_restart = true;
+                    let mut detected_version: Option<String> = None;
+                    for attempt in 1..=10 {
+                        // 매 시도마다 환경변수 새로고침
+                        windows_helper::refresh_environment_variables();
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        
+                        // Node.js 인식 확인
+                        if let Some(version) = windows_helper::get_node_version() {
+                            if windows_helper::is_node_version_compatible(&version) {
+                                detected_version = Some(version);
+                                eprintln!("Node.js 인식 성공 ({}초 후)", attempt);
+                                break;
+                            }
                         }
+                        eprintln!("Node.js 인식 대기 중... ({}/10)", attempt);
+                    }
+                    
+                    if let Some(version) = detected_version {
+                        // ✅ 인식 성공 → 재시작 불필요
+                        messages.push(format!("✓ Node.js {} 정상 인식됨", version));
                     } else {
-                        // ❌ 인식 실패 → 재시작 필요
-                        messages.push("⚠️ Node.js가 설치되었지만 현재 프로세스에서 인식되지 않습니다.".to_string());
+                        // ❌ 10초 후에도 인식 실패 → 재시작 필요
+                        // 혹시 버전은 있지만 호환 안 되는 경우 체크
+                        if let Some(version) = windows_helper::get_node_version() {
+                            messages.push(format!("⚠️ Node.js {} 인식됨, 하지만 22.12.0 이상 필요", version));
+                        } else {
+                            messages.push("⚠️ Node.js가 설치되었지만 현재 프로세스에서 인식되지 않습니다.".to_string());
+                        }
                         messages.push("moldClaw를 재시작해야 합니다.".to_string());
                         needs_restart = true;
                     }
