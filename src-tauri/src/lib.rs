@@ -75,12 +75,13 @@ fn get_openclaw_version() -> Option<String> {
 
 // ===== 설치 =====
 
-/// OpenClaw 설치 (npm install -g openclaw)
+/// OpenClaw 설치 (npm install -g openclaw) - 에러 자동 복구 포함
 #[tauri::command]
 async fn install_openclaw() -> Result<String, String> {
     #[cfg(windows)]
     {
-        windows_helper::install_openclaw_global()
+        // 에러 핸들링 및 자동 복구 시스템 사용
+        windows_helper::install_openclaw_with_recovery()
     }
     #[cfg(not(windows))]
     {
@@ -379,7 +380,6 @@ fn check_prerequisites() -> windows_helper::PrerequisiteStatus {
 #[tauri::command]
 fn check_prerequisites() -> serde_json::Value {
     serde_json::json!({
-        "git_installed": true,
         "node_installed": true,
         "node_version": null,
         "node_compatible": true,
@@ -387,41 +387,48 @@ fn check_prerequisites() -> serde_json::Value {
     })
 }
 
-/// Git 설치 여부 확인
-#[cfg(windows)]
-#[tauri::command]
-fn is_git_installed() -> bool {
-    windows_helper::is_git_installed()
-}
-
-#[cfg(not(windows))]
-#[tauri::command]
-fn is_git_installed() -> bool {
-    std::process::Command::new("which")
-        .arg("git")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-/// Git 설치 (winget 사용)
-#[cfg(windows)]
-#[tauri::command]
-fn install_git() -> Result<String, String> {
-    windows_helper::install_git_with_winget_visible()
-}
-
-#[cfg(not(windows))]
-#[tauri::command]
-fn install_git() -> Result<String, String> {
-    Err("이 기능은 Windows에서만 사용 가능합니다".to_string())
-}
-
 /// Node.js 설치 (winget 사용)
 #[cfg(windows)]
 #[tauri::command]
 fn install_nodejs() -> Result<String, String> {
     windows_helper::install_nodejs_with_winget_visible()
+}
+
+/// 에러 분석 (디버깅용)
+#[cfg(windows)]
+#[tauri::command]
+fn analyze_install_error(error_message: String) -> serde_json::Value {
+    let analysis = windows_helper::analyze_error(&error_message);
+    serde_json::json!({
+        "error_type": format!("{:?}", analysis.error_type),
+        "description": analysis.description,
+        "solution": analysis.solution,
+        "auto_fixable": analysis.auto_fixable
+    })
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn analyze_install_error(_error_message: String) -> serde_json::Value {
+    serde_json::json!({
+        "error_type": "Unknown",
+        "description": "에러 분석은 Windows에서만 지원됩니다.",
+        "solution": "에러 메시지를 확인해주세요.",
+        "auto_fixable": false
+    })
+}
+
+/// Visual C++ Redistributable 설치
+#[cfg(windows)]
+#[tauri::command]
+fn install_vc_redist() -> Result<String, String> {
+    windows_helper::install_vc_redist()
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn install_vc_redist() -> Result<String, String> {
+    Err("이 기능은 Windows에서만 사용 가능합니다".to_string())
 }
 
 #[cfg(not(windows))]
@@ -452,21 +459,7 @@ fn install_prerequisites() -> Result<serde_json::Value, String> {
     
     #[cfg(windows)]
     {
-        // 1. Git 확인 및 설치
-        if !windows_helper::is_git_installed() {
-            messages.push("Git 설치 중... (관리자 권한 승인 창이 나타나면 '예'를 클릭하세요)".to_string());
-            match windows_helper::install_git_with_winget_visible() {
-                Ok(msg) => {
-                    messages.push(format!("✓ {}", msg));
-                    installed_something = true;
-                }
-                Err(e) => return Err(format!("Git 설치 실패: {}", e)),
-            }
-        } else {
-            messages.push("✓ Git이 이미 설치되어 있습니다.".to_string());
-        }
-        
-        // 2. Node.js 확인 및 설치
+        // Node.js 확인 및 설치
         let node_status = windows_helper::check_prerequisites();
         if !node_status.node_compatible {
             if node_status.node_installed {
@@ -494,13 +487,10 @@ fn install_prerequisites() -> Result<serde_json::Value, String> {
     #[cfg(not(windows))]
     {
         // Unix에서는 시스템 패키지 매니저 사용 안내
-        if !is_git_installed() {
-            return Err("Git이 설치되어 있지 않습니다. 시스템 패키지 매니저로 설치해주세요.".to_string());
-        }
         if !check_node_installed() {
             return Err("Node.js가 설치되어 있지 않습니다. 시스템 패키지 매니저로 설치해주세요.".to_string());
         }
-        messages.push("✓ Git과 Node.js가 설치되어 있습니다.".to_string());
+        messages.push("✓ Node.js가 설치되어 있습니다.".to_string());
     }
     
     Ok(serde_json::json!({
@@ -557,10 +547,10 @@ pub fn run() {
             get_dashboard_url,
             // Windows 전용
             check_prerequisites,
-            is_git_installed,
-            install_git,
             install_nodejs,
             refresh_path,
+            analyze_install_error,
+            install_vc_redist,
             // 삭제/종료
             uninstall_openclaw,
             cleanup_before_exit,

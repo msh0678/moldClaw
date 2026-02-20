@@ -64,116 +64,9 @@ pub fn run_elevated_script(script: &str) -> Result<String, String> {
     }
 }
 
-/// Git 설치 여부 확인
-pub fn is_git_installed() -> bool {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-    
-    Command::new("cmd")
-        .args(["/C", "where git"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-/// winget으로 Git 설치 (UAC 프롬프트를 사용자에게 직접 보여줌)
-/// 
-/// 창을 숨기지 않고 사용자가 직접 UAC 승인 클릭하도록 함
-pub fn install_git_with_winget_visible() -> Result<String, String> {
-    eprintln!("Git 설치 시작 (winget 사용, UAC 프롬프트 표시)...");
-    
-    // 먼저 winget 사용 가능한지 확인
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-    
-    let winget_check = Command::new("cmd")
-        .args(["/C", "winget --version"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-    
-    match winget_check {
-        Ok(output) if output.status.success() => {},
-        _ => return Err("winget이 설치되어 있지 않습니다. Windows 10 1709+ 또는 Windows 11이 필요합니다.".to_string()),
-    }
-    
-    eprintln!("winget 확인됨. Git 설치를 위한 관리자 권한 요청...");
-    
-    // PowerShell을 통해 관리자 권한으로 winget 실행
-    // -Wait: 설치 완료까지 대기
-    // -Verb RunAs: UAC 프롬프트 표시
-    // 창을 숨기지 않음 - 사용자가 UAC 프롬프트를 볼 수 있음
-    let ps_command = r#"
-        Start-Process -FilePath 'winget' -ArgumentList 'install --id Git.Git -e --source winget --silent --accept-source-agreements --accept-package-agreements' -Verb RunAs -Wait
-    "#;
-    
-    // 중요: CREATE_NO_WINDOW를 사용하지 않음 - 사용자가 UAC 창을 볼 수 있도록
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command", ps_command])
-        .output()
-        .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
-    
-    // 설치 확인 (PATH 새로고침)
-    refresh_environment_variables();
-    std::thread::sleep(std::time::Duration::from_secs(2));
-    
-    if is_git_installed() {
-        eprintln!("✓ Git 설치 확인됨");
-        Ok("Git이 성공적으로 설치되었습니다!".to_string())
-    } else {
-        // 설치는 됐지만 PATH가 아직 안 잡힌 경우
-        eprintln!("Git 설치 완료 (PATH 새로고침 필요할 수 있음)");
-        Ok("Git 설치 완료. 앱을 재시작하면 인식됩니다.".to_string())
-    }
-}
-
-/// winget으로 Git 설치 (async 버전 - 기존 호환성)
-pub async fn install_git_with_winget() -> Result<String, String> {
-    install_git_with_winget_visible()
-}
-
-/// Visual Studio Build Tools 설치 여부 확인
-pub fn is_build_tools_installed() -> bool {
-    let vs_paths = [
-        r"C:\Program Files\Microsoft Visual Studio\2022\BuildTools",
-        r"C:\Program Files\Microsoft Visual Studio\2022\Community",
-        r"C:\Program Files\Microsoft Visual Studio\2022\Professional",
-        r"C:\Program Files\Microsoft Visual Studio\2022\Enterprise",
-        r"C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools",
-    ];
-    
-    vs_paths.iter().any(|p| PathBuf::from(p).exists())
-}
-
-/// Visual Studio Build Tools 설치 (node-gyp 네이티브 모듈용)
-pub async fn install_build_tools() -> Result<String, String> {
-    eprintln!("Visual Studio Build Tools 설치 시작...");
-    
-    let install_script = r#"
-$ErrorActionPreference = 'Stop'
-try {
-    Write-Host "Visual Studio Build Tools 설치 중..."
-    winget install --id Microsoft.VisualStudio.2022.BuildTools -e --source winget --silent --accept-source-agreements --accept-package-agreements --override "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet --wait"
-    
-    if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null) {
-        Write-Host "Visual Studio Build Tools 설치 완료!"
-    } else {
-        throw "설치 실패"
-    }
-} catch {
-    Write-Error $_.Exception.Message
-    exit 1
-}
-"#;
-    
-    run_elevated_script(install_script)?;
-    Ok("Visual Studio Build Tools 설치 완료".to_string())
-}
-
 /// 필수 프로그램 상태 확인
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PrerequisiteStatus {
-    pub git_installed: bool,
     pub node_installed: bool,
     pub node_version: Option<String>,
     pub node_compatible: bool,  // >= 22.12.0
@@ -187,7 +80,6 @@ pub fn check_prerequisites() -> PrerequisiteStatus {
         .unwrap_or(false);
     
     PrerequisiteStatus {
-        git_installed: is_git_installed(),
         node_installed: node_version.is_some(),
         node_version,
         node_compatible,
@@ -391,32 +283,6 @@ pub fn refresh_environment_variables() {
     }
 }
 
-/// 사용자별 디렉토리 반환 (권한 문제 없는 위치)
-pub fn get_user_install_dir() -> PathBuf {
-    // %LOCALAPPDATA%는 사용자별 디렉토리로 관리자 권한 불필요
-    dirs::data_local_dir()
-        .unwrap_or_else(|| {
-            // 폴백: %USERPROFILE%\AppData\Local
-            dirs::home_dir()
-                .map(|h| h.join("AppData").join("Local"))
-                .unwrap_or_else(|| PathBuf::from("C:\\Users\\Public\\AppData\\Local"))
-        })
-        .join("Programs")
-        .join("openclaw")
-}
-
-/// npm install을 관리자 권한 없이 사용자 디렉토리에서 실행
-pub fn get_npm_user_config() -> Vec<(String, String)> {
-    let user_cache = dirs::cache_dir()
-        .unwrap_or_else(|| std::env::temp_dir())
-        .join("npm");
-    
-    vec![
-        ("npm_config_cache".to_string(), user_cache.to_string_lossy().to_string()),
-        ("npm_config_prefix".to_string(), get_user_install_dir().to_string_lossy().to_string()),
-    ]
-}
-
 /// Gateway Scheduled Task 설치 여부 확인
 pub fn is_gateway_task_installed() -> bool {
     use std::os::windows::process::CommandExt;
@@ -510,4 +376,248 @@ pub fn install_gateway_with_uac() -> Result<String, String> {
             Err(format!("Gateway 설치 실패: {}", stderr))
         }
     }
+}
+
+// ===== 에러 핸들링 시스템 (오버헤드) =====
+
+/// 에러 유형 분류
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub enum InstallErrorType {
+    /// Visual C++ Redistributable 누락 (DLL 로드 실패)
+    VcRedistMissing,
+    /// 백신/보안 소프트웨어 차단
+    AntivirusBlocking,
+    /// npm 캐시 손상
+    NpmCacheCorrupted,
+    /// 네트워크 문제
+    NetworkError,
+    /// 권한 문제 (관리자 필요)
+    PermissionDenied,
+    /// node-llama-cpp 빌드 실패 (optional, 무시 가능)
+    LlamaCppBuildFailed,
+    /// 알 수 없는 에러
+    Unknown,
+}
+
+/// 에러 분석 결과
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ErrorAnalysis {
+    pub error_type: InstallErrorType,
+    pub description: String,
+    pub solution: String,
+    pub auto_fixable: bool,
+}
+
+/// 에러 메시지 분석하여 원인 파악
+pub fn analyze_error(stderr: &str) -> ErrorAnalysis {
+    let stderr_lower = stderr.to_lowercase();
+    
+    // 1. Visual C++ Redistributable 누락
+    if stderr_lower.contains("err_dlopen_failed") 
+        || stderr_lower.contains("the specified module could not be found")
+        || stderr_lower.contains("vcruntime")
+        || stderr_lower.contains("msvcp")
+    {
+        return ErrorAnalysis {
+            error_type: InstallErrorType::VcRedistMissing,
+            description: "Visual C++ Redistributable이 설치되어 있지 않습니다.".to_string(),
+            solution: "Visual C++ Redistributable을 설치해주세요. moldClaw가 자동으로 설치를 시도합니다.".to_string(),
+            auto_fixable: true,
+        };
+    }
+    
+    // 2. npm 캐시 손상
+    if (stderr_lower.contains("enoent") && stderr_lower.contains("npm-cache"))
+        || (stderr_lower.contains("enoent") && stderr_lower.contains("_npx"))
+        || stderr_lower.contains("could not read package.json")
+    {
+        return ErrorAnalysis {
+            error_type: InstallErrorType::NpmCacheCorrupted,
+            description: "npm 캐시가 손상되었습니다.".to_string(),
+            solution: "npm 캐시를 정리하고 다시 시도합니다.".to_string(),
+            auto_fixable: true,
+        };
+    }
+    
+    // 3. 네트워크 문제
+    if stderr_lower.contains("etimedout")
+        || stderr_lower.contains("econnreset") 
+        || stderr_lower.contains("enotfound")
+        || stderr_lower.contains("failed to download")
+        || stderr_lower.contains("network")
+        || stderr_lower.contains("socket hang up")
+    {
+        return ErrorAnalysis {
+            error_type: InstallErrorType::NetworkError,
+            description: "네트워크 연결에 문제가 있습니다.".to_string(),
+            solution: "인터넷 연결을 확인하고 다시 시도해주세요. VPN을 사용 중이라면 일시 중지해보세요.".to_string(),
+            auto_fixable: false,
+        };
+    }
+    
+    // 4. 권한 문제 / 백신 차단 (비정상 종료 코드 포함)
+    if stderr_lower.contains("eperm")
+        || stderr_lower.contains("eacces")
+        || stderr_lower.contains("operation not permitted")
+        || stderr_lower.contains("access denied")
+        || stderr.contains("4294963238")  // 백신 차단 시 자주 나오는 종료 코드
+        || stderr.contains("-1018")
+    {
+        // EPERM + cleanup은 백신 의심
+        if stderr_lower.contains("cleanup") || stderr.contains("4294963238") {
+            return ErrorAnalysis {
+                error_type: InstallErrorType::AntivirusBlocking,
+                description: "백신/보안 소프트웨어가 설치를 차단하고 있습니다.".to_string(),
+                solution: "백신의 실시간 감시를 일시 중지하고 다시 시도해주세요. 설치 후 다시 활성화하세요.".to_string(),
+                auto_fixable: false,
+            };
+        }
+        return ErrorAnalysis {
+            error_type: InstallErrorType::PermissionDenied,
+            description: "파일 접근 권한이 없습니다.".to_string(),
+            solution: "관리자 권한으로 실행하거나, 다른 프로그램이 파일을 사용 중인지 확인해주세요.".to_string(),
+            auto_fixable: false,
+        };
+    }
+    
+    // 5. node-llama-cpp 빌드 실패 (무시 가능하지만 전체 실패로 이어질 수 있음)
+    if stderr_lower.contains("node-llama-cpp")
+        || stderr_lower.contains("llama.cpp")
+        || stderr_lower.contains("cmake")
+    {
+        return ErrorAnalysis {
+            error_type: InstallErrorType::LlamaCppBuildFailed,
+            description: "로컬 AI 모델(llama.cpp) 빌드에 실패했습니다. API 사용에는 영향 없습니다.".to_string(),
+            solution: "Visual C++ Build Tools 또는 cmake가 필요합니다. API만 사용할 경우 무시해도 됩니다.".to_string(),
+            auto_fixable: false,
+        };
+    }
+    
+    // 알 수 없는 에러
+    ErrorAnalysis {
+        error_type: InstallErrorType::Unknown,
+        description: "알 수 없는 오류가 발생했습니다.".to_string(),
+        solution: "에러 메시지를 확인하고 지원 채널에 문의해주세요.".to_string(),
+        auto_fixable: false,
+    }
+}
+
+/// Visual C++ Redistributable 설치 (winget 사용)
+pub fn install_vc_redist() -> Result<String, String> {
+    eprintln!("Visual C++ Redistributable 설치 시작...");
+    
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    // winget 사용 가능한지 확인
+    let winget_check = Command::new("cmd")
+        .args(["/C", "winget --version"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    
+    match winget_check {
+        Ok(output) if output.status.success() => {},
+        _ => return Err("winget이 설치되어 있지 않습니다.".to_string()),
+    }
+    
+    // VC++ Redistributable 설치 (관리자 권한)
+    let ps_command = r#"
+        Start-Process -FilePath 'winget' -ArgumentList 'install --id Microsoft.VCRedist.2015+.x64 -e --source winget --silent --accept-source-agreements --accept-package-agreements' -Verb RunAs -Wait
+    "#;
+    
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", ps_command])
+        .output()
+        .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
+    
+    if output.status.success() {
+        Ok("Visual C++ Redistributable 설치 완료!".to_string())
+    } else {
+        Err("Visual C++ Redistributable 설치 실패".to_string())
+    }
+}
+
+/// 자동 복구 시도 (에러 유형에 따라)
+pub fn attempt_auto_fix(error_type: &InstallErrorType) -> Result<String, String> {
+    match error_type {
+        InstallErrorType::VcRedistMissing => {
+            install_vc_redist()
+        }
+        InstallErrorType::NpmCacheCorrupted => {
+            clear_npm_cache()?;
+            Ok("npm 캐시를 정리했습니다. 다시 시도해주세요.".to_string())
+        }
+        _ => {
+            Err("자동 복구가 불가능한 에러입니다.".to_string())
+        }
+    }
+}
+
+/// OpenClaw 설치 with 에러 핸들링
+pub fn install_openclaw_with_recovery() -> Result<String, String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    eprintln!("OpenClaw 설치 시작 (에러 복구 활성화)...");
+    
+    // npm이 있는지 확인
+    if !is_npm_installed() {
+        return Err("npm이 설치되어 있지 않습니다. Node.js를 먼저 설치해주세요.".to_string());
+    }
+    
+    // 1차 시도
+    let output = Command::new("cmd")
+        .args(["/C", "npm install -g openclaw"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("npm 실행 실패: {}", e))?;
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    
+    eprintln!("1차 설치 stdout: {}", stdout);
+    eprintln!("1차 설치 stderr: {}", stderr);
+    
+    if output.status.success() {
+        // 설치 확인
+        if is_openclaw_installed() {
+            return Ok("OpenClaw 설치 완료!".to_string());
+        }
+    }
+    
+    // 실패 시 에러 분석
+    let full_output = format!("{}\n{}", stdout, stderr);
+    let analysis = analyze_error(&full_output);
+    
+    eprintln!("에러 분석 결과: {:?}", analysis);
+    
+    // 자동 복구 가능한 경우 시도
+    if analysis.auto_fixable {
+        eprintln!("자동 복구 시도: {}", analysis.solution);
+        
+        if let Ok(fix_result) = attempt_auto_fix(&analysis.error_type) {
+            eprintln!("복구 결과: {}", fix_result);
+            
+            // 복구 후 재시도
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            
+            let retry_output = Command::new("cmd")
+                .args(["/C", "npm install -g openclaw"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+                .map_err(|e| format!("재시도 실패: {}", e))?;
+            
+            if retry_output.status.success() && is_openclaw_installed() {
+                return Ok("OpenClaw 설치 완료! (자동 복구 후)".to_string());
+            }
+        }
+    }
+    
+    // 복구 불가능한 경우 상세 에러 반환
+    Err(format!(
+        "OpenClaw 설치 실패\n\n원인: {}\n\n해결 방법: {}\n\n상세 에러:\n{}",
+        analysis.description,
+        analysis.solution,
+        stderr.chars().take(500).collect::<String>()
+    ))
 }
