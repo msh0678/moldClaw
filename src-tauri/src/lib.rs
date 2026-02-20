@@ -463,13 +463,14 @@ fn install_prerequisites() -> Result<serde_json::Value, String> {
     
     #[cfg(windows)]
     {
-        // Node.js 확인 및 설치
-        let node_status = windows_helper::check_prerequisites();
-        if !node_status.node_compatible {
-            if node_status.node_installed {
+        let prereq_status = windows_helper::check_prerequisites();
+        
+        // 1. Node.js 확인 및 설치
+        if !prereq_status.node_compatible {
+            if prereq_status.node_installed {
                 messages.push(format!(
                     "⚠️ Node.js {}가 설치되어 있지만, 22.12.0 이상이 필요합니다.",
-                    node_status.node_version.unwrap_or_default()
+                    prereq_status.node_version.clone().unwrap_or_default()
                 ));
             }
             messages.push("Node.js LTS 설치 중... (관리자 권한 승인 창이 나타나면 '예'를 클릭하세요)".to_string());
@@ -483,7 +484,40 @@ fn install_prerequisites() -> Result<serde_json::Value, String> {
         } else {
             messages.push(format!(
                 "✓ Node.js {}가 이미 설치되어 있습니다.",
-                node_status.node_version.unwrap_or_default()
+                prereq_status.node_version.clone().unwrap_or_default()
+            ));
+        }
+        
+        // 2. Visual C++ Redistributable 확인 및 설치
+        if !prereq_status.vc_redist_installed {
+            messages.push("Visual C++ Redistributable 설치 중... (관리자 권한 승인 창이 나타나면 '예'를 클릭하세요)".to_string());
+            match windows_helper::install_vc_redist() {
+                Ok(msg) => {
+                    messages.push(format!("✓ {}", msg));
+                    // VC++ 설치는 재시작 불필요
+                }
+                Err(e) => {
+                    // VC++ 설치 실패는 경고만 (OpenClaw 설치 시 다시 시도)
+                    messages.push(format!("⚠️ Visual C++ 설치 실패: {} (OpenClaw 설치 시 재시도)", e));
+                }
+            }
+        } else {
+            messages.push("✓ Visual C++ Redistributable이 이미 설치되어 있습니다.".to_string());
+        }
+        
+        // 3. 디스크 공간 확인
+        if !prereq_status.disk_space_ok {
+            messages.push(format!(
+                "⚠️ 디스크 공간 부족: {:.1}GB (권장: 2GB 이상)",
+                prereq_status.disk_space_gb
+            ));
+        }
+        
+        // 4. 백신 감지 알림
+        if let Some(ref av) = prereq_status.antivirus_detected {
+            messages.push(format!(
+                "ℹ️ 백신 감지됨: {}. 설치 실패 시 실시간 감시 일시 중지가 필요할 수 있습니다.",
+                av
             ));
         }
     }
