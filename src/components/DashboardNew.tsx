@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 interface DashboardNewProps {
   onSettings: () => void
+  onStartUninstall: () => void
 }
 
 type GatewayStatus = 'checking' | 'running' | 'stopped' | 'error'
@@ -20,14 +21,13 @@ interface UsageStats {
   lastActive: string
 }
 
-export default function DashboardNew({ onSettings }: DashboardNewProps) {
+export default function DashboardNew({ onSettings, onStartUninstall }: DashboardNewProps) {
   const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>('checking')
   const [channels, setChannels] = useState<ChannelStatus[]>([])
   const [usage, setUsage] = useState<UsageStats | null>(null)
   const [recentActivity, setRecentActivity] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [uninstalling, setUninstalling] = useState(false)  // 삭제 진행 중
 
   useEffect(() => {
     checkStatus()
@@ -109,33 +109,6 @@ export default function DashboardNew({ onSettings }: DashboardNewProps) {
     }
   }
 
-  const handleUninstall = async () => {
-    const confirmed = window.confirm(
-      'moldClaw와 OpenClaw를 모두 삭제하시겠습니까?\n\n' +
-      '• OpenClaw 프로그램 및 설정 파일이 삭제됩니다\n' +
-      '• API 키가 포함된 설정도 삭제됩니다\n' +
-      '• moldClaw 앱도 함께 삭제됩니다\n\n' +
-      '이 작업은 되돌릴 수 없습니다.'
-    )
-    if (!confirmed) return
-
-    // 삭제 진행 화면으로 전환
-    setUninstalling(true)
-    
-    try {
-      // 1. OpenClaw 삭제 (npm + 설정 폴더)
-      await invoke<string>('uninstall_openclaw')
-      
-      // 2. moldClaw 삭제 (MSI Uninstaller 실행)
-      await invoke('uninstall_moldclaw')
-      
-      // uninstaller가 실행되면 앱이 종료됨
-    } catch (err) {
-      setUninstalling(false)
-      setError(String(err))
-    }
-  }
-
   const openDashboard = async () => {
     try {
       const url = await invoke<string>('get_dashboard_url')
@@ -161,20 +134,6 @@ export default function DashboardNew({ onSettings }: DashboardNewProps) {
       case 'checking': return '상태 확인 중...'
       case 'error': return 'Gateway 오류'
     }
-  }
-
-  // 삭제 진행 중 화면
-  if (uninstalling) {
-    return (
-      <div className="h-full flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="text-4xl mb-4 animate-spin">⚙️</div>
-          <p className="text-forge-text text-lg">
-            OpenClaw 삭제 중... 잠시 기다리시면 moldClaw 삭제가 진행됩니다.
-          </p>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -340,9 +299,8 @@ export default function DashboardNew({ onSettings }: DashboardNewProps) {
       <div className="pt-4 border-t border-white/10">
         <div className="flex items-center justify-between">
           <button
-            onClick={handleUninstall}
-            disabled={loading}
-            className="text-xs text-forge-muted hover:text-forge-error transition-colors disabled:opacity-50"
+            onClick={onStartUninstall}
+            className="text-xs text-forge-muted hover:text-forge-error transition-colors"
           >
             🗑️ moldClaw 삭제
           </button>

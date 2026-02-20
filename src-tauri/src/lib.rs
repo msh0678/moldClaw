@@ -255,41 +255,81 @@ async fn uninstall_moldclaw() -> Result<(), String> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
-        // 방법 1: msiexec로 제품 이름으로 삭제 시도
-        // Tauri MSI 설치 시 제품명: "moldClaw"
-        let result = std::process::Command::new("powershell")
-            .args([
-                "-Command",
-                r#"$app = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like '*moldClaw*' }; if ($app) { $app.Uninstall() }"#
-            ])
+        // 방법 1: 레지스트리에서 UninstallString 찾아서 실행 (가장 빠름)
+        // PowerShell로 레지스트리 검색 후 msiexec 실행
+        let ps_script = r#"
+            $paths = @(
+                'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+            )
+            foreach ($path in $paths) {
+                $app = Get-ItemProperty $path -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like '*moldClaw*' }
+                if ($app) {
+                    $uninstall = $app.UninstallString
+                    if ($uninstall) {
+                        Write-Output $uninstall
+                        exit 0
+                    }
+                }
+            }
+            exit 1
+        "#;
+        
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", ps_script])
             .creation_flags(CREATE_NO_WINDOW)
-            .spawn();
+            .output();
         
-        if result.is_ok() {
-            eprintln!("MSI Uninstaller 실행됨");
-            // uninstaller가 실행되면 앱이 종료될 것임
-            // 잠시 대기 후 프로세스 종료
-            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-            std::process::exit(0);
+        if let Ok(output) = output {
+            if output.status.success() {
+                let uninstall_cmd = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                eprintln!("UninstallString 발견: {}", uninstall_cmd);
+                
+                // msiexec 명령어 실행 (보통 "MsiExec.exe /I{GUID}" 형식)
+                // /I를 /X로 변경해야 삭제됨
+                let uninstall_cmd = uninstall_cmd.replace("/I", "/X");
+                
+                // /quiet 옵션 추가하여 조용히 삭제
+                let _ = std::process::Command::new("cmd")
+                    .args(["/C", &format!("{} /quiet /norestart", uninstall_cmd)])
+                    .spawn();
+                
+                eprintln!("MSI Uninstaller 실행됨");
+                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                std::process::exit(0);
+            }
         }
         
-        // 방법 2: 직접 uninstall.exe 찾아서 실행
+        // 방법 2: 직접 uninstall.exe 찾기
         let program_files = std::env::var("PROGRAMFILES").unwrap_or_default();
-        let uninstaller_path = format!("{}\\moldClaw\\uninstall.exe", program_files);
+        let uninstaller_paths = vec![
+            format!("{}\\moldClaw\\uninstall.exe", program_files),
+            format!("{}\\moldClaw\\Uninstall moldClaw.exe", program_files),
+        ];
         
-        if std::path::Path::new(&uninstaller_path).exists() {
-            let _ = std::process::Command::new(&uninstaller_path)
-                .spawn();
-            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-            std::process::exit(0);
+        for path in uninstaller_paths {
+            if std::path::Path::new(&path).exists() {
+                eprintln!("Uninstaller 발견: {}", path);
+                let _ = std::process::Command::new(&path)
+                    .arg("/S")  // Silent mode
+                    .spawn();
+                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                std::process::exit(0);
+            }
         }
         
-        Err("언인스톨러를 찾을 수 없습니다. 제어판에서 직접 삭제해 주세요.".to_string())
+        // 삭제 실패 시 안내
+        Err("언인스톨러를 찾을 수 없습니다.\n\n제어판 > 프로그램 제거에서 'moldClaw'를 직접 삭제해 주세요.".to_string())
     }
     
     #[cfg(not(windows))]
     {
-        // Linux/Mac: 수동 삭제 안내
+        // Linux/Mac: 앱 파일 직접 삭제 시도
+        let app_path = std::env::current_exe().ok();
+        if let Some(path) = app_path {
+            eprintln!("앱 경로: {:?}", path);
+        }
         Err("Linux/Mac에서는 앱을 직접 삭제해 주세요.".to_string())
     }
 }
