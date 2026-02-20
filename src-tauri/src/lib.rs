@@ -458,7 +458,7 @@ fn refresh_path() {
 /// 반환: { needs_restart: bool, message: String }
 #[tauri::command]
 fn install_prerequisites() -> Result<serde_json::Value, String> {
-    let mut installed_something = false;
+    let mut needs_restart = false;
     let mut messages: Vec<String> = Vec::new();
     
     #[cfg(windows)]
@@ -477,7 +477,28 @@ fn install_prerequisites() -> Result<serde_json::Value, String> {
             match windows_helper::install_nodejs_with_winget_visible() {
                 Ok(msg) => {
                     messages.push(format!("✓ {}", msg));
-                    installed_something = true;
+                    
+                    // 설치 후 환경변수 새로고침하고 인식 확인
+                    messages.push("환경변수 새로고침 중...".to_string());
+                    windows_helper::refresh_environment_variables();
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    
+                    // Node.js 인식 확인
+                    if let Some(version) = windows_helper::get_node_version() {
+                        if windows_helper::is_node_version_compatible(&version) {
+                            // ✅ 인식 성공 → 재시작 불필요
+                            messages.push(format!("✓ Node.js {} 정상 인식됨", version));
+                        } else {
+                            // 버전 호환 안 됨 (드문 케이스)
+                            messages.push(format!("⚠️ Node.js {} 인식됨, 하지만 22.12.0 이상 필요", version));
+                            needs_restart = true;
+                        }
+                    } else {
+                        // ❌ 인식 실패 → 재시작 필요
+                        messages.push("⚠️ Node.js가 설치되었지만 현재 프로세스에서 인식되지 않습니다.".to_string());
+                        messages.push("moldClaw를 재시작해야 합니다.".to_string());
+                        needs_restart = true;
+                    }
                 }
                 Err(e) => return Err(format!("Node.js 설치 실패: {}", e)),
             }
@@ -532,7 +553,7 @@ fn install_prerequisites() -> Result<serde_json::Value, String> {
     }
     
     Ok(serde_json::json!({
-        "needs_restart": installed_something,
+        "needs_restart": needs_restart,
         "message": messages.join("\n")
     }))
 }

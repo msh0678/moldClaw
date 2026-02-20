@@ -197,7 +197,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
     )
   }
 
-  // 재시작 필요 화면 (Windows winget 설치 후)
+  // 재시작 필요 화면 (Windows winget 설치 후 PATH 인식 실패)
   if (step === 'restart-required') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -212,20 +212,16 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
           <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg mb-4">
             <p className="text-yellow-400 text-sm">
               ⚠️ 새로 설치된 프로그램을 인식하려면<br />
-              앱을 다시 시작해야 합니다.
+              앱을 완전히 종료 후 다시 실행해야 합니다.
             </p>
           </div>
           
-          <button
-            onClick={handleRetry}
-            className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl font-semibold hover:opacity-90"
-          >
-            🔄 다시 확인
-          </button>
-          
-          <p className="text-xs text-gray-500 mt-4">
-            버튼을 눌러도 안 되면 앱을 완전히 종료 후 다시 실행하세요
-          </p>
+          <div className="p-3 bg-steel-dark/50 rounded-lg">
+            <p className="text-xs text-steel-light">
+              우측 상단 X 버튼으로 앱을 종료한 후<br />
+              다시 moldClaw를 실행하세요.
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -257,9 +253,9 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
             </p>
           </div>
           
-          <p className="text-xs text-gray-500 mt-4">
-            moldClaw는 forgeClaw의 테스트 버전입니다.<br />
-            문의: <span className="text-blue-400">hexagon0678@gmail.com</span>
+          <p className="text-sm text-steel-light mt-4">
+            moldClaw는 아직 불완전합니다. 여러분의 도움이 필요합니다.<br />
+            <span className="text-xs text-gray-500">문의: <span className="text-blue-400">hexagon0678@gmail.com</span></span>
           </p>
         </div>
       </div>
