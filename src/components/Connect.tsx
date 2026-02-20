@@ -67,22 +67,26 @@ export default function Connect({ config, onMessengerConfigUpdate, onGatewayConf
     return text.split('\n').map(s => s.trim()).filter(s => s.length > 0)
   }
 
-  // 모든 설정을 일괄 저장
+  // 모든 설정을 일괄 저장 (공식 OpenClaw 형식 사용)
   const saveAllConfigs = async () => {
     setLoading(true)
     setError(null)
     setCurrentStep(1)
 
     try {
-      // Step 1: 워크스페이스 초기화
-      setStatus('워크스페이스 초기화 중...')
-      await invoke('initialize_workspace')
+      // Step 1: 공식 형식 Config 생성 (Device Identity 포함)
+      // 이 단계에서 device.json과 기본 openclaw.json이 생성됨
+      setStatus('설정 초기화 중... (Device Identity 생성)')
+      const finalToken = await invoke<string>('create_official_config', {
+        gatewayPort: gatewayPort,
+        gatewayBind: gatewayBind,
+      })
       setCurrentStep(2)
 
-      // Step 2: 모델 설정
+      // Step 2: 모델 설정 추가
       setStatus('AI 모델 설정 중...')
       if (config.model) {
-        await invoke('configure_model', {
+        await invoke('add_model_to_config', {
           provider: config.model.provider,
           model: config.model.model,
           apiKey: config.model.apiKey,
@@ -90,50 +94,39 @@ export default function Connect({ config, onMessengerConfigUpdate, onGatewayConf
       }
       setCurrentStep(3)
 
-      // Step 3: Gateway 설정
-      setStatus('Gateway 설정 중...')
-      let finalToken = config.gateway.token
-      if (!finalToken) {
-        finalToken = await invoke<string>('generate_token')
-      }
-      await invoke('configure_gateway', {
-        port: gatewayPort,
-        bind: gatewayBind,
-        authToken: gatewayAuthMode === 'token' ? finalToken : '',
-        authPassword: gatewayAuthMode === 'password' ? gatewayPassword : '',
-      })
-      setCurrentStep(4)
-
-      // Step 4: 메신저 설정
+      // Step 3: 메신저 채널 설정 추가
       setStatus('메신저 연결 설정 중...')
       const allowFromArray = textToArray(allowFrom)
-      const groupAllowFromArray = textToArray(groupAllowFrom)
       
-      if (messenger === 'telegram') {
-        await invoke('configure_telegram_full', { 
-          token,
+      if (messenger === 'telegram' || messenger === 'discord') {
+        await invoke('add_channel_to_config', {
+          channel: messenger,
+          botToken: token,
           dmPolicy,
           allowFrom: allowFromArray,
           groupPolicy,
-          groupAllowFrom: groupAllowFromArray,
-          requireMention,
-        })
-      } else if (messenger === 'discord') {
-        await invoke('configure_discord_full', { 
-          token,
-          dmPolicy,
-          allowFrom: allowFromArray,
-          groupPolicy,
-          groupAllowFrom: groupAllowFromArray,
           requireMention,
         })
       } else if (messenger === 'whatsapp') {
-        await invoke('configure_whatsapp_full', {
+        await invoke('add_channel_to_config', {
+          channel: 'whatsapp',
+          botToken: '',  // WhatsApp은 QR 코드 연동
           dmPolicy,
           allowFrom: allowFromArray,
           groupPolicy,
-          groupAllowFrom: groupAllowFromArray,
           requireMention,
+        })
+      }
+      setCurrentStep(4)
+
+      // Step 4: Gateway 비밀번호 설정 (비밀번호 모드일 때)
+      if (gatewayAuthMode === 'password' && gatewayPassword) {
+        setStatus('Gateway 인증 설정 중...')
+        await invoke('configure_gateway', {
+          port: gatewayPort,
+          bind: gatewayBind,
+          authToken: '',
+          authPassword: gatewayPassword,
         })
       }
       setCurrentStep(5)
@@ -149,7 +142,6 @@ export default function Connect({ config, onMessengerConfigUpdate, onGatewayConf
       
       // 보안 설정 적용 (tools.exec 자동 실행)
       await invoke('apply_default_security_settings')
-      
       setCurrentStep(6)
 
       // Step 6: 설정 검증
@@ -171,6 +163,7 @@ export default function Connect({ config, onMessengerConfigUpdate, onGatewayConf
       await new Promise(resolve => setTimeout(resolve, 1000))
       
       // 부모에게 최종 설정 전달
+      const groupAllowFromArray = textToArray(groupAllowFrom)
       onMessengerConfigUpdate({
         token,
         dmPolicy,

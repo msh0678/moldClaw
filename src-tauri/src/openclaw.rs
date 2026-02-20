@@ -2,6 +2,16 @@ use std::process::Command;
 use std::path::PathBuf;
 use std::fs;
 use serde_json::{json, Value};
+use chrono::Utc;
+
+// Device Identity 생성에 필요한 imports
+use ed25519_dalek::SigningKey;
+use rand::rngs::OsRng;
+use sha2::{Sha256, Digest};
+use base64::{engine::general_purpose::STANDARD, Engine};
+
+/// OpenClaw 버전 (config meta에 사용)
+const OPENCLAW_VERSION: &str = "2026.2.10";
 
 /// OpenClaw 명령 실행 헬퍼 (시스템 PATH 사용)
 fn run_openclaw_command(args: &[&str]) -> Result<String, String> {
@@ -111,6 +121,473 @@ fn get_config_path() -> PathBuf {
 /// Workspace 디렉토리 경로
 fn get_workspace_dir() -> PathBuf {
     get_openclaw_dir().join("workspace")
+}
+
+/// Identity 디렉토리 경로
+fn get_identity_dir() -> PathBuf {
+    get_openclaw_dir().join("identity")
+}
+
+/// Device Identity 파일 경로
+fn get_device_identity_path() -> PathBuf {
+    get_identity_dir().join("device.json")
+}
+
+// =============================================================================
+// Device Identity 생성 (OpenClaw 공식 형식 준수)
+// 참조: DEVICE_IDENTITY_SPEC.md
+// =============================================================================
+
+/// Ed25519 SPKI prefix (RFC 8410)
+const ED25519_SPKI_PREFIX: [u8; 12] = [
+    0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00
+];
+
+/// Ed25519 PKCS#8 prefix
+const ED25519_PKCS8_PREFIX: [u8; 16] = [
+    0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70,
+    0x04, 0x22, 0x04, 0x20
+];
+
+/// Device Identity 구조체
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceIdentity {
+    pub version: u8,
+    pub device_id: String,
+    pub public_key_pem: String,
+    pub private_key_pem: String,
+    pub created_at_ms: u64,
+}
+
+/// 새 Device Identity 생성 (Ed25519 키 쌍)
+fn generate_device_identity() -> DeviceIdentity {
+    let mut csprng = OsRng;
+    let signing_key = SigningKey::generate(&mut csprng);
+    let verifying_key = signing_key.verifying_key();
+    
+    // Public key를 SPKI 형식으로 인코딩
+    let public_bytes = verifying_key.as_bytes();
+    let mut spki = Vec::with_capacity(ED25519_SPKI_PREFIX.len() + 32);
+    spki.extend_from_slice(&ED25519_SPKI_PREFIX);
+    spki.extend_from_slice(public_bytes);
+    let public_key_pem = format!(
+        "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n",
+        STANDARD.encode(&spki)
+    );
+    
+    // Private key를 PKCS#8 형식으로 인코딩
+    let private_bytes = signing_key.to_bytes();
+    let mut pkcs8 = Vec::with_capacity(ED25519_PKCS8_PREFIX.len() + 32);
+    pkcs8.extend_from_slice(&ED25519_PKCS8_PREFIX);
+    pkcs8.extend_from_slice(&private_bytes);
+    let private_key_pem = format!(
+        "-----BEGIN PRIVATE KEY-----\n{}\n-----END PRIVATE KEY-----\n",
+        STANDARD.encode(&pkcs8)
+    );
+    
+    // deviceId = SHA256(raw public key bytes) → hex
+    let mut hasher = Sha256::new();
+    hasher.update(public_bytes);
+    let device_id = hex::encode(hasher.finalize());
+    
+    let created_at_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    
+    DeviceIdentity {
+        version: 1,
+        device_id,
+        public_key_pem,
+        private_key_pem,
+        created_at_ms,
+    }
+}
+
+/// 기존 Device Identity 읽기 (없거나 유효하지 않으면 None)
+fn read_existing_device_identity() -> Option<DeviceIdentity> {
+    let path = get_device_identity_path();
+    if !path.exists() {
+        return None;
+    }
+    
+    let content = fs::read_to_string(&path).ok()?;
+    let identity: DeviceIdentity = serde_json::from_str(&content).ok()?;
+    
+    // 버전 확인
+    if identity.version != 1 {
+        return None;
+    }
+    
+    // 필수 필드 확인
+    if identity.device_id.is_empty() 
+        || identity.public_key_pem.is_empty() 
+        || identity.private_key_pem.is_empty() 
+    {
+        return None;
+    }
+    
+    Some(identity)
+}
+
+/// Device Identity 저장 (권한 0o600)
+fn write_device_identity(identity: &DeviceIdentity) -> Result<(), String> {
+    let identity_dir = get_identity_dir();
+    fs::create_dir_all(&identity_dir)
+        .map_err(|e| format!("identity 디렉토리 생성 실패: {}", e))?;
+    
+    let path = get_device_identity_path();
+    let content = serde_json::to_string_pretty(identity)
+        .map_err(|e| format!("JSON 직렬화 실패: {}", e))?;
+    
+    fs::write(&path, &content)
+        .map_err(|e| format!("device.json 저장 실패: {}", e))?;
+    
+    // Unix에서 파일 권한 설정 (Windows는 무시)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    
+    Ok(())
+}
+
+/// Device Identity 확보 (기존 것 사용 또는 새로 생성)
+pub fn ensure_device_identity() -> Result<DeviceIdentity, String> {
+    // 1. 기존 identity 확인
+    if let Some(existing) = read_existing_device_identity() {
+        return Ok(existing);
+    }
+    
+    // 2. 새로 생성
+    let identity = generate_device_identity();
+    write_device_identity(&identity)?;
+    
+    Ok(identity)
+}
+
+// =============================================================================
+// 공식 Config 생성 (OpenClaw onboard 형식 준수)
+// 참조: OPENCLAW_CONFIG_SPEC.md
+// =============================================================================
+
+/// Gateway 토큰 생성 (32바이트 랜덤 → base64url)
+pub fn generate_gateway_token() -> String {
+    use rand::Rng;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    
+    let mut bytes = [0u8; 32];
+    rand::thread_rng().fill(&mut bytes);
+    URL_SAFE_NO_PAD.encode(bytes)
+}
+
+/// 공식 형식의 기본 Config 구조 생성
+/// OpenClaw onboard가 생성하는 것과 동일한 형식
+fn create_base_config(
+    gateway_port: u16,
+    gateway_bind: &str,
+    gateway_token: &str,
+) -> Value {
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let workspace_path = get_workspace_dir();
+    let workspace_str = workspace_path.to_string_lossy().to_string();
+    
+    json!({
+        // 메타데이터 (OpenClaw 자동 관리 필드)
+        "meta": {
+            "lastTouchedVersion": OPENCLAW_VERSION,
+            "lastTouchedAt": now
+        },
+        
+        // 온보딩 정보
+        "wizard": {
+            "lastRunAt": now,
+            "lastRunVersion": OPENCLAW_VERSION,
+            "lastRunCommand": "onboard",
+            "lastRunMode": "local"
+        },
+        
+        // Gateway 설정 (필수!)
+        "gateway": {
+            "mode": "local",              // 필수: 로컬 실행 모드
+            "port": gateway_port,
+            "bind": gateway_bind,
+            "auth": {
+                "mode": "token",
+                "token": gateway_token
+            },
+            // 위험한 노드 명령어 거부 목록 (OpenClaw 기본값)
+            "nodes": {
+                "denyCommands": [
+                    "camera.snap",
+                    "camera.clip",
+                    "screen.record",
+                    "calendar.add",
+                    "contacts.add",
+                    "reminders.add"
+                ]
+            }
+        },
+        
+        // 에이전트 기본 설정
+        "agents": {
+            "defaults": {
+                "workspace": workspace_str
+            }
+        }
+    })
+}
+
+/// 공식 형식으로 초기 Config 생성 (첫 실행용)
+/// Device Identity도 함께 생성
+pub async fn create_official_config(
+    gateway_port: u16,
+    gateway_bind: &str,
+) -> Result<String, String> {
+    // 1. Device Identity 확보 (가장 먼저!)
+    ensure_device_identity()?;
+    
+    // 2. Gateway 토큰 생성 또는 기존 값 사용
+    let existing_config = read_existing_config();
+    let gateway_token = existing_config
+        .get("gateway")
+        .and_then(|g| g.get("auth"))
+        .and_then(|a| a.get("token"))
+        .and_then(|t| t.as_str())
+        .filter(|t| !t.is_empty())
+        .map(String::from)
+        .unwrap_or_else(generate_gateway_token);
+    
+    // 3. 기본 config 생성
+    let config = create_base_config(gateway_port, gateway_bind, &gateway_token);
+    
+    // 4. 설정 디렉토리 및 파일 저장
+    write_config(&config)?;
+    
+    // 5. 워크스페이스 초기화
+    initialize_workspace().await?;
+    
+    Ok(gateway_token)
+}
+
+/// Config에 모델 설정 추가 (기존 설정 보존)
+pub async fn add_model_to_config(
+    provider: &str,
+    model: &str,
+    api_key: &str,
+) -> Result<(), String> {
+    let mut config = read_existing_config();
+    
+    // 기존 config가 없으면 기본 config 먼저 생성
+    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        return Err("Config가 없습니다. 먼저 create_official_config를 호출하세요.".to_string());
+    }
+    
+    // meta.lastTouchedAt 업데이트
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
+    set_nested_value(&mut config, &["meta", "lastTouchedVersion"], json!(OPENCLAW_VERSION));
+    
+    // wizard 정보 업데이트
+    set_nested_value(&mut config, &["wizard", "lastRunAt"], json!(now));
+    set_nested_value(&mut config, &["wizard", "lastRunCommand"], json!("configure"));
+    
+    // 모델 프로바이더 설정
+    set_nested_value(
+        &mut config,
+        &["models", "providers", provider, "apiKey"],
+        json!(api_key),
+    );
+    
+    // 프로바이더별 baseUrl 설정
+    match provider {
+        "anthropic" => {
+            set_nested_value(
+                &mut config,
+                &["models", "providers", provider, "baseUrl"],
+                json!("https://api.anthropic.com"),
+            );
+            set_nested_value(
+                &mut config,
+                &["models", "providers", provider, "api"],
+                json!("anthropic-messages"),
+            );
+        }
+        "openai" => {
+            set_nested_value(
+                &mut config,
+                &["models", "providers", provider, "baseUrl"],
+                json!("https://api.openai.com/v1"),
+            );
+        }
+        "google" => {
+            set_nested_value(
+                &mut config,
+                &["models", "providers", provider, "baseUrl"],
+                json!("https://generativelanguage.googleapis.com/v1"),
+            );
+        }
+        _ => {}
+    }
+    
+    // 모델 정보 추가
+    let model_info = create_model_info(model);
+    set_nested_value(
+        &mut config,
+        &["models", "providers", provider, "models"],
+        json!([model_info]),
+    );
+    
+    // agents.defaults.model.primary 설정
+    let model_string = format!("{}/{}", provider, model);
+    set_nested_value(
+        &mut config,
+        &["agents", "defaults", "model", "primary"],
+        json!(model_string),
+    );
+    
+    // auth.profiles 추가
+    let profile_id = format!("{}:default", provider);
+    set_nested_value(
+        &mut config,
+        &["auth", "profiles", &profile_id, "provider"],
+        json!(provider),
+    );
+    set_nested_value(
+        &mut config,
+        &["auth", "profiles", &profile_id, "mode"],
+        json!("token"),
+    );
+    
+    write_config(&config)?;
+    Ok(())
+}
+
+/// 모델 정보 JSON 생성
+fn create_model_info(model: &str) -> Value {
+    match model {
+        "claude-sonnet-4-20250514" => json!({
+            "id": "claude-sonnet-4-20250514",
+            "name": "Claude Sonnet 4",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 200000,
+            "maxTokens": 8192
+        }),
+        "claude-haiku-4-5-20251001" => json!({
+            "id": "claude-haiku-4-5-20251001", 
+            "name": "Claude Haiku 4.5",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 200000,
+            "maxTokens": 8192
+        }),
+        "claude-opus-4-20250514" => json!({
+            "id": "claude-opus-4-20250514",
+            "name": "Claude Opus 4",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 200000,
+            "maxTokens": 8192
+        }),
+        "gpt-4o" => json!({
+            "id": "gpt-4o",
+            "name": "GPT-4o",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 128000,
+            "maxTokens": 16384
+        }),
+        "gpt-4o-mini" => json!({
+            "id": "gpt-4o-mini",
+            "name": "GPT-4o Mini",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 128000,
+            "maxTokens": 16384
+        }),
+        _ => json!({
+            "id": model,
+            "name": model,
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 128000,
+            "maxTokens": 8192
+        })
+    }
+}
+
+/// 채널(메신저) 설정 추가 (기존 설정 보존)
+pub async fn add_channel_to_config(
+    channel: &str,
+    bot_token: &str,
+    dm_policy: &str,
+    allow_from: &[String],
+    group_policy: &str,
+    require_mention: bool,
+) -> Result<(), String> {
+    let mut config = read_existing_config();
+    
+    // 기존 config가 없으면 에러
+    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        return Err("Config가 없습니다. 먼저 create_official_config를 호출하세요.".to_string());
+    }
+    
+    // meta.lastTouchedAt 업데이트
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
+    
+    // 채널별 설정
+    match channel {
+        "telegram" => {
+            set_nested_value(
+                &mut config,
+                &["channels", "telegram", "botToken"],
+                json!(bot_token),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "telegram", "dmPolicy"],
+                json!(dm_policy),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "telegram", "allowFrom"],
+                json!(allow_from),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "telegram", "groupPolicy"],
+                json!(group_policy),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "telegram", "groups", "*", "requireMention"],
+                json!(require_mention),
+            );
+        }
+        "discord" => {
+            set_nested_value(
+                &mut config,
+                &["channels", "discord", "botToken"],
+                json!(bot_token),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "discord", "guilds", "*", "requireMention"],
+                json!(require_mention),
+            );
+        }
+        _ => {}
+    }
+    
+    write_config(&config)?;
+    Ok(())
 }
 
 /// 기존 설정 읽기 (없으면 빈 객체)

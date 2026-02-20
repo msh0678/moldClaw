@@ -98,7 +98,41 @@ async fn install_openclaw() -> Result<String, String> {
     }
 }
 
-// ===== 설정 =====
+// ===== 공식 형식 Config 생성 (Device Identity 포함) =====
+
+#[tauri::command]
+async fn create_official_config(gateway_port: u16, gateway_bind: String) -> Result<String, String> {
+    openclaw::create_official_config(gateway_port, &gateway_bind).await
+}
+
+#[tauri::command]
+fn ensure_device_identity() -> Result<openclaw::DeviceIdentity, String> {
+    openclaw::ensure_device_identity()
+}
+
+#[tauri::command]
+fn generate_gateway_token() -> String {
+    openclaw::generate_gateway_token()
+}
+
+#[tauri::command]
+async fn add_model_to_config(provider: String, model: String, api_key: String) -> Result<(), String> {
+    openclaw::add_model_to_config(&provider, &model, &api_key).await
+}
+
+#[tauri::command]
+async fn add_channel_to_config(
+    channel: String,
+    bot_token: String,
+    dm_policy: String,
+    allow_from: Vec<String>,
+    group_policy: String,
+    require_mention: bool,
+) -> Result<(), String> {
+    openclaw::add_channel_to_config(&channel, &bot_token, &dm_policy, &allow_from, &group_policy, require_mention).await
+}
+
+// ===== 설정 (레거시 - 하위 호환성) =====
 
 #[tauri::command]
 async fn configure_model(provider: String, model: String, api_key: String) -> Result<(), String> {
@@ -990,7 +1024,13 @@ pub fn run() {
             // 설치
             install_openclaw,
             install_prerequisites,
-            // 설정
+            // 공식 형식 Config (Device Identity 포함)
+            create_official_config,
+            ensure_device_identity,
+            generate_gateway_token,
+            add_model_to_config,
+            add_channel_to_config,
+            // 설정 (레거시)
             configure_model,
             configure_gateway,
             initialize_workspace,
