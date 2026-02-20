@@ -7,13 +7,26 @@ interface LoadingProps {
   onDashboard: () => void
 }
 
-type SetupStep = 'checking' | 'node-missing' | 'installing-prerequisites' | 'restart-required' | 'installing-openclaw' | 'ready' | 'error'
+type SetupStep = 'checking' | 'antivirus-warning' | 'node-missing' | 'installing-prerequisites' | 'restart-required' | 'installing-openclaw' | 'ready' | 'error'
+
+interface PrerequisiteStatus {
+  node_installed: boolean
+  node_version: string | null
+  node_compatible: boolean
+  npm_installed: boolean
+  vc_redist_installed: boolean
+  disk_space_gb: number
+  disk_space_ok: boolean
+  antivirus_detected: string | null
+}
 
 export default function Loading({ onReady, onDashboard }: LoadingProps) {
   const [step, setStep] = useState<SetupStep>('checking')
   const [status, setStatus] = useState('환경 확인 중...')
   const [error, setError] = useState<string | null>(null)
   const [nodeUrl, setNodeUrl] = useState('')
+  const [antivirusName, setAntivirusName] = useState<string | null>(null)
+  const [prereqStatus, setPrereqStatus] = useState<PrerequisiteStatus | null>(null)
 
   useEffect(() => {
     checkEnvironment()
@@ -25,11 +38,34 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
       const osType = await invoke<string>('get_os_type')
       const isWindows = osType === 'windows'
 
-      // 1. Node.js 확인
-      setStatus('Node.js 확인 중...')
-      const nodeInstalled = await invoke<boolean>('check_node_installed')
+      // 1. 환경 사전 검사 (백신 감지 포함)
+      setStatus('환경 확인 중...')
+      const status = await invoke<PrerequisiteStatus>('check_prerequisites')
+      setPrereqStatus(status)
       
-      if (!nodeInstalled) {
+      // 2. 백신 감지 시 경고 (Windows만)
+      if (isWindows && status.antivirus_detected) {
+        setAntivirusName(status.antivirus_detected)
+        setStep('antivirus-warning')
+        return  // 사용자가 "설치 계속하기" 누를 때까지 대기
+      }
+      
+      // 3. 백신 없으면 바로 설치 진행
+      await proceedWithInstallation(isWindows, status)
+
+    } catch (err) {
+      setStep('error')
+      setError(String(err))
+    }
+  }
+
+  // 설치 진행 (백신 경고 후 또는 백신 없을 때)
+  const proceedWithInstallation = async (isWindows: boolean, status: PrerequisiteStatus) => {
+    try {
+      // Node.js 확인
+      setStatus('Node.js 확인 중...')
+      
+      if (!status.node_compatible) {
         if (isWindows) {
           // Windows: winget으로 자동 설치 시도
           setStep('installing-prerequisites')
@@ -112,6 +148,55 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
     checkEnvironment()
   }
 
+  // 백신 경고 후 설치 계속하기
+  const handleContinueWithAntivirus = async () => {
+    const osType = await invoke<string>('get_os_type')
+    const isWindows = osType === 'windows'
+    
+    if (prereqStatus) {
+      setStep('checking')
+      setStatus('설치 진행 중...')
+      await proceedWithInstallation(isWindows, prereqStatus)
+    }
+  }
+
+  // 백신 감지 경고 화면
+  if (step === 'antivirus-warning') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6">
+        <div className="glass rounded-2xl p-8 max-w-md text-center">
+          <div className="text-6xl mb-4">🛡️</div>
+          <h2 className="text-xl font-bold mb-2">백신 프로그램 감지됨</h2>
+          <p className="text-steel-light text-sm mb-4">
+            <strong className="text-yellow-400">{antivirusName}</strong>이(가) 실행 중입니다.
+          </p>
+          
+          <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg mb-6 text-left">
+            <p className="text-yellow-400 text-sm mb-2">
+              ⚠️ 백신의 실시간 감시가 설치를 차단할 수 있습니다.
+            </p>
+            <p className="text-gray-300 text-sm">
+              설치 전 백신의 <strong>실시간 감시를 일시 중지</strong>해주세요.<br />
+              설치 완료 후 다시 활성화하시면 됩니다.
+            </p>
+          </div>
+          
+          <button
+            onClick={handleContinueWithAntivirus}
+            className="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl font-semibold hover:opacity-90 mb-3"
+          >
+            백신 끔, 설치 계속하기 →
+          </button>
+          
+          <p className="text-xs text-gray-500 mt-4">
+            moldClaw는 forgeClaw의 테스트 버전으로, 불완전한 프로그램입니다.<br />
+            문제 발생 시: <span className="text-blue-400">hexagon0678@gmail.com</span>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   // 재시작 필요 화면 (Windows winget 설치 후)
   if (step === 'restart-required') {
     return (
@@ -167,10 +252,15 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
           <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-left">
             <p className="text-xs text-blue-400">
               설치 중인 항목:<br />
-              • Git (버전 관리)<br />
-              • Node.js (런타임)
+              • Node.js (런타임)<br />
+              • Visual C++ Redistributable (필수 라이브러리)
             </p>
           </div>
+          
+          <p className="text-xs text-gray-500 mt-4">
+            moldClaw는 forgeClaw의 테스트 버전입니다.<br />
+            문의: <span className="text-blue-400">hexagon0678@gmail.com</span>
+          </p>
         </div>
       </div>
     )
@@ -218,10 +308,10 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
   if (step === 'error') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
-        <div className="glass rounded-2xl p-8 max-w-sm text-center">
+        <div className="glass rounded-2xl p-8 max-w-md text-center">
           <div className="text-6xl mb-4">😢</div>
           <h2 className="text-xl font-bold mb-2">설치 실패</h2>
-          <p className="text-gray-400 text-sm mb-4 whitespace-pre-wrap">{error}</p>
+          <p className="text-gray-400 text-sm mb-4 whitespace-pre-wrap max-h-40 overflow-y-auto">{error}</p>
           
           <div className="p-3 bg-black/20 rounded-lg text-left mb-4">
             <p className="text-xs text-gray-400 mb-1">수동 설치:</p>
@@ -232,10 +322,25 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
 
           <button
             onClick={handleRetry}
-            className="w-full py-3 bg-indigo-500 rounded-xl font-semibold hover:bg-indigo-600"
+            className="w-full py-3 bg-indigo-500 rounded-xl font-semibold hover:bg-indigo-600 mb-4"
           >
             다시 시도
           </button>
+          
+          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-left">
+            <p className="text-red-400 text-sm font-semibold mb-2">
+              ⚠️ 도움이 필요하신가요?
+            </p>
+            <p className="text-gray-300 text-xs mb-2">
+              moldClaw는 forgeClaw의 테스트 버전으로, 불완전한 프로그램입니다.
+            </p>
+            <p className="text-gray-300 text-xs">
+              문제가 발생한 경우, 다음 이메일로 연락 주시면 도움을 드리겠습니다:
+            </p>
+            <p className="text-blue-400 text-sm font-semibold mt-1">
+              hexagon0678@gmail.com
+            </p>
+          </div>
         </div>
       </div>
     )
