@@ -185,7 +185,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
             onClick={handleContinueWithAntivirus}
             className="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl font-semibold hover:opacity-90 mb-3"
           >
-            백신 끔, 설치 계속하기 →
+            백신 비활성화 완료, 설치 계속하기 →
           </button>
           
           <p className="text-xs text-gray-500 mt-4">

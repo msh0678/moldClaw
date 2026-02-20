@@ -163,7 +163,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
           >
             <span className="text-3xl">📋</span>
             <div>
-              <h3 className="text-forge-text font-semibold">설정 Summary</h3>
+              <h3 className="text-forge-text font-semibold">설정 한눈에 보기</h3>
               <p className="text-sm text-forge-muted">현재 설정 확인 및 적용</p>
             </div>
             <span className="ml-auto text-forge-muted">→</span>
