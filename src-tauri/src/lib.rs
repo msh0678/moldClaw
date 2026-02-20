@@ -424,88 +424,53 @@ fn get_dashboard_url() -> String {
 /// Cron jobs 목록 조회
 #[tauri::command]
 async fn get_cron_jobs() -> Result<String, String> {
-    // OpenClaw CLI를 통해 cron jobs 조회 (Gateway WebSocket RPC 사용)
+    // ~/.openclaw/cron/jobs.json 파일 직접 읽기 (더 안정적)
+    let jobs_path = dirs::home_dir()
+        .map(|h| h.join(".openclaw").join("cron").join("jobs.json"))
+        .ok_or("홈 디렉토리를 찾을 수 없습니다.")?;
     
-    // config에서 authToken 읽기
-    let config = openclaw::read_existing_config();
-    let auth_token = config.get("gateway")
-        .and_then(|g| g.get("authToken"))
-        .and_then(|t| t.as_str())
-        .unwrap_or("");
+    eprintln!("Cron jobs 파일 경로: {:?}", jobs_path);
     
-    // CLI 인자 구성
-    let mut args = vec!["cron", "list", "--all", "--json", "--timeout", "10000"];
-    let token_arg;
-    if !auth_token.is_empty() {
-        token_arg = format!("{}", auth_token);
-        args.push("--token");
-        args.push(&token_arg);
+    if !jobs_path.exists() {
+        eprintln!("Cron jobs 파일이 없음");
+        return Ok(serde_json::json!({
+            "jobs": [],
+            "info": "아직 설정된 알림이 없습니다."
+        }).to_string());
     }
     
-    eprintln!("Cron jobs 조회: openclaw {:?}", args);
+    // 파일 읽기
+    let content = std::fs::read_to_string(&jobs_path)
+        .map_err(|e| format!("파일 읽기 실패: {}", e))?;
     
-    let output = tokio::process::Command::new("openclaw")
-        .args(&args)
-        .output()
-        .await
-        .map_err(|e| format!("openclaw 실행 실패: {}", e))?;
+    eprintln!("Cron jobs 파일 내용: {}", content);
     
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    // JSON 파싱
+    let parsed: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("JSON 파싱 실패: {}", e))?;
     
-    eprintln!("Cron list stdout: {}", stdout);
-    eprintln!("Cron list stderr: {}", stderr);
-    eprintln!("Cron list status: {}", output.status);
+    // jobs 배열 추출
+    let jobs = parsed.get("jobs").cloned().unwrap_or(serde_json::json!([]));
     
-    if output.status.success() {
-        // JSON 파싱 시도
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&stdout) {
-            // OpenClaw cron list 응답에서 jobs 배열 추출
-            // 응답 형식: { jobs: [...] } 또는 배열 직접
-            let jobs = if parsed.is_array() {
-                parsed.clone()
-            } else {
-                parsed.get("jobs").cloned().unwrap_or(serde_json::json!([]))
-            };
-            
-            // moldClaw UI 형식으로 변환
-            let formatted_jobs: Vec<serde_json::Value> = jobs.as_array()
-                .unwrap_or(&vec![])
-                .iter()
-                .map(|job| {
-                    serde_json::json!({
-                        "id": job.get("id").or(job.get("jobId")).and_then(|v| v.as_str()).unwrap_or("unknown"),
-                        "name": job.get("name").and_then(|v| v.as_str()).unwrap_or("Unnamed Job"),
-                        "schedule": format_schedule(job.get("schedule")),
-                        "enabled": job.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
-                        "lastRun": job.get("lastRun").and_then(|v| v.as_str()),
-                        "nextRun": job.get("nextRun").and_then(|v| v.as_str()),
-                    })
-                })
-                .collect();
-            
-            Ok(serde_json::json!({ "jobs": formatted_jobs }).to_string())
-        } else {
-            // JSON 파싱 실패 - 원본 반환
-            Ok(serde_json::json!({
-                "jobs": [],
-                "raw": stdout.to_string()
-            }).to_string())
-        }
-    } else {
-        // Gateway 연결 실패 등의 에러 처리
-        if stderr.contains("ECONNREFUSED") || stderr.contains("connection") {
-            Ok(serde_json::json!({
-                "jobs": [],
-                "error": "Gateway가 실행 중이 아닙니다. 먼저 Gateway를 시작해 주세요."
-            }).to_string())
-        } else {
-            Ok(serde_json::json!({
-                "jobs": [],
-                "error": format!("조회 실패: {}", stderr)
-            }).to_string())
-        }
-    }
+    // moldClaw UI 형식으로 변환
+    let formatted_jobs: Vec<serde_json::Value> = jobs.as_array()
+        .unwrap_or(&vec![])
+        .iter()
+        .map(|job| {
+            serde_json::json!({
+                "id": job.get("id").or(job.get("jobId")).and_then(|v| v.as_str()).unwrap_or("unknown"),
+                "name": job.get("name").and_then(|v| v.as_str()).unwrap_or("이름 없는 알림"),
+                "schedule": format_schedule(job.get("schedule")),
+                "enabled": job.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
+                "lastRun": job.get("lastRun").and_then(|v| v.as_str()),
+                "nextRun": job.get("nextRun").and_then(|v| v.as_str()),
+            })
+        })
+        .collect();
+    
+    eprintln!("변환된 jobs: {:?}", formatted_jobs);
+    
+    Ok(serde_json::json!({ "jobs": formatted_jobs }).to_string())
 }
 
 // schedule 객체를 읽기 쉬운 문자열로 변환
