@@ -1,8 +1,9 @@
 interface ExpiredScreenProps {
   message?: string;
+  onContinue?: () => void;  // 확인 후 계속 사용
 }
 
-export default function ExpiredScreen({ message }: ExpiredScreenProps) {
+export default function ExpiredScreen({ message, onContinue }: ExpiredScreenProps) {
   const defaultMessage = `moldClaw 테스트가 종료되었습니다.
 
 공식 배포 버전인 forgeClaw를 기대해 주세요.
@@ -30,9 +31,19 @@ moldClaw를 삭제하고, 관리자에게 피드백을 전달해 주시면 감�
         </div>
         
         {/* 감사 메시지 */}
-        <p className="text-gray-400 text-sm">
+        <p className="text-gray-400 text-sm mb-6">
           테스트에 참여해 주셔서 감사합니다. 🙏
         </p>
+
+        {/* 계속 사용하기 버튼 */}
+        {onContinue && (
+          <button
+            onClick={onContinue}
+            className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white font-medium transition-colors border border-white/20"
+          >
+            확인했습니다, 계속 사용하기
+          </button>
+        )}
       </div>
     </div>
   );

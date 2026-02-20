@@ -72,6 +72,7 @@ function App() {
   const [appState, setAppState] = useState<AppState>('loading')
   const [currentPage, setCurrentPage] = useState<Page>('dashboard')
   const [config] = useState<FullConfig>(initialConfig)
+  const [expiredAcknowledged, setExpiredAcknowledged] = useState(false)  // 테스트 종료 확인 여부
   const { appStatus, loading: statusLoading } = useAppStatus()
 
   // 앱 상태 체크 (테스트 종료 여부)
@@ -83,8 +84,13 @@ function App() {
     )
   }
 
-  if (appStatus?.status === 'expired') {
-    return <ExpiredScreen message={appStatus.message} />
+  if (appStatus?.status === 'expired' && !expiredAcknowledged) {
+    return (
+      <ExpiredScreen 
+        message={appStatus.message} 
+        onContinue={() => setExpiredAcknowledged(true)}
+      />
+    )
   }
 
   // 로딩 화면
