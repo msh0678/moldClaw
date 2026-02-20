@@ -173,6 +173,20 @@ body {
   animation: pulse-copper 2s infinite;
 }
 
+/* 온보딩 강조 효과 - 반짝이는 테두리 */
+@keyframes pulse-border {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(232, 107, 42, 0.6), 0 0 20px rgba(232, 107, 42, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(232, 107, 42, 0.8), 0 0 30px rgba(232, 107, 42, 0.5);
+  }
+}
+
+.animate-pulse-border {
+  animation: pulse-border 1.5s ease-in-out infinite;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;

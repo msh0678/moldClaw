@@ -6,6 +6,7 @@ interface ModelSetupProps {
   onComplete: (config: ModelConfig) => void
   onBack: () => void
   onGoToDashboard?: () => void
+  isOnboarding?: boolean  // 온보딩 모드일 때 첫 단계 강조
 }
 
 const providers = [
@@ -45,7 +46,7 @@ const providers = [
   },
 ]
 
-export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDashboard }: ModelSetupProps) {
+export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDashboard, isOnboarding = false }: ModelSetupProps) {
   const [selectedProvider, setSelectedProvider] = useState<string | null>(
     initialConfig?.provider || null
   )
@@ -110,8 +111,15 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
 
           {/* 프로바이더 선택 */}
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-2 text-gray-300">AI 서비스</label>
-            <div className="grid grid-cols-3 gap-2">
+            <label className="block text-sm font-medium mb-2 text-gray-300">
+              AI 서비스
+              {isOnboarding && !selectedProvider && (
+                <span className="ml-2 text-forge-copper animate-pulse">← 여기서 시작!</span>
+              )}
+            </label>
+            <div className={`grid grid-cols-3 gap-2 ${
+              isOnboarding && !selectedProvider ? 'ring-2 ring-forge-copper ring-offset-2 ring-offset-forge-dark rounded-xl animate-pulse-border' : ''
+            }`}>
               {providers.map((p) => (
                 <button
                   key={p.id}

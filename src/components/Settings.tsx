@@ -181,6 +181,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
         onComplete={handleModelUpdate}
         onBack={handleBack}
         onGoToDashboard={!isOnboarding ? onCancel : undefined}
+        isOnboarding={isOnboarding}
       />
     )
   }

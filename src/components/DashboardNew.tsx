@@ -158,16 +158,17 @@ export default function DashboardNew({ onSettings }: DashboardNewProps) {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="h-full overflow-y-auto p-4 lg:p-6">
+      <div className="max-w-3xl mx-auto">
       {/* 헤더 */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-forge-text mb-1">🏠 대시보드</h1>
-          <p className="text-forge-muted">OpenClaw Gateway 상태와 활동을 확인합니다.</p>
+          <h1 className="text-xl font-bold text-forge-text">🏠 대시보드</h1>
+          <p className="text-forge-muted text-sm">OpenClaw Gateway 상태</p>
         </div>
         <button
           onClick={onSettings}
-          className="btn-primary px-4 py-2 rounded-lg flex items-center gap-2"
+          className="btn-primary px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm"
         >
           <span>⚙️</span>
           <span>설정</span>
@@ -176,20 +177,20 @@ export default function DashboardNew({ onSettings }: DashboardNewProps) {
 
       {/* 에러 메시지 */}
       {error && (
-        <div className="card p-4 mb-6 bg-forge-error/10 border-forge-error/30">
-          <p className="text-forge-error text-sm">{error}</p>
+        <div className="card p-3 mb-4 bg-forge-error/10 border-forge-error/30">
+          <p className="text-forge-error text-xs">{error}</p>
         </div>
       )}
 
       {/* 상태 카드 그리드 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
         {/* Gateway 상태 */}
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-forge-text">Gateway</h3>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{getStatusIcon()}</span>
-              <span className={`font-medium ${
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-base font-semibold text-forge-text">Gateway</h3>
+            <div className="flex items-center gap-1.5">
+              <span className="text-lg">{getStatusIcon()}</span>
+              <span className={`text-sm font-medium ${
                 gatewayStatus === 'running' ? 'text-forge-success' : 
                 gatewayStatus === 'stopped' ? 'text-forge-error' : 
                 'text-forge-amber'
@@ -206,23 +207,23 @@ export default function DashboardNew({ onSettings }: DashboardNewProps) {
                 <button
                   onClick={handleStopGateway}
                   disabled={loading}
-                  className="flex-1 py-2 rounded-lg bg-forge-error/20 text-forge-error hover:bg-forge-error/30 disabled:opacity-50 transition-colors font-medium"
+                  className="flex-1 py-1.5 text-sm rounded-lg bg-forge-error/20 text-forge-error hover:bg-forge-error/30 disabled:opacity-50 transition-colors font-medium"
                 >
-                  {loading ? '중지 중...' : '🛑 중지'}
+                  {loading ? '...' : '🛑 중지'}
                 </button>
                 <button
                   onClick={handleRestartGateway}
                   disabled={loading}
-                  className="flex-1 py-2 rounded-lg bg-forge-surface text-forge-text hover:bg-white/10 disabled:opacity-50 transition-colors font-medium"
+                  className="flex-1 py-1.5 text-sm rounded-lg bg-forge-surface text-forge-text hover:bg-white/10 disabled:opacity-50 transition-colors font-medium"
                 >
-                  {loading ? '재시작 중...' : '🔄 재시작'}
+                  {loading ? '...' : '🔄 재시작'}
                 </button>
               </>
             ) : (
               <button
                 onClick={handleStartGateway}
                 disabled={loading}
-                className="w-full py-2 rounded-lg btn-primary disabled:opacity-50 transition-colors"
+                className="w-full py-1.5 text-sm rounded-lg btn-primary disabled:opacity-50 transition-colors"
               >
                 {loading ? '시작 중...' : '⚡ 시작'}
               </button>
@@ -231,19 +232,19 @@ export default function DashboardNew({ onSettings }: DashboardNewProps) {
         </div>
 
         {/* 채널 상태 */}
-        <div className="card p-5">
-          <h3 className="text-lg font-semibold text-forge-text mb-4">채널</h3>
+        <div className="card p-4">
+          <h3 className="text-base font-semibold text-forge-text mb-2">채널</h3>
           {channels.length === 0 ? (
-            <p className="text-forge-muted text-sm">연결된 채널이 없습니다.</p>
+            <p className="text-forge-muted text-xs">연결된 채널이 없습니다.</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {channels.map((channel, idx) => (
-                <div key={idx} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{channel.icon}</span>
-                    <span className="text-forge-text">{channel.name}</span>
+                <div key={idx} className="flex items-center justify-between py-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">{channel.icon}</span>
+                    <span className="text-forge-text text-sm">{channel.name}</span>
                   </div>
-                  <span className={`text-sm ${channel.connected ? 'text-forge-success' : 'text-forge-muted'}`}>
+                  <span className={`text-xs ${channel.connected ? 'text-forge-success' : 'text-forge-muted'}`}>
                     {channel.connected ? '연결됨' : '연결 안 됨'}
                   </span>
                 </div>
@@ -254,81 +255,82 @@ export default function DashboardNew({ onSettings }: DashboardNewProps) {
       </div>
 
       {/* 사용량 요약 */}
-      <div className="card p-5 mb-6">
-        <h3 className="text-lg font-semibold text-forge-text mb-4">📊 사용량 요약</h3>
+      <div className="card p-4 mb-4">
+        <h3 className="text-base font-semibold text-forge-text mb-3">📊 사용량</h3>
         {usage ? (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-2">
             <div className="text-center">
-              <p className="text-2xl font-bold text-forge-copper">{usage.tokensUsed.toLocaleString()}</p>
-              <p className="text-sm text-forge-muted">토큰 사용량</p>
+              <p className="text-lg font-bold text-forge-copper">{usage.tokensUsed.toLocaleString()}</p>
+              <p className="text-xs text-forge-muted">토큰</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-forge-copper">{usage.messagesCount}</p>
-              <p className="text-sm text-forge-muted">메시지 수</p>
+              <p className="text-lg font-bold text-forge-copper">{usage.messagesCount}</p>
+              <p className="text-xs text-forge-muted">메시지</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-forge-copper">{usage.lastActive}</p>
-              <p className="text-sm text-forge-muted">마지막 활동</p>
+              <p className="text-lg font-bold text-forge-copper">{usage.lastActive}</p>
+              <p className="text-xs text-forge-muted">최근</p>
             </div>
           </div>
         ) : (
-          <p className="text-forge-muted text-sm text-center py-4">사용량 데이터가 없습니다.</p>
+          <p className="text-forge-muted text-xs text-center py-2">사용량 데이터가 없습니다.</p>
         )}
       </div>
 
-      {/* 최근 활동 */}
-      <div className="card p-5 mb-6">
-        <h3 className="text-lg font-semibold text-forge-text mb-4">🕐 최근 활동</h3>
-        {recentActivity.length === 0 ? (
-          <p className="text-forge-muted text-sm text-center py-4">최근 활동이 없습니다.</p>
-        ) : (
-          <ul className="space-y-2">
-            {recentActivity.slice(0, 5).map((activity, idx) => (
-              <li key={idx} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
-                <span className="text-forge-amber">•</span>
-                <span className="text-sm text-forge-text">{activity}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {/* 최근 활동 + 빠른 작업 (가로 배치) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+        {/* 최근 활동 */}
+        <div className="card p-4">
+          <h3 className="text-base font-semibold text-forge-text mb-2">🕐 최근 활동</h3>
+          {recentActivity.length === 0 ? (
+            <p className="text-forge-muted text-xs text-center py-2">최근 활동이 없습니다.</p>
+          ) : (
+            <ul className="space-y-1">
+              {recentActivity.slice(0, 3).map((activity, idx) => (
+                <li key={idx} className="flex items-center gap-2 py-1 text-xs text-forge-text">
+                  <span className="text-forge-amber">•</span>
+                  <span className="truncate">{activity}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
-      {/* 빠른 작업 */}
-      <div className="card p-5 mb-6">
-        <h3 className="text-lg font-semibold text-forge-text mb-4">⚡ 빠른 작업</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={openDashboard}
-            className="py-3 rounded-lg bg-forge-surface hover:bg-white/10 text-forge-text transition-colors"
-          >
-            🌐 웹 인터페이스
-          </button>
-          <button
-            onClick={() => window.open('~/.openclaw/openclaw.json', '_blank')}
-            className="py-3 rounded-lg bg-forge-surface hover:bg-white/10 text-forge-text transition-colors"
-          >
-            📝 설정 파일
-          </button>
+        {/* 빠른 작업 */}
+        <div className="card p-4">
+          <h3 className="text-base font-semibold text-forge-text mb-2">⚡ 빠른 작업</h3>
+          <div className="space-y-2">
+            <button
+              onClick={openDashboard}
+              className="w-full py-2 text-sm rounded-lg bg-forge-surface hover:bg-white/10 text-forge-text transition-colors"
+            >
+              🌐 웹 인터페이스
+            </button>
+            <button
+              onClick={() => window.open('~/.openclaw/openclaw.json', '_blank')}
+              className="w-full py-2 text-sm rounded-lg bg-forge-surface hover:bg-white/10 text-forge-text transition-colors"
+            >
+              📝 설정 파일
+            </button>
+          </div>
         </div>
       </div>
 
       {/* 하단 - 삭제 및 연락처 */}
-      <div className="mt-8 pt-6 border-t border-white/10">
+      <div className="pt-4 border-t border-white/10">
         <div className="flex items-center justify-between">
-          {/* 삭제 버튼 */}
           <button
             onClick={handleUninstall}
             disabled={loading}
-            className="text-sm text-forge-muted hover:text-forge-error transition-colors disabled:opacity-50"
+            className="text-xs text-forge-muted hover:text-forge-error transition-colors disabled:opacity-50"
           >
             🗑️ OpenClaw 삭제
           </button>
-
-          {/* 연락처 */}
-          <p className="text-sm text-forge-muted">
+          <p className="text-xs text-forge-muted">
             문의: <a href="mailto:hexagon0678@gmail.com" className="text-forge-copper hover:underline">hexagon0678@gmail.com</a>
           </p>
         </div>
+      </div>
       </div>
     </div>
   )
