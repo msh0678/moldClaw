@@ -340,8 +340,10 @@ fn create_base_config(
     })
 }
 
-/// 공식 형식으로 초기 Config 생성 (첫 실행용)
-/// Device Identity도 함께 생성
+/// 공식 형식으로 Config 생성/업데이트
+/// - 기존 config가 없으면: 새로 생성
+/// - 기존 config가 있으면: 필수 필드만 업데이트 (기존 설정 보존)
+/// Device Identity도 함께 확보
 pub async fn create_official_config(
     gateway_port: u16,
     gateway_bind: &str,
@@ -349,9 +351,12 @@ pub async fn create_official_config(
     // 1. Device Identity 확보 (가장 먼저!)
     ensure_device_identity()?;
     
-    // 2. Gateway 토큰 생성 또는 기존 값 사용
-    let existing_config = read_existing_config();
-    let gateway_token = existing_config
+    // 2. 기존 config 읽기
+    let mut config = read_existing_config();
+    let is_new_config = config.as_object().map(|o| o.is_empty()).unwrap_or(true);
+    
+    // 3. Gateway 토큰 생성 또는 기존 값 사용
+    let gateway_token = config
         .get("gateway")
         .and_then(|g| g.get("auth"))
         .and_then(|a| a.get("token"))
@@ -360,13 +365,63 @@ pub async fn create_official_config(
         .map(String::from)
         .unwrap_or_else(generate_gateway_token);
     
-    // 3. 기본 config 생성
-    let config = create_base_config(gateway_port, gateway_bind, &gateway_token);
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let workspace_path = get_workspace_dir();
+    let workspace_str = workspace_path.to_string_lossy().to_string();
     
-    // 4. 설정 디렉토리 및 파일 저장
+    if is_new_config {
+        // 4a. 새 config 생성 (첫 실행)
+        config = create_base_config(gateway_port, gateway_bind, &gateway_token);
+    } else {
+        // 4b. 기존 config 업데이트 (필수 필드만, 기존 설정 보존)
+        
+        // meta 업데이트
+        set_nested_value(&mut config, &["meta", "lastTouchedVersion"], json!(OPENCLAW_VERSION));
+        set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
+        
+        // wizard 업데이트
+        set_nested_value(&mut config, &["wizard", "lastRunAt"], json!(now));
+        set_nested_value(&mut config, &["wizard", "lastRunVersion"], json!(OPENCLAW_VERSION));
+        set_nested_value(&mut config, &["wizard", "lastRunCommand"], json!("onboard"));
+        set_nested_value(&mut config, &["wizard", "lastRunMode"], json!("local"));
+        
+        // gateway 필수 설정 (mode는 반드시 local이어야 함)
+        set_nested_value(&mut config, &["gateway", "mode"], json!("local"));
+        set_nested_value(&mut config, &["gateway", "port"], json!(gateway_port));
+        set_nested_value(&mut config, &["gateway", "bind"], json!(gateway_bind));
+        set_nested_value(&mut config, &["gateway", "auth", "mode"], json!("token"));
+        set_nested_value(&mut config, &["gateway", "auth", "token"], json!(gateway_token));
+        
+        // workspace 설정 (없으면 추가)
+        if config.get("agents")
+            .and_then(|a| a.get("defaults"))
+            .and_then(|d| d.get("workspace"))
+            .is_none()
+        {
+            set_nested_value(&mut config, &["agents", "defaults", "workspace"], json!(workspace_str));
+        }
+        
+        // 위험한 노드 명령어 거부 목록 (없으면 추가)
+        if config.get("gateway")
+            .and_then(|g| g.get("nodes"))
+            .and_then(|n| n.get("denyCommands"))
+            .is_none()
+        {
+            set_nested_value(&mut config, &["gateway", "nodes", "denyCommands"], json!([
+                "camera.snap",
+                "camera.clip",
+                "screen.record",
+                "calendar.add",
+                "contacts.add",
+                "reminders.add"
+            ]));
+        }
+    }
+    
+    // 5. 설정 저장
     write_config(&config)?;
     
-    // 5. 워크스페이스 초기화
+    // 6. 워크스페이스 초기화
     initialize_workspace().await?;
     
     Ok(gateway_token)
