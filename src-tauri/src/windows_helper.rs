@@ -99,18 +99,13 @@ pub fn check_prerequisites() -> PrerequisiteStatus {
 }
 
 /// Visual C++ Redistributable 설치 여부 확인
-/// vcruntime140.dll 존재 여부로 판단
+/// vcruntime140.dll 존재 여부로 판단 (직접 파일 확인 - 빠름)
 fn is_vc_redist_installed() -> bool {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    // 직접 파일 존재 확인 (관리자 권한 불필요, 재귀 검색보다 빠름)
+    let system32 = std::path::Path::new("C:\\Windows\\System32\\vcruntime140.dll");
+    let syswow64 = std::path::Path::new("C:\\Windows\\SysWOW64\\vcruntime140.dll");
     
-    // System32에서 vcruntime140.dll 확인
-    let output = Command::new("cmd")
-        .args(["/C", "where /R C:\\Windows\\System32 vcruntime140.dll"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-    
-    output.map(|o| o.status.success()).unwrap_or(false)
+    system32.exists() || syswow64.exists()
 }
 
 /// 사용 가능한 디스크 공간 확인 (GB)
@@ -136,11 +131,15 @@ fn get_available_disk_space_gb() -> f64 {
 }
 
 /// 실행 중인 안티바이러스 감지
+/// 
+/// 권한: 일반 사용자 (관리자 불필요)
+/// 호환성: Windows Home/Pro만 지원, Server는 SecurityCenter2 없음 (try-catch 처리)
+/// 개인정보: 백신 제품명만 수집, 로컬 로그에만 기록, 외부 전송 없음
 fn detect_antivirus() -> Option<String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     
-    // WMI로 안티바이러스 제품 확인
+    // WMI로 안티바이러스 제품 확인 (displayName만 조회)
     let ps_cmd = r#"
         try {
             $av = Get-CimInstance -Namespace 'root/SecurityCenter2' -ClassName 'AntiVirusProduct' -ErrorAction Stop
