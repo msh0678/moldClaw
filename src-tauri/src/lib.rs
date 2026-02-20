@@ -372,76 +372,134 @@ fn get_dashboard_url() -> String {
 /// Cron jobs 목록 조회
 #[tauri::command]
 async fn get_cron_jobs() -> Result<String, String> {
-    // OpenClaw Gateway API를 통해 cron jobs 조회
-    let config = openclaw::read_existing_config();
-    let port = config.get("gateway")
-        .and_then(|g| g.get("port"))
-        .and_then(|p| p.as_u64())
-        .unwrap_or(18789) as u16;
-    let auth_token = config.get("gateway")
-        .and_then(|g| g.get("authToken"))
-        .and_then(|t| t.as_str())
-        .unwrap_or("");
+    // OpenClaw CLI를 통해 cron jobs 조회 (Gateway WebSocket RPC 사용)
+    let output = tokio::process::Command::new("openclaw")
+        .args(["cron", "list", "--all", "--json", "--timeout", "5000"])
+        .output()
+        .await
+        .map_err(|e| format!("openclaw 실행 실패: {}", e))?;
     
-    // Gateway API 호출
-    let url = format!("http://127.0.0.1:{}/api/cron", port);
-    let client = reqwest::Client::new();
-    
-    let mut request = client.get(&url);
-    if !auth_token.is_empty() {
-        request = request.header("Authorization", format!("Bearer {}", auth_token));
-    }
-    
-    match request.send().await {
-        Ok(response) => {
-            if response.status().is_success() {
-                match response.text().await {
-                    Ok(body) => {
-                        // API 응답을 파싱해서 jobs 배열로 변환
-                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body) {
-                            // OpenClaw cron API 응답 구조에 맞게 변환
-                            let jobs = parsed.get("jobs").cloned().unwrap_or(serde_json::json!([]));
-                            Ok(serde_json::json!({ "jobs": jobs }).to_string())
-                        } else {
-                            Ok(serde_json::json!({ "jobs": [], "raw": body }).to_string())
-                        }
-                    }
-                    Err(e) => Ok(serde_json::json!({
-                        "jobs": [],
-                        "error": format!("응답 읽기 실패: {}", e)
-                    }).to_string())
-                }
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        
+        // JSON 파싱 시도
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&stdout) {
+            // OpenClaw cron list 응답에서 jobs 배열 추출
+            // 응답 형식: { jobs: [...] } 또는 배열 직접
+            let jobs = if parsed.is_array() {
+                parsed.clone()
             } else {
-                Ok(serde_json::json!({
-                    "jobs": [],
-                    "error": format!("API 오류: {}", response.status())
-                }).to_string())
-            }
-        }
-        Err(e) => {
-            // Gateway가 실행 중이 아니거나 연결 실패
+                parsed.get("jobs").cloned().unwrap_or(serde_json::json!([]))
+            };
+            
+            // moldClaw UI 형식으로 변환
+            let formatted_jobs: Vec<serde_json::Value> = jobs.as_array()
+                .unwrap_or(&vec![])
+                .iter()
+                .map(|job| {
+                    serde_json::json!({
+                        "id": job.get("id").or(job.get("jobId")).and_then(|v| v.as_str()).unwrap_or("unknown"),
+                        "name": job.get("name").and_then(|v| v.as_str()).unwrap_or("Unnamed Job"),
+                        "schedule": format_schedule(job.get("schedule")),
+                        "enabled": job.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
+                        "lastRun": job.get("lastRun").and_then(|v| v.as_str()),
+                        "nextRun": job.get("nextRun").and_then(|v| v.as_str()),
+                    })
+                })
+                .collect();
+            
+            Ok(serde_json::json!({ "jobs": formatted_jobs }).to_string())
+        } else {
+            // JSON 파싱 실패 - 원본 반환
             Ok(serde_json::json!({
                 "jobs": [],
-                "error": format!("Gateway 연결 실패: {}", e)
+                "raw": stdout.to_string()
             }).to_string())
         }
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        
+        // Gateway 연결 실패 등의 에러 처리
+        if stderr.contains("ECONNREFUSED") || stderr.contains("connection") {
+            Ok(serde_json::json!({
+                "jobs": [],
+                "error": "Gateway가 실행 중이 아닙니다. 먼저 Gateway를 시작해 주세요."
+            }).to_string())
+        } else {
+            Ok(serde_json::json!({
+                "jobs": [],
+                "error": format!("조회 실패: {}", stderr)
+            }).to_string())
+        }
+    }
+}
+
+// schedule 객체를 읽기 쉬운 문자열로 변환
+fn format_schedule(schedule: Option<&serde_json::Value>) -> String {
+    match schedule {
+        Some(s) => {
+            let kind = s.get("kind").and_then(|v| v.as_str()).unwrap_or("unknown");
+            match kind {
+                "at" => {
+                    let at = s.get("at").and_then(|v| v.as_str()).unwrap_or("?");
+                    format!("1회: {}", at)
+                }
+                "every" => {
+                    let ms = s.get("everyMs").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let hours = ms / 3600000;
+                    let mins = (ms % 3600000) / 60000;
+                    if hours > 0 {
+                        format!("{}시간마다", hours)
+                    } else {
+                        format!("{}분마다", mins)
+                    }
+                }
+                "cron" => {
+                    let expr = s.get("expr").and_then(|v| v.as_str()).unwrap_or("?");
+                    format!("cron: {}", expr)
+                }
+                _ => "알 수 없음".to_string()
+            }
+        }
+        None => "알 수 없음".to_string()
     }
 }
 
 /// Cron job 삭제
 #[tauri::command]
 async fn delete_cron_job(job_id: String) -> Result<(), String> {
-    eprintln!("Cron job 삭제: {}", job_id);
-    // TODO: 실제 삭제 구현
-    Ok(())
+    let output = tokio::process::Command::new("openclaw")
+        .args(["cron", "remove", &job_id, "--timeout", "5000"])
+        .output()
+        .await
+        .map_err(|e| format!("openclaw 실행 실패: {}", e))?;
+    
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("삭제 실패: {}", stderr))
+    }
 }
 
-/// Cron job 토글
+/// Cron job 활성화/비활성화
 #[tauri::command]
 async fn toggle_cron_job(job_id: String, enabled: bool) -> Result<(), String> {
-    eprintln!("Cron job 토글: {} -> {}", job_id, enabled);
-    // TODO: 실제 토글 구현
-    Ok(())
+    // OpenClaw cron update로 enabled 상태 변경
+    let enabled_str = if enabled { "true" } else { "false" };
+    
+    let output = tokio::process::Command::new("openclaw")
+        .args(["cron", "update", &job_id, "--enabled", enabled_str, "--timeout", "5000"])
+        .output()
+        .await
+        .map_err(|e| format!("openclaw 실행 실패: {}", e))?;
+    
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("상태 변경 실패: {}", stderr))
+    }
 }
 
 /// 워크스페이스 파일 목록 조회

@@ -21,16 +21,23 @@ export default function Notifications() {
 
   const loadCronJobs = async () => {
     setLoading(true)
+    setError(null)
     try {
       // OpenClaw cron jobs 목록 조회
       const result = await invoke<string>('get_cron_jobs')
       const parsed = JSON.parse(result)
-      setJobs(parsed.jobs || [])
-      setError(null)
+      
+      // API 응답에 에러가 있는 경우
+      if (parsed.error) {
+        setError(parsed.error)
+        setJobs([])
+      } else {
+        setJobs(parsed.jobs || [])
+      }
     } catch (err) {
       console.error('Cron jobs 로드 실패:', err)
+      setError('알림 목록을 불러올 수 없습니다.')
       setJobs([])
-      // 에러는 조용히 처리 (아직 설정 안 됐을 수 있음)
     } finally {
       setLoading(false)
     }
