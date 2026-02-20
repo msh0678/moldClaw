@@ -391,6 +391,10 @@ pub enum InstallErrorType {
     NpmCacheCorrupted,
     /// 네트워크 문제
     NetworkError,
+    /// SSL/인증서 문제
+    SslError,
+    /// 디스크 공간 부족
+    DiskSpaceFull,
     /// 권한 문제 (관리자 필요)
     PermissionDenied,
     /// node-llama-cpp 빌드 실패 (optional, 무시 가능)
@@ -412,24 +416,29 @@ pub struct ErrorAnalysis {
 pub fn analyze_error(stderr: &str) -> ErrorAnalysis {
     let stderr_lower = stderr.to_lowercase();
     
-    // 1. Visual C++ Redistributable 누락
+    // 1. Visual C++ Redistributable 누락 또는 DLL 로드 실패
+    // 참고: "The specified module could not be found"는 VC++ 누락 또는 
+    // Administrator로 설치 후 다른 사용자로 실행 시에도 발생할 수 있음
     if stderr_lower.contains("err_dlopen_failed") 
         || stderr_lower.contains("the specified module could not be found")
         || stderr_lower.contains("vcruntime")
         || stderr_lower.contains("msvcp")
+        || stderr_lower.contains("api-ms-win")
     {
         return ErrorAnalysis {
             error_type: InstallErrorType::VcRedistMissing,
-            description: "Visual C++ Redistributable이 설치되어 있지 않습니다.".to_string(),
-            solution: "Visual C++ Redistributable을 설치해주세요. moldClaw가 자동으로 설치를 시도합니다.".to_string(),
+            description: "Visual C++ Redistributable이 설치되어 있지 않거나 DLL을 로드할 수 없습니다.".to_string(),
+            solution: "Visual C++ Redistributable 설치를 시도합니다. 실패 시 관리자 권한이 아닌 일반 사용자로 다시 설치해보세요.".to_string(),
             auto_fixable: true,
         };
     }
     
-    // 2. npm 캐시 손상
+    // 2. npm 캐시 손상 (ENOENT, ENOTEMPTY 등)
     if (stderr_lower.contains("enoent") && stderr_lower.contains("npm-cache"))
         || (stderr_lower.contains("enoent") && stderr_lower.contains("_npx"))
+        || (stderr_lower.contains("enotempty") && stderr_lower.contains("npm"))
         || stderr_lower.contains("could not read package.json")
+        || stderr_lower.contains("unexpected end of json")
     {
         return ErrorAnalysis {
             error_type: InstallErrorType::NpmCacheCorrupted,
@@ -439,13 +448,29 @@ pub fn analyze_error(stderr: &str) -> ErrorAnalysis {
         };
     }
     
-    // 3. 네트워크 문제
+    // 3. SSL/인증서 문제 (프록시, 기업 네트워크 등)
+    if stderr_lower.contains("ssl")
+        || stderr_lower.contains("cert")
+        || stderr_lower.contains("certificate")
+        || stderr_lower.contains("unable_to_verify")
+        || stderr_lower.contains("self_signed")
+    {
+        return ErrorAnalysis {
+            error_type: InstallErrorType::SslError,
+            description: "SSL/인증서 오류가 발생했습니다.".to_string(),
+            solution: "기업 네트워크나 프록시를 사용 중이라면 npm 설정을 확인하세요. 'npm config set strict-ssl false'로 일시 해제할 수 있습니다.".to_string(),
+            auto_fixable: false,
+        };
+    }
+    
+    // 4. 네트워크 문제
     if stderr_lower.contains("etimedout")
         || stderr_lower.contains("econnreset") 
         || stderr_lower.contains("enotfound")
         || stderr_lower.contains("failed to download")
         || stderr_lower.contains("network")
         || stderr_lower.contains("socket hang up")
+        || stderr_lower.contains("econnrefused")
     {
         return ErrorAnalysis {
             error_type: InstallErrorType::NetworkError,
@@ -455,19 +480,35 @@ pub fn analyze_error(stderr: &str) -> ErrorAnalysis {
         };
     }
     
-    // 4. 권한 문제 / 백신 차단 (비정상 종료 코드 포함)
+    // 5. 디스크 공간 부족
+    if stderr_lower.contains("enospc")
+        || stderr_lower.contains("no space")
+        || stderr_lower.contains("disk full")
+    {
+        return ErrorAnalysis {
+            error_type: InstallErrorType::DiskSpaceFull,
+            description: "디스크 공간이 부족합니다.".to_string(),
+            solution: "디스크 공간을 확보한 후 다시 시도해주세요. npm 캐시 정리도 도움이 됩니다.".to_string(),
+            auto_fixable: false,
+        };
+    }
+    
+    // 6. 권한 문제 / 백신 차단 (비정상 종료 코드 포함)
     if stderr_lower.contains("eperm")
         || stderr_lower.contains("eacces")
         || stderr_lower.contains("operation not permitted")
         || stderr_lower.contains("access denied")
-        || stderr.contains("4294963238")  // 백신 차단 시 자주 나오는 종료 코드
+        || stderr.contains("4294963238")  // 비정상 종료 - 백신 차단 의심
         || stderr.contains("-1018")
     {
-        // EPERM + cleanup은 백신 의심
-        if stderr_lower.contains("cleanup") || stderr.contains("4294963238") {
+        // EPERM + cleanup 또는 비정상 종료 코드는 백신 의심
+        if stderr_lower.contains("cleanup") 
+            || stderr.contains("4294963238") 
+            || stderr.contains("-1018")
+        {
             return ErrorAnalysis {
                 error_type: InstallErrorType::AntivirusBlocking,
-                description: "백신/보안 소프트웨어가 설치를 차단하고 있습니다.".to_string(),
+                description: "백신/보안 소프트웨어가 설치를 차단하고 있을 수 있습니다.".to_string(),
                 solution: "백신의 실시간 감시를 일시 중지하고 다시 시도해주세요. 설치 후 다시 활성화하세요.".to_string(),
                 auto_fixable: false,
             };
@@ -475,12 +516,12 @@ pub fn analyze_error(stderr: &str) -> ErrorAnalysis {
         return ErrorAnalysis {
             error_type: InstallErrorType::PermissionDenied,
             description: "파일 접근 권한이 없습니다.".to_string(),
-            solution: "관리자 권한으로 실행하거나, 다른 프로그램이 파일을 사용 중인지 확인해주세요.".to_string(),
+            solution: "다른 프로그램이 파일을 사용 중인지 확인하거나, moldClaw를 재시작해보세요.".to_string(),
             auto_fixable: false,
         };
     }
     
-    // 5. node-llama-cpp 빌드 실패 (무시 가능하지만 전체 실패로 이어질 수 있음)
+    // 7. node-llama-cpp 빌드 실패 (optional, API 사용에는 영향 없음)
     if stderr_lower.contains("node-llama-cpp")
         || stderr_lower.contains("llama.cpp")
         || stderr_lower.contains("cmake")
