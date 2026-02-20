@@ -383,7 +383,11 @@ fn check_prerequisites() -> serde_json::Value {
         "node_installed": true,
         "node_version": null,
         "node_compatible": true,
-        "npm_installed": true
+        "npm_installed": true,
+        "vc_redist_installed": true,  // Windows 전용, 다른 OS에서는 항상 true
+        "disk_space_gb": 100.0,
+        "disk_space_ok": true,
+        "antivirus_detected": null
     })
 }
 

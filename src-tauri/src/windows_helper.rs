@@ -71,6 +71,11 @@ pub struct PrerequisiteStatus {
     pub node_version: Option<String>,
     pub node_compatible: bool,  // >= 22.12.0
     pub npm_installed: bool,
+    // 확장된 환경 검사
+    pub vc_redist_installed: bool,
+    pub disk_space_gb: f64,
+    pub disk_space_ok: bool,  // >= 2GB
+    pub antivirus_detected: Option<String>,
 }
 
 pub fn check_prerequisites() -> PrerequisiteStatus {
@@ -79,11 +84,85 @@ pub fn check_prerequisites() -> PrerequisiteStatus {
         .map(|v| is_node_version_compatible(v))
         .unwrap_or(false);
     
+    let disk_space_gb = get_available_disk_space_gb();
+    
     PrerequisiteStatus {
         node_installed: node_version.is_some(),
         node_version,
         node_compatible,
         npm_installed: is_npm_installed(),
+        vc_redist_installed: is_vc_redist_installed(),
+        disk_space_gb,
+        disk_space_ok: disk_space_gb >= 2.0,
+        antivirus_detected: detect_antivirus(),
+    }
+}
+
+/// Visual C++ Redistributable 설치 여부 확인
+/// vcruntime140.dll 존재 여부로 판단
+fn is_vc_redist_installed() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    // System32에서 vcruntime140.dll 확인
+    let output = Command::new("cmd")
+        .args(["/C", "where /R C:\\Windows\\System32 vcruntime140.dll"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    
+    output.map(|o| o.status.success()).unwrap_or(false)
+}
+
+/// 사용 가능한 디스크 공간 확인 (GB)
+fn get_available_disk_space_gb() -> f64 {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    // PowerShell로 C: 드라이브 여유 공간 확인
+    let ps_cmd = r#"(Get-PSDrive C).Free / 1GB"#;
+    
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", ps_cmd])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    
+    match output {
+        Ok(o) if o.status.success() => {
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            stdout.trim().parse::<f64>().unwrap_or(0.0)
+        }
+        _ => 0.0,
+    }
+}
+
+/// 실행 중인 안티바이러스 감지
+fn detect_antivirus() -> Option<String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    // WMI로 안티바이러스 제품 확인
+    let ps_cmd = r#"
+        try {
+            $av = Get-CimInstance -Namespace 'root/SecurityCenter2' -ClassName 'AntiVirusProduct' -ErrorAction Stop
+            if ($av) { $av.displayName -join ',' }
+        } catch { }
+    "#;
+    
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", ps_cmd])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    
+    match output {
+        Ok(o) if o.status.success() => {
+            let stdout = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if stdout.is_empty() {
+                None
+            } else {
+                Some(stdout)
+            }
+        }
+        _ => None,
     }
 }
 
@@ -616,6 +695,35 @@ pub fn install_openclaw_with_recovery() -> Result<String, String> {
     // npm이 있는지 확인
     if !is_npm_installed() {
         return Err("npm이 설치되어 있지 않습니다. Node.js를 먼저 설치해주세요.".to_string());
+    }
+    
+    // 환경 사전 검사
+    let env_status = check_prerequisites();
+    eprintln!("환경 검사: VC++={}, 디스크={}GB, 백신={:?}", 
+        env_status.vc_redist_installed, 
+        env_status.disk_space_gb,
+        env_status.antivirus_detected);
+    
+    // 디스크 공간 부족 시 미리 경고
+    if !env_status.disk_space_ok {
+        return Err(format!(
+            "디스크 공간이 부족합니다. (현재: {:.1}GB, 필요: 2GB 이상)\n\n불필요한 파일을 정리한 후 다시 시도해주세요.",
+            env_status.disk_space_gb
+        ));
+    }
+    
+    // VC++ 미설치 시 미리 설치 시도
+    if !env_status.vc_redist_installed {
+        eprintln!("VC++ Redistributable 미설치 감지, 사전 설치 시도...");
+        if let Err(e) = install_vc_redist() {
+            eprintln!("VC++ 사전 설치 실패: {}", e);
+            // 실패해도 계속 진행 (npm 설치 시 다시 시도)
+        }
+    }
+    
+    // 백신 감지 시 경고 로그 (설치는 계속 진행)
+    if let Some(ref av) = env_status.antivirus_detected {
+        eprintln!("⚠️ 백신 감지됨: {}. 설치 실패 시 실시간 감시 중지 필요할 수 있음.", av);
     }
     
     // 1차 시도
