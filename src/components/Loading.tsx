@@ -167,7 +167,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
         <div className="glass rounded-2xl p-8 max-w-md text-center">
           <div className="text-6xl mb-4">🛡️</div>
           <h2 className="text-xl font-bold mb-2">백신 프로그램 감지됨</h2>
-          <p className="text-steel-light text-sm mb-4">
+          <p className="text-forge-text text-sm mb-4">
             <strong className="text-yellow-400">{antivirusName}</strong>이(가) 실행 중입니다.
           </p>
           
@@ -204,7 +204,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
         <div className="glass rounded-2xl p-8 max-w-sm text-center">
           <div className="text-6xl mb-4">✅</div>
           <h2 className="text-xl font-bold mb-2">설치 완료!</h2>
-          <p className="text-steel-light text-sm mb-6">
+          <p className="text-forge-text text-sm mb-6">
             Node.js가 설치되었습니다.<br />
             <strong className="text-white">moldClaw를 재시작</strong>해주세요.
           </p>
@@ -216,8 +216,8 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
             </p>
           </div>
           
-          <div className="p-3 bg-steel-dark/50 rounded-lg">
-            <p className="text-xs text-steel-light">
+          <div className="p-3 bg-forge-dark/50 rounded-lg">
+            <p className="text-xs text-forge-text">
               우측 상단 X 버튼으로 앱을 종료한 후<br />
               다시 moldClaw를 실행하세요.
             </p>
@@ -234,7 +234,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
         <div className="glass rounded-2xl p-8 max-w-sm text-center">
           <div className="text-6xl mb-4 animate-bounce">📦</div>
           <h2 className="text-xl font-bold mb-2">설치 중...</h2>
-          <p className="text-steel-light text-sm mb-6">
+          <p className="text-forge-text text-sm mb-6">
             필수 프로그램을 설치하고 있습니다.<br />
             <strong className="text-white">관리자 권한 창이 뜨면 승인</strong>해주세요.
           </p>
@@ -253,7 +253,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
             </p>
           </div>
           
-          <p className="text-sm text-steel-light mt-4">
+          <p className="text-sm text-forge-text mt-4">
             moldClaw는 아직 불완전합니다. 여러분의 도움이 필요합니다.<br />
             <span className="text-xs text-gray-500">문의: <span className="text-blue-400">hexagon0678@gmail.com</span></span>
           </p>
@@ -269,7 +269,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
         <div className="glass rounded-2xl p-8 max-w-sm text-center">
           <div className="text-6xl mb-4">📦</div>
           <h2 className="text-xl font-bold mb-2">Node.js 필요</h2>
-          <p className="text-steel-light text-sm mb-6">
+          <p className="text-forge-text text-sm mb-6">
             moldClaw를 사용하려면 Node.js가 필요해요.<br />
             설치 후 이 앱을 다시 실행해주세요.
           </p>
@@ -283,7 +283,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
           
           <button
             onClick={handleRetry}
-            className="w-full py-3 bg-white/10 rounded-xl text-steel-bright hover:bg-white/20"
+            className="w-full py-3 bg-white/10 rounded-xl text-forge-bright hover:bg-white/20"
           >
             설치 완료됨, 다시 확인
           </button>
@@ -347,17 +347,16 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
       <div className="mb-6 flex justify-center animate-bounce">
         <img 
-          src="/app-icon.jpg" 
+          src="/app-icon.png" 
           alt="moldClaw" 
-          className="w-16 h-16 object-contain"
+          className="w-20 h-20 object-contain"
           style={{
-            filter: 'drop-shadow(0 4px 8px rgba(43, 45, 48, 0.8))',
-            imageRendering: 'crisp-edges'
+            filter: 'drop-shadow(0 4px 12px rgba(232, 107, 42, 0.4))',
           }}
         />
       </div>
-      <h1 className="text-2xl font-bold mb-2 bg-gradient-to-r from-steel-light to-steel-primary bg-clip-text text-transparent">moldClaw</h1>
-      <p className="text-steel-light mb-4">{status}</p>
+      <h1 className="text-2xl font-bold mb-2 bg-gradient-to-r from-forge-copper to-forge-amber bg-clip-text text-transparent">moldClaw</h1>
+      <p className="text-forge-text mb-4">{status}</p>
       
       {step === 'installing-openclaw' && (
         <div className="glass rounded-xl p-4 max-w-xs text-center mb-4">

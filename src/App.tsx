@@ -1,17 +1,15 @@
 import { useState } from 'react'
-import Welcome from './components/Welcome'
-import ModelSetup from './components/ModelSetup'
-import MessengerSelect from './components/MessengerSelect'
-import Integrations from './components/Integrations'
-import Connect from './components/Connect'
-import Summary from './components/Summary'
 import Loading from './components/Loading'
-import Dashboard from './components/Dashboard'
 import ExpiredScreen from './components/ExpiredScreen'
-import { BrowserControl } from './pages/BrowserControl'
+import Sidebar, { type Page } from './components/Sidebar'
+import DashboardNew from './components/DashboardNew'
+import Notifications from './components/Notifications'
+import Files from './components/Files'
+import Logs from './components/Logs'
+import Settings from './components/Settings'
 import { useAppStatus } from './hooks/useAppStatus'
 
-type Step = 'loading' | 'dashboard' | 'welcome' | 'model' | 'messenger' | 'integrations' | 'browsercontrol' | 'summary' | 'connect'
+type AppState = 'loading' | 'onboarding' | 'main' | 'settings'
 type Messenger = 'telegram' | 'discord' | 'whatsapp' | null
 
 export interface ModelConfig {
@@ -24,22 +22,22 @@ export interface MessengerConfig {
   type: Messenger
   token: string
   dmPolicy: string
-  allowFrom: string[]           // 허용 사용자 목록
-  groupPolicy: string           // 그룹 정책: open | allowlist | disabled
-  groupAllowFrom: string[]      // 그룹 허용 사용자 목록
-  requireMention: boolean       // 그룹에서 멘션 필요 여부
+  allowFrom: string[]
+  groupPolicy: string
+  groupAllowFrom: string[]
+  requireMention: boolean
 }
 
 export interface GatewayConfig {
   port: number
-  bind: string                  // loopback | lan | tailnet | auto | custom
-  authMode: string              // token | password
+  bind: string
+  authMode: string
   token: string
   password: string
 }
 
 export interface IntegrationConfig {
-  [key: string]: string  // envVar -> value
+  [key: string]: string
 }
 
 export interface FullConfig {
@@ -71,15 +69,16 @@ const initialConfig: FullConfig = {
 }
 
 function App() {
-  const [step, setStep] = useState<Step>('loading')
-  const [config, setConfig] = useState<FullConfig>(initialConfig)
+  const [appState, setAppState] = useState<AppState>('loading')
+  const [currentPage, setCurrentPage] = useState<Page>('dashboard')
+  const [config] = useState<FullConfig>(initialConfig)
   const { appStatus, loading: statusLoading } = useAppStatus()
 
   // 앱 상태 체크 (테스트 종료 여부)
   if (statusLoading) {
     return (
       <div className="gradient-bg min-h-screen flex items-center justify-center">
-        <div className="text-white">상태 확인 중...</div>
+        <div className="text-forge-text">상태 확인 중...</div>
       </div>
     )
   }
@@ -88,146 +87,63 @@ function App() {
     return <ExpiredScreen message={appStatus.message} />
   }
 
-  // 모델 설정 업데이트 (메모리만)
-  const handleModelUpdate = (modelConfig: ModelConfig) => {
-    setConfig(prev => ({ ...prev, model: modelConfig }))
-    setStep('messenger')
+  // 로딩 화면
+  if (appState === 'loading') {
+    return (
+      <Loading
+        onReady={() => setAppState('onboarding')}
+        onDashboard={() => setAppState('main')}
+      />
+    )
   }
 
-  // 메신저 설정 업데이트 (타입 + 토큰 포함)
-  const handleMessengerComplete = (messengerConfig: MessengerConfig) => {
-    setConfig(prev => ({
-      ...prev,
-      messenger: messengerConfig,
-    }))
-    setStep('integrations')
+  // 온보딩 (첫 실행 설정)
+  if (appState === 'onboarding') {
+    return (
+      <div className="gradient-bg min-h-screen">
+        <Settings
+          isOnboarding={true}
+          initialConfig={config}
+          onComplete={() => setAppState('main')}
+          // onCancel 없음 - 온보딩 중에는 대시보드로 이동 불가
+        />
+      </div>
+    )
   }
 
-  // 메신저 상세 설정 업데이트 (메모리만)
-  const handleMessengerConfigUpdate = (messengerConfig: Partial<MessengerConfig>) => {
-    setConfig(prev => ({
-      ...prev,
-      messenger: { ...prev.messenger, ...messengerConfig },
-    }))
+  // 설정 화면 (메인에서 진입)
+  if (appState === 'settings') {
+    return (
+      <div className="gradient-bg min-h-screen">
+        <Settings
+          isOnboarding={false}
+          initialConfig={config}
+          onComplete={() => setAppState('main')}
+          onCancel={() => setAppState('main')}
+        />
+      </div>
+    )
   }
 
-  // Gateway 설정 업데이트 (메모리만)
-  const handleGatewayConfigUpdate = (gatewayConfig: Partial<GatewayConfig>) => {
-    setConfig(prev => ({
-      ...prev,
-      gateway: { ...prev.gateway, ...gatewayConfig },
-    }))
-  }
-
-  // 통합 설정 일괄 업데이트 (메모리만)
-  const handleIntegrationsUpdate = (integrations: IntegrationConfig) => {
-    setConfig(prev => ({
-      ...prev,
-      integrations: { ...prev.integrations, ...integrations },
-    }))
-  }
-
-  // 뒤로가기 핸들러
-  const handleBack = () => {
-    switch (step) {
-      case 'model':
-        setStep('welcome')
-        break
-      case 'messenger':
-        setStep('model')
-        break
-      case 'integrations':
-        setStep('messenger')
-        break
-      case 'browsercontrol':
-        setStep('integrations')
-        break
-      case 'summary':
-        setStep('browsercontrol')
-        break
-      case 'connect':
-        setStep('summary')
-        break
-    }
-  }
-
-  // 관리센터로 돌아가기 핸들러
-  const handleGoToDashboard = () => {
-    setStep('dashboard')
-  }
-
+  // 메인 레이아웃 (사이드바 + 컨텐츠)
   return (
-    <div className="gradient-bg min-h-screen">
-      {step === 'loading' && (
-        <Loading 
-          onReady={() => setStep('welcome')} 
-          onDashboard={() => setStep('dashboard')}
-        />
-      )}
-      
-      {step === 'dashboard' && (
-        <Dashboard onStartOnboarding={() => setStep('welcome')} />
-      )}
-      
-      {step === 'welcome' && (
-        <Welcome 
-          onComplete={() => setStep('model')}
-          onGoToDashboard={handleGoToDashboard}
-        />
-      )}
-      
-      {step === 'model' && (
-        <ModelSetup 
-          initialConfig={config.model}
-          onComplete={handleModelUpdate}
-          onBack={handleBack}
-          onGoToDashboard={handleGoToDashboard}
-        />
-      )}
-      
-      {step === 'messenger' && (
-        <MessengerSelect 
-          initialConfig={config.messenger}
-          onComplete={handleMessengerComplete}
-          onBack={handleBack}
-        />
-      )}
-      
-      {step === 'integrations' && (
-        <Integrations
-          initialValues={config.integrations}
-          onUpdate={handleIntegrationsUpdate}
-          onComplete={() => setStep('browsercontrol')}
-          onSkip={() => setStep('browsercontrol')}
-          onBack={handleBack}
-        />
-      )}
-      
-      {step === 'browsercontrol' && (
-        <BrowserControl
-          onNext={() => setStep('summary')}
-          onBack={handleBack}
-        />
-      )}
-      
-      {step === 'summary' && (
-        <Summary
-          config={config}
-          onConfirm={() => setStep('connect')}
-          onEdit={(target) => setStep(target as Step)}
-          onBack={handleBack}
-        />
-      )}
-      
-      {step === 'connect' && config.messenger.type && (
-        <Connect 
-          config={config}
-          onMessengerConfigUpdate={handleMessengerConfigUpdate}
-          onGatewayConfigUpdate={handleGatewayConfigUpdate}
-          onComplete={() => setStep('dashboard')}
-          onBack={handleBack}
-        />
-      )}
+    <div className="gradient-bg min-h-screen flex">
+      {/* 사이드바 */}
+      <Sidebar
+        currentPage={currentPage}
+        onNavigate={setCurrentPage}
+        onSettings={() => setAppState('settings')}
+      />
+
+      {/* 메인 컨텐츠 */}
+      <main className="flex-1 overflow-auto">
+        {currentPage === 'dashboard' && (
+          <DashboardNew onSettings={() => setAppState('settings')} />
+        )}
+        {currentPage === 'notifications' && <Notifications />}
+        {currentPage === 'files' && <Files />}
+        {currentPage === 'logs' && <Logs />}
+      </main>
     </div>
   )
 }

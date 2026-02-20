@@ -367,6 +367,190 @@ fn get_dashboard_url() -> String {
     openclaw::get_dashboard_url()
 }
 
+// ===== 새 UI 관련 명령어들 =====
+
+/// Cron jobs 목록 조회
+#[tauri::command]
+async fn get_cron_jobs() -> Result<String, String> {
+    // TODO: 실제 cron jobs 조회 구현
+    Ok(serde_json::json!({
+        "jobs": []
+    }).to_string())
+}
+
+/// Cron job 삭제
+#[tauri::command]
+async fn delete_cron_job(job_id: String) -> Result<(), String> {
+    eprintln!("Cron job 삭제: {}", job_id);
+    // TODO: 실제 삭제 구현
+    Ok(())
+}
+
+/// Cron job 토글
+#[tauri::command]
+async fn toggle_cron_job(job_id: String, enabled: bool) -> Result<(), String> {
+    eprintln!("Cron job 토글: {} -> {}", job_id, enabled);
+    // TODO: 실제 토글 구현
+    Ok(())
+}
+
+/// 워크스페이스 파일 목록 조회
+#[tauri::command]
+async fn get_workspace_files() -> Result<String, String> {
+    let workspace_path = dirs::home_dir()
+        .map(|h| h.join(".openclaw").join("workspace"))
+        .unwrap_or_default();
+    
+    let mut files = Vec::new();
+    
+    if workspace_path.exists() {
+        if let Ok(entries) = std::fs::read_dir(&workspace_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let metadata = entry.metadata().ok();
+                
+                files.push(serde_json::json!({
+                    "name": entry.file_name().to_string_lossy(),
+                    "path": path.to_string_lossy(),
+                    "size": metadata.as_ref().map(|m| m.len()).unwrap_or(0),
+                    "modified": metadata.as_ref()
+                        .and_then(|m| m.modified().ok())
+                        .map(|t| {
+                            let duration = t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+                            chrono::DateTime::from_timestamp(duration.as_secs() as i64, 0)
+                                .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+                                .unwrap_or_default()
+                        })
+                        .unwrap_or_default(),
+                    "isDirectory": path.is_dir()
+                }));
+            }
+        }
+    }
+    
+    Ok(serde_json::json!({
+        "path": workspace_path.to_string_lossy(),
+        "files": files
+    }).to_string())
+}
+
+/// 파일 열기
+#[tauri::command]
+async fn open_file(path: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &path])
+            .spawn()
+            .map_err(|e| format!("파일 열기 실패: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("파일 열기 실패: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("파일 열기 실패: {}", e))?;
+    }
+    Ok(())
+}
+
+/// 워크스페이스 폴더 열기
+#[tauri::command]
+async fn open_workspace_folder() -> Result<(), String> {
+    let workspace_path = dirs::home_dir()
+        .map(|h| h.join(".openclaw").join("workspace"))
+        .unwrap_or_default();
+    
+    open_file(workspace_path.to_string_lossy().to_string()).await
+}
+
+/// 대화 기록 조회
+#[tauri::command]
+async fn get_conversations() -> Result<String, String> {
+    // TODO: 실제 대화 기록 조회 구현
+    Ok(serde_json::json!({
+        "conversations": []
+    }).to_string())
+}
+
+/// Gateway 로그 조회
+#[tauri::command]
+async fn get_gateway_logs() -> Result<String, String> {
+    // TODO: 실제 로그 조회 구현
+    Ok(serde_json::json!({
+        "logs": []
+    }).to_string())
+}
+
+/// Gateway 로그 삭제
+#[tauri::command]
+async fn clear_gateway_logs() -> Result<(), String> {
+    // TODO: 실제 로그 삭제 구현
+    Ok(())
+}
+
+/// 채널 상태 조회
+#[tauri::command]
+async fn get_channel_status() -> Result<String, String> {
+    // config 파일에서 설정된 채널 읽기
+    let config_path = dirs::home_dir()
+        .map(|h| h.join(".openclaw").join("openclaw.json"))
+        .unwrap_or_default();
+    
+    let mut channels = Vec::new();
+    
+    if config_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            if let Ok(config) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(ch) = config.get("channels") {
+                    if ch.get("telegram").is_some() {
+                        channels.push(serde_json::json!({
+                            "name": "Telegram",
+                            "icon": "✈️",
+                            "connected": true
+                        }));
+                    }
+                    if ch.get("discord").is_some() {
+                        channels.push(serde_json::json!({
+                            "name": "Discord",
+                            "icon": "🎮",
+                            "connected": true
+                        }));
+                    }
+                    if ch.get("whatsapp").is_some() {
+                        channels.push(serde_json::json!({
+                            "name": "WhatsApp",
+                            "icon": "💚",
+                            "connected": true
+                        }));
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(serde_json::json!({
+        "channels": channels
+    }).to_string())
+}
+
+/// 사용량 통계 조회
+#[tauri::command]
+async fn get_usage_stats() -> Result<String, String> {
+    // TODO: 실제 사용량 통계 구현
+    Ok(serde_json::json!({
+        "usage": null,
+        "recentActivity": []
+    }).to_string())
+}
+
 // ===== Windows 전용 명령어 =====
 
 /// Windows 필수 프로그램 상태 확인
@@ -626,6 +810,18 @@ pub fn run() {
             // 삭제/종료
             uninstall_openclaw,
             cleanup_before_exit,
+            // 새 UI 관련
+            get_cron_jobs,
+            delete_cron_job,
+            toggle_cron_job,
+            get_workspace_files,
+            open_file,
+            open_workspace_folder,
+            get_conversations,
+            get_gateway_logs,
+            clear_gateway_logs,
+            get_channel_status,
+            get_usage_stats,
         ])
         .setup(|_app| {
             eprintln!("moldClaw 시작됨");
