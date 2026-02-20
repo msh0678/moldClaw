@@ -114,7 +114,7 @@ fn get_workspace_dir() -> PathBuf {
 }
 
 /// 기존 설정 읽기 (없으면 빈 객체)
-fn read_existing_config() -> Value {
+pub fn read_existing_config() -> Value {
     let config_path = get_config_path();
     if config_path.exists() {
         if let Ok(content) = fs::read_to_string(&config_path) {

@@ -39,6 +39,7 @@ const initialConfig: FullConfig = {
 export default function Settings({ isOnboarding, initialConfig: propConfig, onComplete, onCancel }: SettingsProps) {
   const [step, setStep] = useState<SettingsStep>(isOnboarding ? 'ai' : 'menu')
   const [config, setConfig] = useState<FullConfig>(propConfig || initialConfig)
+  const [returnTo, setReturnTo] = useState<SettingsStep | null>(null)  // Summary에서 수정 후 돌아갈 위치
 
   // 설정 업데이트 핸들러들
   const handleModelUpdate = (modelConfig: ModelConfig) => {
@@ -65,6 +66,13 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
 
   // 뒤로가기
   const handleBack = () => {
+    // Summary에서 수정으로 온 경우, 다시 Summary로 돌아감
+    if (returnTo) {
+      setStep(returnTo)
+      setReturnTo(null)
+      return
+    }
+
     switch (step) {
       case 'ai':
         if (!isOnboarding) setStep('menu')
@@ -85,6 +93,12 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
         setStep('summary')
         break
     }
+  }
+
+  // Summary에서 수정 버튼 클릭 시 사용
+  const handleEditFromSummary = (targetStep: SettingsStep) => {
+    setReturnTo('summary')
+    setStep(targetStep)
   }
 
   // 메뉴 화면 (일반 설정 모드)
@@ -232,10 +246,9 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
             <div className="flex items-start gap-3">
               <span className="text-2xl">💡</span>
               <div>
-                <p className="text-forge-text font-medium mb-1">Chrome 브라우저가 필요합니다</p>
+                <p className="text-forge-text font-medium mb-1">Chromium 기반 브라우저 필요</p>
                 <p className="text-forge-muted text-sm">
-                  브라우저 릴레이는 <strong>Chrome 브라우저</strong>를 기본으로 사용합니다. 
-                  Chrome이 설치되어 있지 않다면 먼저 설치해 주세요.
+                  브라우저 릴레이는 <strong>Chrome 또는 Edge</strong> 브라우저에서 사용할 수 있습니다.
                 </p>
               </div>
             </div>
@@ -280,7 +293,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
               <div className="card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-forge-muted">AI 모델</span>
-                  <button onClick={() => setStep('ai')} className="text-xs text-forge-copper">수정</button>
+                  <button onClick={() => handleEditFromSummary('ai')} className="text-xs text-forge-copper hover:underline">수정</button>
                 </div>
                 {config.model ? (
                   <div>
@@ -296,7 +309,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
               <div className="card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-forge-muted">메신저</span>
-                  <button onClick={() => setStep('messenger')} className="text-xs text-forge-copper">수정</button>
+                  <button onClick={() => handleEditFromSummary('messenger')} className="text-xs text-forge-copper hover:underline">수정</button>
                 </div>
                 {config.messenger.type ? (
                   <div className="flex items-center gap-3">
@@ -318,7 +331,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
               <div className="card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-forge-muted">외부 서비스</span>
-                  <button onClick={() => setStep('features')} className="text-xs text-forge-copper">수정</button>
+                  <button onClick={() => handleEditFromSummary('features')} className="text-xs text-forge-copper hover:underline">수정</button>
                 </div>
                 {Object.keys(config.integrations).filter(k => config.integrations[k]?.length > 0).length > 0 ? (
                   <p className="text-forge-text">

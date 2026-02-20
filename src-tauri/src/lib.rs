@@ -372,10 +372,60 @@ fn get_dashboard_url() -> String {
 /// Cron jobs 목록 조회
 #[tauri::command]
 async fn get_cron_jobs() -> Result<String, String> {
-    // TODO: 실제 cron jobs 조회 구현
-    Ok(serde_json::json!({
-        "jobs": []
-    }).to_string())
+    // OpenClaw Gateway API를 통해 cron jobs 조회
+    let config = openclaw::read_existing_config();
+    let port = config.get("gateway")
+        .and_then(|g| g.get("port"))
+        .and_then(|p| p.as_u64())
+        .unwrap_or(18789) as u16;
+    let auth_token = config.get("gateway")
+        .and_then(|g| g.get("authToken"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
+    
+    // Gateway API 호출
+    let url = format!("http://127.0.0.1:{}/api/cron", port);
+    let client = reqwest::Client::new();
+    
+    let mut request = client.get(&url);
+    if !auth_token.is_empty() {
+        request = request.header("Authorization", format!("Bearer {}", auth_token));
+    }
+    
+    match request.send().await {
+        Ok(response) => {
+            if response.status().is_success() {
+                match response.text().await {
+                    Ok(body) => {
+                        // API 응답을 파싱해서 jobs 배열로 변환
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body) {
+                            // OpenClaw cron API 응답 구조에 맞게 변환
+                            let jobs = parsed.get("jobs").cloned().unwrap_or(serde_json::json!([]));
+                            Ok(serde_json::json!({ "jobs": jobs }).to_string())
+                        } else {
+                            Ok(serde_json::json!({ "jobs": [], "raw": body }).to_string())
+                        }
+                    }
+                    Err(e) => Ok(serde_json::json!({
+                        "jobs": [],
+                        "error": format!("응답 읽기 실패: {}", e)
+                    }).to_string())
+                }
+            } else {
+                Ok(serde_json::json!({
+                    "jobs": [],
+                    "error": format!("API 오류: {}", response.status())
+                }).to_string())
+            }
+        }
+        Err(e) => {
+            // Gateway가 실행 중이 아니거나 연결 실패
+            Ok(serde_json::json!({
+                "jobs": [],
+                "error": format!("Gateway 연결 실패: {}", e)
+            }).to_string())
+        }
+    }
 }
 
 /// Cron job 삭제

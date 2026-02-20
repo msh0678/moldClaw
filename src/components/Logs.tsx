@@ -103,10 +103,10 @@ export default function Logs() {
             <button
               key={level}
               onClick={() => setFilter(level)}
-              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all border-2 ${
                 filter === level
-                  ? 'bg-forge-copper text-white'
-                  : 'bg-forge-surface text-forge-muted hover:text-forge-text'
+                  ? 'bg-forge-copper text-white border-forge-copper shadow-md'
+                  : 'bg-forge-surface text-forge-muted border-forge-surface hover:border-forge-copper/50 hover:text-forge-text'
               }`}
             >
               {level === 'all' ? '전체' :
