@@ -197,48 +197,100 @@ async fn restart_gateway() -> Result<String, String> {
     openclaw::restart_gateway().await
 }
 
-/// OpenClaw 삭제 (npm uninstall -g openclaw)
+/// OpenClaw 삭제 (npm uninstall + 설정 폴더 삭제)
 #[tauri::command]
 async fn uninstall_openclaw() -> Result<String, String> {
     eprintln!("OpenClaw 삭제 시작...");
     
-    // 먼저 Gateway 종료
+    // 1. 먼저 Gateway 종료
     let _ = openclaw::stop_gateway().await;
+    
+    // 2. npm uninstall
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "npm uninstall -g openclaw"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new("npm")
+            .args(["uninstall", "-g", "openclaw"])
+            .output();
+    }
+    
+    // 3. 설정 폴더 삭제
+    if let Some(home) = dirs::home_dir() {
+        // ~/.openclaw 삭제
+        let openclaw_dir = home.join(".openclaw");
+        if openclaw_dir.exists() {
+            let _ = std::fs::remove_dir_all(&openclaw_dir);
+            eprintln!("~/.openclaw 삭제됨");
+        }
+        
+        // ~/.config/openclaw 삭제
+        let config_dir = home.join(".config").join("openclaw");
+        if config_dir.exists() {
+            let _ = std::fs::remove_dir_all(&config_dir);
+            eprintln!("~/.config/openclaw 삭제됨");
+        }
+    }
+    
+    eprintln!("OpenClaw 삭제 완료");
+    Ok("OpenClaw가 성공적으로 삭제되었습니다.".to_string())
+}
+
+/// moldClaw 삭제 (MSI Uninstaller 실행)
+#[tauri::command]
+async fn uninstall_moldclaw() -> Result<(), String> {
+    eprintln!("moldClaw 삭제 시작...");
     
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
-        let output = std::process::Command::new("cmd")
-            .args(["/C", "npm uninstall -g openclaw"])
+        // 방법 1: msiexec로 제품 이름으로 삭제 시도
+        // Tauri MSI 설치 시 제품명: "moldClaw"
+        let result = std::process::Command::new("powershell")
+            .args([
+                "-Command",
+                r#"$app = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like '*moldClaw*' }; if ($app) { $app.Uninstall() }"#
+            ])
             .creation_flags(CREATE_NO_WINDOW)
-            .output()
-            .map_err(|e| format!("npm 실행 실패: {}", e))?;
+            .spawn();
         
-        if output.status.success() {
-            eprintln!("OpenClaw 삭제 완료");
-            Ok("OpenClaw가 성공적으로 삭제되었습니다.".to_string())
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("삭제 실패: {}", stderr))
+        if result.is_ok() {
+            eprintln!("MSI Uninstaller 실행됨");
+            // uninstaller가 실행되면 앱이 종료될 것임
+            // 잠시 대기 후 프로세스 종료
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            std::process::exit(0);
         }
+        
+        // 방법 2: 직접 uninstall.exe 찾아서 실행
+        let program_files = std::env::var("PROGRAMFILES").unwrap_or_default();
+        let uninstaller_path = format!("{}\\moldClaw\\uninstall.exe", program_files);
+        
+        if std::path::Path::new(&uninstaller_path).exists() {
+            let _ = std::process::Command::new(&uninstaller_path)
+                .spawn();
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            std::process::exit(0);
+        }
+        
+        Err("언인스톨러를 찾을 수 없습니다. 제어판에서 직접 삭제해 주세요.".to_string())
     }
     
     #[cfg(not(windows))]
     {
-        let output = std::process::Command::new("npm")
-            .args(["uninstall", "-g", "openclaw"])
-            .output()
-            .map_err(|e| format!("npm 실행 실패: {}", e))?;
-        
-        if output.status.success() {
-            eprintln!("OpenClaw 삭제 완료");
-            Ok("OpenClaw가 성공적으로 삭제되었습니다.".to_string())
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("삭제 실패: {}", stderr))
-        }
+        // Linux/Mac: 수동 삭제 안내
+        Err("Linux/Mac에서는 앱을 직접 삭제해 주세요.".to_string())
     }
 }
 
@@ -917,6 +969,7 @@ pub fn run() {
             install_vc_redist,
             // 삭제/종료
             uninstall_openclaw,
+            uninstall_moldclaw,
             cleanup_before_exit,
             // 새 UI 관련
             get_cron_jobs,
