@@ -562,8 +562,10 @@ pub fn install_vc_redist() -> Result<String, String> {
     }
     
     // VC++ Redistributable 설치 (관리자 권한)
+    // -PassThru로 프로세스 객체 받아서 ExitCode 확인
     let ps_command = r#"
-        Start-Process -FilePath 'winget' -ArgumentList 'install --id Microsoft.VCRedist.2015+.x64 -e --source winget --silent --accept-source-agreements --accept-package-agreements' -Verb RunAs -Wait
+        $process = Start-Process -FilePath 'winget' -ArgumentList 'install --id Microsoft.VCRedist.2015+.x64 -e --source winget --silent --accept-source-agreements --accept-package-agreements' -Verb RunAs -Wait -PassThru
+        exit $process.ExitCode
     "#;
     
     let output = Command::new("powershell")
@@ -571,10 +573,20 @@ pub fn install_vc_redist() -> Result<String, String> {
         .output()
         .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
     
-    if output.status.success() {
+    let exit_code = output.status.code().unwrap_or(-1);
+    eprintln!("VC++ 설치 exit code: {}", exit_code);
+    
+    // winget exit codes: 0 = 성공, -1978335189 = 이미 설치됨
+    if exit_code == 0 || exit_code == -1978335189_i32 {
         Ok("Visual C++ Redistributable 설치 완료!".to_string())
     } else {
-        Err("Visual C++ Redistributable 설치 실패".to_string())
+        // 사용자가 UAC 거부했을 수 있음
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("canceled") || stderr.contains("취소") || exit_code == -2147024891 {
+            Err("사용자가 설치를 취소했습니다.".to_string())
+        } else {
+            Err(format!("Visual C++ Redistributable 설치 실패 (코드: {})", exit_code))
+        }
     }
 }
 
@@ -651,6 +663,31 @@ pub fn install_openclaw_with_recovery() -> Result<String, String> {
             if retry_output.status.success() && is_openclaw_installed() {
                 return Ok("OpenClaw 설치 완료! (자동 복구 후)".to_string());
             }
+            
+            // 재시도도 실패한 경우 새로운 에러 분석
+            let retry_stderr = String::from_utf8_lossy(&retry_output.stderr);
+            let retry_stdout = String::from_utf8_lossy(&retry_output.stdout);
+            let retry_full = format!("{}\n{}", retry_stdout, retry_stderr);
+            let retry_analysis = analyze_error(&retry_full);
+            
+            eprintln!("재시도 후 에러 분석: {:?}", retry_analysis);
+            
+            // 같은 에러가 반복되면 복구 실패로 판단
+            if retry_analysis.error_type == analysis.error_type {
+                return Err(format!(
+                    "OpenClaw 설치 실패 (자동 복구 시도 후에도 동일 문제 발생)\n\n원인: {}\n\n해결 방법: {}\n\n추가 조치: 백신 프로그램을 일시 중지하거나 관리자 권한으로 실행해보세요.",
+                    retry_analysis.description,
+                    retry_analysis.solution
+                ));
+            }
+            
+            // 다른 에러로 변경된 경우 새 에러 정보 반환
+            return Err(format!(
+                "OpenClaw 설치 실패\n\n원인: {}\n\n해결 방법: {}\n\n상세 에러:\n{}",
+                retry_analysis.description,
+                retry_analysis.solution,
+                retry_stderr.chars().take(500).collect::<String>()
+            ));
         }
     }
     
