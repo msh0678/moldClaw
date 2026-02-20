@@ -425,15 +425,39 @@ fn get_dashboard_url() -> String {
 #[tauri::command]
 async fn get_cron_jobs() -> Result<String, String> {
     // OpenClaw CLI를 통해 cron jobs 조회 (Gateway WebSocket RPC 사용)
+    
+    // config에서 authToken 읽기
+    let config = openclaw::read_existing_config();
+    let auth_token = config.get("gateway")
+        .and_then(|g| g.get("authToken"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
+    
+    // CLI 인자 구성
+    let mut args = vec!["cron", "list", "--all", "--json", "--timeout", "10000"];
+    let token_arg;
+    if !auth_token.is_empty() {
+        token_arg = format!("{}", auth_token);
+        args.push("--token");
+        args.push(&token_arg);
+    }
+    
+    eprintln!("Cron jobs 조회: openclaw {:?}", args);
+    
     let output = tokio::process::Command::new("openclaw")
-        .args(["cron", "list", "--all", "--json", "--timeout", "5000"])
+        .args(&args)
         .output()
         .await
         .map_err(|e| format!("openclaw 실행 실패: {}", e))?;
     
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    
+    eprintln!("Cron list stdout: {}", stdout);
+    eprintln!("Cron list stderr: {}", stderr);
+    eprintln!("Cron list status: {}", output.status);
+    
     if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        
         // JSON 파싱 시도
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&stdout) {
             // OpenClaw cron list 응답에서 jobs 배열 추출
@@ -469,8 +493,6 @@ async fn get_cron_jobs() -> Result<String, String> {
             }).to_string())
         }
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        
         // Gateway 연결 실패 등의 에러 처리
         if stderr.contains("ECONNREFUSED") || stderr.contains("connection") {
             Ok(serde_json::json!({
