@@ -36,7 +36,7 @@ export const BrowserControl: React.FC<BrowserControlProps> = ({ onNext, onBack }
       setTimeout(() => {
         open(CHROME_EXTENSION_URL).catch((err) => {
           console.error('웹스토어 열기 실패:', err);
-          setError('Chrome 웹스토어를 열 수 없습니다. 수동으로 접속해주세요.');
+          setError('Chrome 웹스토어를 열 수 없습니다. 수동으로 접속해 주세요.');
         });
       }, 1000);
       
@@ -116,7 +116,7 @@ export const BrowserControl: React.FC<BrowserControlProps> = ({ onNext, onBack }
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <h3 className="font-bold text-green-900 mb-2">✅ Browser Control 설치 완료</h3>
             <p className="text-sm text-green-800">
-              이제 Chrome 확장 프로그램을 설치해주세요.
+              이제 Chrome 확장 프로그램을 설치해 주세요.
             </p>
           </div>
 

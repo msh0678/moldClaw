@@ -235,7 +235,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
                 <p className="text-forge-text font-medium mb-1">Chrome 브라우저가 필요합니다</p>
                 <p className="text-forge-muted text-sm">
                   브라우저 릴레이는 <strong>Chrome 브라우저</strong>를 기본으로 사용합니다. 
-                  Chrome이 설치되어 있지 않다면 먼저 설치해주세요.
+                  Chrome이 설치되어 있지 않다면 먼저 설치해 주세요.
                 </p>
               </div>
             </div>

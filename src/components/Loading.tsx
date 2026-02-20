@@ -176,7 +176,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
               ⚠️ 백신의 실시간 감시가 설치를 차단할 수 있습니다.
             </p>
             <p className="text-gray-300 text-sm">
-              설치 전 백신의 <strong>실시간 감시를 일시 중지</strong>해주세요.<br />
+              설치 전 백신의 <strong>실시간 감시를 일시 중지</strong>해 주세요.<br />
               설치 완료 후 다시 활성화하시면 됩니다.
             </p>
           </div>
@@ -206,7 +206,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
           <h2 className="text-xl font-bold mb-2">설치 완료!</h2>
           <p className="text-forge-text text-sm mb-6">
             Node.js가 설치되었습니다.<br />
-            <strong className="text-white">moldClaw를 재시작</strong>해주세요.
+            <strong className="text-white">moldClaw를 재시작</strong>해 주세요.
           </p>
           
           <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg mb-4">
@@ -236,7 +236,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
           <h2 className="text-xl font-bold mb-2">설치 중...</h2>
           <p className="text-forge-text text-sm mb-6">
             필수 프로그램을 설치하고 있습니다.<br />
-            <strong className="text-white">관리자 권한 창이 뜨면 승인</strong>해주세요.
+            <strong className="text-white">관리자 권한 창이 나타나면 승인</strong>해 주세요.
           </p>
           
           <div className="flex justify-center gap-1 mb-4">
@@ -254,7 +254,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
           </div>
           
           <p className="text-sm text-forge-text mt-4">
-            moldClaw는 아직 불완전합니다. 여러분의 도움이 필요합니다.<br />
+            moldClaw는 아직 개발 중입니다. 피드백을 환영합니다.<br />
             <span className="text-xs text-gray-500">문의: <span className="text-blue-400">hexagon0678@gmail.com</span></span>
           </p>
         </div>
@@ -270,8 +270,8 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
           <div className="text-6xl mb-4">📦</div>
           <h2 className="text-xl font-bold mb-2">Node.js 필요</h2>
           <p className="text-forge-text text-sm mb-6">
-            moldClaw를 사용하려면 Node.js가 필요해요.<br />
-            설치 후 이 앱을 다시 실행해주세요.
+            moldClaw를 사용하려면 Node.js가 필요합니다.<br />
+            설치 후 앱을 다시 실행해 주세요.
           </p>
           
           <button
@@ -361,8 +361,8 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
       {step === 'installing-openclaw' && (
         <div className="glass rounded-xl p-4 max-w-xs text-center mb-4">
           <p className="text-sm text-gray-300">
-            OpenClaw를 설치하고 있어요.<br />
-            잠시만 기다려주세요...
+            OpenClaw를 설치하고 있습니다.<br />
+            잠시만 기다려 주세요.
           </p>
         </div>
       )}

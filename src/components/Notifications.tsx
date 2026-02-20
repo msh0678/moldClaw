@@ -71,7 +71,7 @@ export default function Notifications() {
           <div>
             <p className="text-forge-text font-medium mb-1">AI가 알림을 설정해줍니다!</p>
             <p className="text-forge-muted text-sm">
-              수동 설정하지 않아도, AI에게 "내일 아침 9시에 알려줘" 같이 명령하면 자동으로 알림을 설정해줍니다!
+              수동 설정 없이도 AI에게 "내일 아침 9시에 알려줘"와 같이 요청하면 자동으로 알림이 설정됩니다.
             </p>
           </div>
         </div>
@@ -95,7 +95,7 @@ export default function Notifications() {
           <div className="text-4xl mb-4">📭</div>
           <h3 className="text-lg font-medium text-forge-text mb-2">설정된 알림이 없습니다</h3>
           <p className="text-forge-muted text-sm">
-            AI에게 "매일 아침 9시에 날씨 알려줘" 같이 말해보세요!
+            AI에게 "매일 아침 9시에 날씨 알려줘"와 같이 요청해 보세요.
           </p>
         </div>
       ) : (
