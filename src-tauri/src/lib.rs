@@ -457,13 +457,32 @@ async fn get_cron_jobs() -> Result<String, String> {
         .unwrap_or(&vec![])
         .iter()
         .map(|job| {
+            // state에서 실행 정보 추출
+            let state = job.get("state");
+            let next_run_ms = state.and_then(|s| s.get("nextRunAtMs")).and_then(|v| v.as_i64());
+            let last_run_ms = state.and_then(|s| s.get("lastRunAtMs")).and_then(|v| v.as_i64());
+            
+            // 밀리초 타임스탬프를 읽기 쉬운 형식으로 변환
+            let next_run = next_run_ms.map(|ms| format_timestamp_ms(ms));
+            let last_run = last_run_ms.map(|ms| format_timestamp_ms(ms));
+            
+            // payload에서 메시지 추출 (이름이 없을 경우 대체용)
+            let payload_msg = job.get("payload")
+                .and_then(|p| p.get("message"))
+                .and_then(|m| m.as_str());
+            
+            let name = job.get("name")
+                .and_then(|v| v.as_str())
+                .or(payload_msg)
+                .unwrap_or("이름 없는 알림");
+            
             serde_json::json!({
-                "id": job.get("id").or(job.get("jobId")).and_then(|v| v.as_str()).unwrap_or("unknown"),
-                "name": job.get("name").and_then(|v| v.as_str()).unwrap_or("이름 없는 알림"),
+                "id": job.get("id").and_then(|v| v.as_str()).unwrap_or("unknown"),
+                "name": name,
                 "schedule": format_schedule(job.get("schedule")),
                 "enabled": job.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
-                "lastRun": job.get("lastRun").and_then(|v| v.as_str()),
-                "nextRun": job.get("nextRun").and_then(|v| v.as_str()),
+                "lastRun": last_run,
+                "nextRun": next_run,
             })
         })
         .collect();
@@ -474,6 +493,21 @@ async fn get_cron_jobs() -> Result<String, String> {
 }
 
 // schedule 객체를 읽기 쉬운 문자열로 변환
+// 밀리초 타임스탬프를 읽기 쉬운 형식으로 변환
+fn format_timestamp_ms(ms: i64) -> String {
+    use chrono::{DateTime, Local, TimeZone};
+    
+    let secs = ms / 1000;
+    let nsecs = ((ms % 1000) * 1_000_000) as u32;
+    
+    if let Some(dt) = DateTime::from_timestamp(secs, nsecs) {
+        let local: DateTime<Local> = dt.with_timezone(&Local);
+        local.format("%m/%d %H:%M").to_string()
+    } else {
+        "알 수 없음".to_string()
+    }
+}
+
 fn format_schedule(schedule: Option<&serde_json::Value>) -> String {
     match schedule {
         Some(s) => {
