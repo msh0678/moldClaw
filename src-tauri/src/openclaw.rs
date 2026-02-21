@@ -666,11 +666,14 @@ pub async fn add_channel_to_config(
                 &["channels", "telegram", "enabled"],
                 json!(true),
             );
-            set_nested_value(
-                &mut config,
-                &["channels", "telegram", "botToken"],
-                json!(bot_token),
-            );
+            // 토큰이 비어있으면 기존 값 유지
+            if !bot_token.is_empty() {
+                set_nested_value(
+                    &mut config,
+                    &["channels", "telegram", "botToken"],
+                    json!(bot_token),
+                );
+            }
             set_nested_value(
                 &mut config,
                 &["channels", "telegram", "dmPolicy"],
@@ -699,11 +702,14 @@ pub async fn add_channel_to_config(
                 &["channels", "discord", "enabled"],
                 json!(true),
             );
-            set_nested_value(
-                &mut config,
-                &["channels", "discord", "token"],
-                json!(bot_token),
-            );
+            // 토큰이 비어있으면 기존 값 유지
+            if !bot_token.is_empty() {
+                set_nested_value(
+                    &mut config,
+                    &["channels", "discord", "token"],
+                    json!(bot_token),
+                );
+            }
             set_nested_value(
                 &mut config,
                 &["channels", "discord", "groupPolicy"],
@@ -1092,7 +1098,10 @@ pub async fn configure_telegram(token: &str, dm_policy: &str) -> Result<(), Stri
     let mut config = read_existing_config();
 
     set_nested_value(&mut config, &["channels", "telegram", "enabled"], json!(true));
-    set_nested_value(&mut config, &["channels", "telegram", "botToken"], json!(token));
+    // 토큰이 비어있으면 기존 값 유지
+    if !token.is_empty() {
+        set_nested_value(&mut config, &["channels", "telegram", "botToken"], json!(token));
+    }
     set_nested_value(&mut config, &["channels", "telegram", "dmPolicy"], json!(dm_policy));
 
     // 기본 그룹 설정 (멘션 필요)
@@ -1125,7 +1134,10 @@ pub async fn configure_telegram_full(
     let mut config = read_existing_config();
 
     set_nested_value(&mut config, &["channels", "telegram", "enabled"], json!(true));
-    set_nested_value(&mut config, &["channels", "telegram", "botToken"], json!(token));
+    // 토큰이 비어있으면 기존 값 유지
+    if !token.is_empty() {
+        set_nested_value(&mut config, &["channels", "telegram", "botToken"], json!(token));
+    }
     set_nested_value(&mut config, &["channels", "telegram", "dmPolicy"], json!(dm_policy));
     
     // allowFrom
@@ -1158,7 +1170,10 @@ pub async fn configure_discord(token: &str, dm_policy: &str) -> Result<(), Strin
     let mut config = read_existing_config();
 
     set_nested_value(&mut config, &["channels", "discord", "enabled"], json!(true));
-    set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
+    // 토큰이 비어있으면 기존 값 유지
+    if !token.is_empty() {
+        set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
+    }
     set_nested_value(&mut config, &["channels", "discord", "dm", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "discord", "dm", "policy"], json!(dm_policy));
     
@@ -1187,7 +1202,10 @@ pub async fn configure_discord_full(
     let mut config = read_existing_config();
 
     set_nested_value(&mut config, &["channels", "discord", "enabled"], json!(true));
-    set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
+    // 토큰이 비어있으면 기존 값 유지
+    if !token.is_empty() {
+        set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
+    }
     set_nested_value(&mut config, &["channels", "discord", "dm", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "discord", "dm", "policy"], json!(dm_policy));
     
