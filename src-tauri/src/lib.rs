@@ -812,111 +812,6 @@ async fn open_workspace_folder() -> Result<(), String> {
 }
 
 /// 대화 기록 조회 (openclaw sessions list 사용)
-#[tauri::command]
-async fn get_conversations() -> Result<String, String> {
-    use std::process::Command;
-    
-    // openclaw sessions list 명령어 실행
-    #[cfg(windows)]
-    let output = {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        Command::new("cmd")
-            .args(["/C", "openclaw sessions list --json"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-    };
-    
-    #[cfg(not(windows))]
-    let output = Command::new("openclaw")
-        .args(["sessions", "list", "--json"])
-        .output();
-    
-    match output {
-        Ok(out) if out.status.success() => {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            
-            // JSON 파싱 시도
-            if let Ok(sessions) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                // sessions 배열을 conversations 형식으로 변환
-                let mut conversations: Vec<(String, serde_json::Value)> = sessions
-                    .as_array()
-                    .unwrap_or(&vec![])
-                    .iter()
-                    .map(|s| {
-                        let session_key = s.get("sessionKey")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("unknown");
-                        let channel = extract_channel_from_session_key(session_key);
-                        let last_message = s.get("lastMessage")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let timestamp_raw = s.get("updatedAt")
-                            .or_else(|| s.get("createdAt"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        
-                        (timestamp_raw.clone(), serde_json::json!({
-                            "id": session_key,
-                            "channel": channel,
-                            "lastMessage": truncate_message(&last_message, 100),
-                            "timestamp": format_timestamp(&timestamp_raw),
-                            "messageCount": s.get("messageCount").and_then(|v| v.as_u64()).unwrap_or(0)
-                        }))
-                    })
-                    .collect();
-                
-                // 최신순 정렬 (updatedAt 기준, 내림차순)
-                conversations.sort_by(|a, b| b.0.cmp(&a.0));
-                
-                // 최근 20개만 반환
-                let recent_conversations: Vec<serde_json::Value> = conversations
-                    .into_iter()
-                    .take(20)
-                    .map(|(_, v)| v)
-                    .collect();
-                
-                let total_count = sessions.as_array().map(|a| a.len()).unwrap_or(0);
-                
-                return Ok(serde_json::json!({
-                    "conversations": recent_conversations,
-                    "totalCount": total_count,
-                    "displayedCount": recent_conversations.len()
-                }).to_string());
-            }
-            
-            // JSON 파싱 실패시 빈 배열
-            Ok(serde_json::json!({ "conversations": [] }).to_string())
-        }
-        Ok(out) => {
-            // 명령어 실패 - stderr 확인
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            eprintln!("sessions list 실패: {}", stderr);
-            Ok(serde_json::json!({ "conversations": [] }).to_string())
-        }
-        Err(e) => {
-            eprintln!("sessions list 실행 오류: {}", e);
-            Ok(serde_json::json!({ "conversations": [] }).to_string())
-        }
-    }
-}
-
-/// 세션 키에서 채널 추출 (예: "channel:telegram:123" -> "telegram")
-fn extract_channel_from_session_key(key: &str) -> String {
-    let parts: Vec<&str> = key.split(':').collect();
-    if parts.len() >= 2 {
-        match parts[0] {
-            "channel" => parts[1].to_string(),
-            "agent" => "webchat".to_string(),
-            _ => parts[0].to_string(),
-        }
-    } else {
-        "unknown".to_string()
-    }
-}
-
 /// 메시지 자르기
 fn truncate_message(msg: &str, max_len: usize) -> String {
     if msg.len() > max_len {
@@ -1380,7 +1275,6 @@ pub fn run() {
             get_workspace_files,
             open_file,
             open_workspace_folder,
-            get_conversations,
             get_gateway_logs,
             clear_gateway_logs,
             get_channel_status,
