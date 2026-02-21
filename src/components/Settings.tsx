@@ -242,7 +242,7 @@ export default function Settings({ isOnboarding, initialConfig, onComplete, onCa
         initialConfig={isOnboarding ? onboardConfig.model : null}  // 재설정 시 null → 컴포넌트에서 직접 로드
         onComplete={isOnboarding ? handleOnboardModelComplete : handleEditComplete}
         onBack={handleBack}
-        onGoToDashboard={!isOnboarding ? onCancel : undefined}
+        // onGoToDashboard 제거 - 설정 중간에 이탈 방지
         isOnboarding={isOnboarding}
         editMode={!isOnboarding}
       />
@@ -283,11 +283,7 @@ export default function Settings({ isOnboarding, initialConfig, onComplete, onCa
           <button onClick={handleBack} className="text-forge-muted hover:text-forge-text">
             ← {isOnboarding ? '뒤로' : '취소'}
           </button>
-          {!isOnboarding && onCancel && (
-            <button onClick={onCancel} className="text-forge-muted hover:text-forge-text text-sm">
-              🏠 대시보드
-            </button>
-          )}
+          {/* 대시보드 버튼 제거 - 설정 중간에 이탈 방지 */}
         </div>
         
         <div className="px-6 mb-4">
