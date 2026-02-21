@@ -613,6 +613,19 @@ fn format_schedule(schedule: Option<&serde_json::Value>) -> String {
 /// Cron job 삭제
 #[tauri::command]
 async fn delete_cron_job(job_id: String) -> Result<(), String> {
+    #[cfg(windows)]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        tokio::process::Command::new("cmd")
+            .args(["/C", &format!("openclaw cron remove {} --timeout 5000", job_id)])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .await
+            .map_err(|e| format!("openclaw 실행 실패: {}", e))?
+    };
+    
+    #[cfg(not(windows))]
     let output = tokio::process::Command::new("openclaw")
         .args(["cron", "remove", &job_id, "--timeout", "5000"])
         .output()
@@ -633,6 +646,19 @@ async fn toggle_cron_job(job_id: String, enabled: bool) -> Result<(), String> {
     // OpenClaw cron update로 enabled 상태 변경
     let enabled_str = if enabled { "true" } else { "false" };
     
+    #[cfg(windows)]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        tokio::process::Command::new("cmd")
+            .args(["/C", &format!("openclaw cron update {} --enabled {} --timeout 5000", job_id, enabled_str)])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .await
+            .map_err(|e| format!("openclaw 실행 실패: {}", e))?
+    };
+    
+    #[cfg(not(windows))]
     let output = tokio::process::Command::new("openclaw")
         .args(["cron", "update", &job_id, "--enabled", enabled_str, "--timeout", "5000"])
         .output()
