@@ -324,14 +324,13 @@ async fn uninstall_moldclaw() -> Result<(), String> {
                 // /I를 /X로 변경해야 삭제됨
                 let uninstall_cmd = uninstall_cmd.replace("/I", "/X");
                 
-                // /quiet 옵션 추가하여 조용히 삭제
+                // 다이얼로그 표시 (quiet 없음) - 사용자 확인 동안 앱 종료됨
                 let _ = std::process::Command::new("cmd")
-                    .args(["/C", &format!("{} /quiet /norestart", uninstall_cmd)])
+                    .args(["/C", &uninstall_cmd])
                     .spawn();
                 
-                eprintln!("MSI Uninstaller 실행됨");
-                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-                std::process::exit(0);
+                eprintln!("MSI Uninstaller 실행됨 - 앱 즉시 종료");
+                std::process::exit(0);  // 즉시 종료 → 파일 잠금 해제
             }
         }
         
@@ -346,10 +345,9 @@ async fn uninstall_moldclaw() -> Result<(), String> {
             if std::path::Path::new(&path).exists() {
                 eprintln!("Uninstaller 발견: {}", path);
                 let _ = std::process::Command::new(&path)
-                    .arg("/S")  // Silent mode
-                    .spawn();
-                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-                std::process::exit(0);
+                    .spawn();  // Silent 없음 - 다이얼로그 표시
+                eprintln!("Uninstaller 실행됨 - 앱 즉시 종료");
+                std::process::exit(0);  // 즉시 종료 → 파일 잠금 해제
             }
         }
         
