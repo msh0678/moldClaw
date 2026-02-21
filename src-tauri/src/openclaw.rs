@@ -627,11 +627,39 @@ pub async fn add_channel_to_config(
             );
         }
         "discord" => {
+            // Discord는 "token" 사용 (botToken 아님!)
             set_nested_value(
                 &mut config,
-                &["channels", "discord", "botToken"],
+                &["channels", "discord", "enabled"],
+                json!(true),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "discord", "token"],
                 json!(bot_token),
             );
+            set_nested_value(
+                &mut config,
+                &["channels", "discord", "groupPolicy"],
+                json!(group_policy),
+            );
+            // DM 설정
+            set_nested_value(
+                &mut config,
+                &["channels", "discord", "dm", "enabled"],
+                json!(true),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "discord", "dm", "policy"],
+                json!(dm_policy),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "discord", "dm", "allowFrom"],
+                json!(allow_from),
+            );
+            // Guild 설정
             set_nested_value(
                 &mut config,
                 &["channels", "discord", "guilds", "*", "requireMention"],
