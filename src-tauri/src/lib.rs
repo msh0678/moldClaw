@@ -221,6 +221,18 @@ async fn start_whatsapp_pairing() -> Result<String, String> {
     openclaw::start_whatsapp_pairing().await
 }
 
+/// WhatsApp QR 로그인 (터미널 창에서 QR 표시)
+#[tauri::command]
+async fn login_whatsapp() -> Result<String, String> {
+    openclaw::login_whatsapp().await
+}
+
+/// WhatsApp 인증 상태 확인
+#[tauri::command]
+fn check_whatsapp_linked() -> bool {
+    openclaw::check_whatsapp_linked()
+}
+
 #[tauri::command]
 async fn stop_gateway() -> Result<(), String> {
     openclaw::stop_gateway().await
@@ -1069,6 +1081,8 @@ pub fn run() {
             install_and_start_service,
             get_gateway_status,
             start_whatsapp_pairing,
+            login_whatsapp,
+            check_whatsapp_linked,
             stop_gateway,
             restart_gateway,
             // Onboard

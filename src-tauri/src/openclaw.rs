@@ -1317,7 +1317,7 @@ pub async fn get_status() -> Result<String, String> {
     }
 }
 
-/// WhatsApp 페어링 시작 (onboard 명령 사용)
+/// WhatsApp 페어링 시작 (onboard 명령 사용) - 레거시
 pub async fn start_whatsapp_pairing() -> Result<String, String> {
     // OpenClaw onboard를 non-interactive로 실행하고 WhatsApp 설정
     run_openclaw_command(&[
@@ -1330,6 +1330,68 @@ pub async fn start_whatsapp_pairing() -> Result<String, String> {
         "--skip-health",
     ])
     .map(|_| "WhatsApp 연결 준비 완료. QR 코드를 확인하세요.".to_string())
+}
+
+/// WhatsApp QR 로그인 (openclaw channels login)
+/// 터미널 창에서 QR 코드를 표시하고, 인증 완료까지 대기
+pub async fn login_whatsapp() -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+        
+        // 새 콘솔 창에서 실행 (QR 코드 표시용)
+        let mut child = Command::new("cmd")
+            .args(["/C", "openclaw channels login --channel whatsapp"])
+            .creation_flags(CREATE_NEW_CONSOLE)
+            .spawn()
+            .map_err(|e| format!("WhatsApp 로그인 실행 실패: {}", e))?;
+        
+        // 프로세스 완료 대기 (사용자가 QR 스캔할 때까지)
+        let status = child.wait()
+            .map_err(|e| format!("프로세스 대기 실패: {}", e))?;
+        
+        if status.success() {
+            Ok("WhatsApp 인증 완료!".to_string())
+        } else {
+            Err("WhatsApp 인증이 취소되었거나 실패했습니다.".to_string())
+        }
+    }
+    
+    #[cfg(not(windows))]
+    {
+        // Linux/Mac: 새 터미널 창에서 실행
+        // xterm, gnome-terminal, konsole 등 시도
+        let terminals = [
+            ("gnome-terminal", vec!["--", "openclaw", "channels", "login", "--channel", "whatsapp"]),
+            ("konsole", vec!["-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
+            ("xterm", vec!["-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
+        ];
+        
+        for (term, args) in terminals.iter() {
+            if let Ok(mut child) = Command::new(term).args(args).spawn() {
+                let status = child.wait()
+                    .map_err(|e| format!("프로세스 대기 실패: {}", e))?;
+                
+                if status.success() {
+                    return Ok("WhatsApp 인증 완료!".to_string());
+                } else {
+                    return Err("WhatsApp 인증이 취소되었거나 실패했습니다.".to_string());
+                }
+            }
+        }
+        
+        Err("터미널을 찾을 수 없습니다. 수동으로 'openclaw channels login'을 실행하세요.".to_string())
+    }
+}
+
+/// WhatsApp 인증 상태 확인 (creds.json 존재 여부)
+pub fn check_whatsapp_linked() -> bool {
+    let creds_path = dirs::home_dir()
+        .map(|h| h.join(".openclaw").join("credentials").join("whatsapp").join("default").join("creds.json"))
+        .unwrap_or_default();
+    
+    creds_path.exists() && creds_path.is_file()
 }
 
 /// 전체 onboard 실행 (non-interactive)

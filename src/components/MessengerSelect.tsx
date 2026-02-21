@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import type { MessengerConfig } from '../App'
 
 type Messenger = 'telegram' | 'discord' | 'whatsapp'
@@ -41,13 +42,15 @@ const messengers = [
     cons: ['휴대폰 필요', '웹 세션 유지 필요'],
     recommended: false,
     needsToken: false,
+    needsQr: true,  // QR 인증 필요
     tokenLabel: '',
     tokenPlaceholder: '',
     guideUrl: '',
     guideSteps: [
-      '1. 설치 시작 후 터미널에 QR 코드가 표시됩니다',
-      '2. WhatsApp 앱 → 설정 → 연결된 기기',
-      '3. 기기 연결 → QR 코드 스캔',
+      '1. 아래 "QR 코드 열기" 버튼을 클릭합니다',
+      '2. 터미널 창에 QR 코드가 표시됩니다',
+      '3. WhatsApp 앱 → 설정 → 연결된 기기',
+      '4. "기기 연결" → 터미널의 QR 코드 스캔',
     ],
   },
   {
@@ -78,6 +81,11 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
   const [selectedMessenger, setSelectedMessenger] = useState<Messenger | null>(initialConfig.type)
   const [token, setToken] = useState(initialConfig.token)
   const [showGuide, setShowGuide] = useState(false)
+  
+  // WhatsApp QR 인증 상태
+  const [whatsappLinked, setWhatsappLinked] = useState(false)
+  const [qrLoading, setQrLoading] = useState(false)
+  const [qrError, setQrError] = useState<string | null>(null)
 
   // 초기값 변경 시 상태 업데이트
   useEffect(() => {
@@ -85,11 +93,46 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
     setToken(initialConfig.token)
   }, [initialConfig])
 
+  // WhatsApp 선택 시 인증 상태 확인
+  useEffect(() => {
+    if (selectedMessenger === 'whatsapp') {
+      checkWhatsappStatus()
+    }
+  }, [selectedMessenger])
+
+  const checkWhatsappStatus = async () => {
+    try {
+      const linked = await invoke<boolean>('check_whatsapp_linked')
+      setWhatsappLinked(linked)
+    } catch {
+      setWhatsappLinked(false)
+    }
+  }
+
+  const handleQrLogin = async () => {
+    setQrLoading(true)
+    setQrError(null)
+    
+    try {
+      await invoke<string>('login_whatsapp')
+      // 인증 성공
+      setWhatsappLinked(true)
+      setQrError(null)
+    } catch (err) {
+      setQrError(String(err))
+      // 그래도 상태 확인 (창을 닫았을 수 있음)
+      await checkWhatsappStatus()
+    } finally {
+      setQrLoading(false)
+    }
+  }
+
   const selectedInfo = messengers.find(m => m.id === selectedMessenger)
 
   const handleComplete = () => {
     if (!selectedMessenger) return
     if (selectedInfo?.needsToken && !token) return
+    if (selectedMessenger === 'whatsapp' && !whatsappLinked) return
 
     onComplete({
       ...initialConfig,
@@ -98,7 +141,21 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
     })
   }
 
-  const isValid = selectedMessenger && (!selectedInfo?.needsToken || token.length > 10)
+  // 유효성 검사
+  const isValid = (() => {
+    if (!selectedMessenger) return false
+    if (selectedInfo?.needsToken && token.length <= 10) return false
+    if (selectedMessenger === 'whatsapp' && !whatsappLinked) return false
+    return true
+  })()
+
+  // 버튼 텍스트 결정
+  const getButtonText = () => {
+    if (!selectedMessenger) return '메신저를 선택하세요'
+    if (selectedInfo?.needsToken && !token) return '토큰을 입력하세요'
+    if (selectedMessenger === 'whatsapp' && !whatsappLinked) return 'QR 인증이 필요합니다'
+    return editMode ? '✓ 확인' : '다음 →'
+  }
 
   return (
     <div className="min-h-screen flex flex-col p-6 overflow-auto">
@@ -157,6 +214,11 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
                 onClick={() => {
                   setSelectedMessenger(m.id)
                   setShowGuide(true)
+                  // WhatsApp이 아닌 경우 QR 상태 초기화
+                  if (m.id !== 'whatsapp') {
+                    setWhatsappLinked(false)
+                    setQrError(null)
+                  }
                 }}
                 className={`w-full p-4 glass rounded-xl text-left transition-all hover:bg-white/10 relative ${
                   m.recommended ? 'ring-2 ring-indigo-500/50' : ''
@@ -235,7 +297,7 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
                 ))}
               </ol>
 
-              {/* 토큰 입력 (필요한 경우) */}
+              {/* 토큰 입력 (Telegram, Discord) */}
               {selectedInfo.needsToken && (
                 <div>
                   <label className="block text-sm font-medium mb-2 text-gray-300">
@@ -254,12 +316,72 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
                 </div>
               )}
 
-              {/* WhatsApp 안내 */}
-              {!selectedInfo.needsToken && (
-                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                  <p className="text-sm text-green-400">
-                    ✓ {selectedInfo.name}은 토큰이 필요 없습니다.<br />
-                    설치 완료 후 QR 코드를 스캔하세요.
+              {/* WhatsApp QR 인증 */}
+              {selectedMessenger === 'whatsapp' && (
+                <div className="space-y-4">
+                  {/* 인증 상태 표시 */}
+                  {whatsappLinked ? (
+                    <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">✅</span>
+                        <div>
+                          <p className="font-medium text-green-400">WhatsApp 인증 완료!</p>
+                          <p className="text-sm text-green-400/70">다음 단계로 진행할 수 있습니다</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">📱</span>
+                        <div>
+                          <p className="font-medium text-yellow-400">QR 인증이 필요합니다</p>
+                          <p className="text-sm text-yellow-400/70">아래 버튼을 클릭하여 QR 코드를 열어주세요</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* QR 열기 버튼 */}
+                  <button
+                    onClick={handleQrLogin}
+                    disabled={qrLoading}
+                    className={`w-full py-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-3 ${
+                      whatsappLinked 
+                        ? 'bg-gray-600 hover:bg-gray-500 text-gray-300' 
+                        : 'bg-green-600 hover:bg-green-500 text-white'
+                    } ${qrLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {qrLoading ? (
+                      <>
+                        <div className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
+                        QR 코드 창 열림 - 스캔 대기 중...
+                      </>
+                    ) : whatsappLinked ? (
+                      <>
+                        🔄 다시 인증하기 (선택)
+                      </>
+                    ) : (
+                      <>
+                        📷 QR 코드 열기
+                      </>
+                    )}
+                  </button>
+
+                  {/* 에러 메시지 */}
+                  {qrError && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                      <p className="text-sm text-red-400">{qrError}</p>
+                      <p className="text-xs text-red-400/70 mt-1">
+                        터미널 창이 닫혔다면 다시 시도해주세요
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 안내 */}
+                  <p className="text-xs text-gray-500 text-center">
+                    💡 QR 버튼 클릭 시 터미널 창이 열립니다.<br />
+                    휴대폰 WhatsApp에서 QR을 스캔하면 자동으로 완료됩니다.
                   </p>
                 </div>
               )}
@@ -272,11 +394,7 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
             disabled={!isValid}
             className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
           >
-            {selectedMessenger 
-              ? (selectedInfo?.needsToken && !token 
-                  ? '토큰을 입력하세요' 
-                  : editMode ? '✓ 확인' : '다음 →')
-              : '메신저를 선택하세요'}
+            {getButtonText()}
           </button>
 
           {/* 안내 */}
