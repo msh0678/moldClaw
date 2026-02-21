@@ -152,13 +152,20 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
       setCurrentStep(7)
 
       // Step 7: Gateway 시작
-      setStatus('Gateway 시작 중...')
+      setStatus('Gateway 재시작 중...')
       try {
-        const serviceResult = await invoke<string>('install_and_start_service')
-        setStatus(serviceResult)
+        // 재설정 모드에서도 동작하도록 restart 사용 (stop → start)
+        const restartResult = await invoke<string>('restart_gateway')
+        setStatus(restartResult)
       } catch {
-        await invoke('start_gateway')
-        setStatus('Gateway가 시작되었습니다')
+        // restart 실패 시 start 시도 (최초 실행 케이스)
+        try {
+          await invoke('start_gateway')
+          setStatus('Gateway가 시작되었습니다')
+        } catch (startErr) {
+          console.error('Gateway 시작 실패:', startErr)
+          setStatus('Gateway 시작 실패 - 수동으로 시작해주세요')
+        }
       }
 
       // 완료 대기
