@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ModelSetup from './ModelSetup'
 import MessengerSelect from './MessengerSelect'
 import Integrations from './Integrations'
@@ -63,10 +63,22 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
   const [config, setConfig] = useState<FullConfig>(propConfig || defaultConfig)
   
   // 원본 config (변경 비교용) - 재설정 시에만 사용
-  const [originalConfig] = useState<FullConfig>(propConfig || defaultConfig)
+  const [originalConfig, setOriginalConfig] = useState<FullConfig>(propConfig || defaultConfig)
   
   // Summary에서 수정 시 true, 메뉴에서 직접 접근도 재설정이면 true
   const [editMode, setEditMode] = useState(false)
+
+  // propConfig가 변경되면 (실제 config 로드 완료 시) 상태 업데이트
+  useEffect(() => {
+    if (propConfig) {
+      // 실제 값이 있는 경우에만 업데이트 (model이나 messenger.type이 있으면)
+      const hasRealConfig = propConfig.model !== null || propConfig.messenger.type !== null
+      if (hasRealConfig) {
+        setConfig(propConfig)
+        setOriginalConfig(propConfig)
+      }
+    }
+  }, [propConfig])
 
   // 재설정 모드인지 (첫 실행이 아닐 때)
   const isReconfigureMode = !isOnboarding
@@ -504,7 +516,26 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
   }
 
   // Connect (최종 설정 적용)
-  if (step === 'connect' && config.messenger.type) {
+  if (step === 'connect') {
+    // 메신저가 설정되지 않았으면 에러 표시
+    if (!config.messenger.type) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6">
+          <div className="text-center max-w-md">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h2 className="text-xl font-bold text-forge-text mb-2">메신저가 설정되지 않았습니다</h2>
+            <p className="text-forge-muted mb-6">연결하려면 먼저 메신저를 설정해주세요.</p>
+            <button
+              onClick={handleBack}
+              className="px-6 py-3 btn-primary rounded-xl"
+            >
+              ← 돌아가기
+            </button>
+          </div>
+        </div>
+      )
+    }
+    
     return (
       <Connect
         config={config}

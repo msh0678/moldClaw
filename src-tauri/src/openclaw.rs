@@ -1459,6 +1459,127 @@ pub async fn validate_config() -> Result<bool, String> {
 }
 
 /// 현재 설정 요약 가져오기
+/// 현재 config를 프론트엔드 FullConfig 형식으로 반환
+pub fn get_full_config() -> Value {
+    let config = read_existing_config();
+    
+    // Model 정보 추출
+    let model = if let Some(model_str) = config.get("agents")
+        .and_then(|a| a.get("defaults"))
+        .and_then(|d| d.get("model"))
+    {
+        // model이 객체인 경우 (primary 필드)
+        let model_id = if let Some(primary) = model_str.get("primary").and_then(|p| p.as_str()) {
+            primary.to_string()
+        } else if let Some(s) = model_str.as_str() {
+            s.to_string()
+        } else {
+            String::new()
+        };
+        
+        if !model_id.is_empty() {
+            // provider 추출 (model_id에서 / 앞 부분)
+            let parts: Vec<&str> = model_id.split('/').collect();
+            let provider = parts.first().unwrap_or(&"").to_string();
+            let model_name = parts.get(1).unwrap_or(&model_id.as_str()).to_string();
+            
+            // API 키 확인 (auth.profiles에서)
+            let has_api_key = config.get("auth")
+                .and_then(|a| a.get("profiles"))
+                .map(|p| !p.as_object().map(|o| o.is_empty()).unwrap_or(true))
+                .unwrap_or(false);
+            
+            Some(json!({
+                "provider": provider,
+                "model": model_name,
+                "apiKey": if has_api_key { "***" } else { "" }
+            }))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    
+    // Messenger 정보 추출
+    let messenger = {
+        let channels = config.get("channels");
+        
+        let (msg_type, token, dm_policy, allow_from, group_policy, require_mention) = 
+            if let Some(tg) = channels.and_then(|c| c.get("telegram")) {
+                (
+                    "telegram",
+                    tg.get("botToken").and_then(|t| t.as_str()).unwrap_or(""),
+                    tg.get("dmPolicy").and_then(|d| d.as_str()).unwrap_or("pairing"),
+                    tg.get("allowFrom").and_then(|a| a.as_array()).map(|arr| 
+                        arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>()
+                    ).unwrap_or_default(),
+                    tg.get("groupPolicy").and_then(|g| g.as_str()).unwrap_or("allowlist"),
+                    tg.get("groups").and_then(|g| g.get("*")).and_then(|s| s.get("requireMention")).and_then(|r| r.as_bool()).unwrap_or(true),
+                )
+            } else if let Some(dc) = channels.and_then(|c| c.get("discord")) {
+                (
+                    "discord",
+                    dc.get("token").and_then(|t| t.as_str()).unwrap_or(""),
+                    dc.get("dm").and_then(|d| d.get("policy")).and_then(|p| p.as_str()).unwrap_or("pairing"),
+                    dc.get("dm").and_then(|d| d.get("allowFrom")).and_then(|a| a.as_array()).map(|arr| 
+                        arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>()
+                    ).unwrap_or_default(),
+                    dc.get("groupPolicy").and_then(|g| g.as_str()).unwrap_or("allowlist"),
+                    true, // Discord는 guilds 설정으로 관리
+                )
+            } else if let Some(wa) = channels.and_then(|c| c.get("whatsapp")) {
+                (
+                    "whatsapp",
+                    "", // WhatsApp은 토큰 없음
+                    wa.get("dmPolicy").and_then(|d| d.as_str()).unwrap_or("pairing"),
+                    wa.get("allowFrom").and_then(|a| a.as_array()).map(|arr| 
+                        arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>()
+                    ).unwrap_or_default(),
+                    wa.get("groupPolicy").and_then(|g| g.as_str()).unwrap_or("allowlist"),
+                    wa.get("groups").and_then(|g| g.get("*")).and_then(|s| s.get("requireMention")).and_then(|r| r.as_bool()).unwrap_or(true),
+                )
+            } else {
+                ("", "", "pairing", vec![], "allowlist", true)
+            };
+        
+        json!({
+            "type": if msg_type.is_empty() { Value::Null } else { json!(msg_type) },
+            "token": if token.is_empty() { "" } else { "***" },  // 토큰은 마스킹
+            "dmPolicy": dm_policy,
+            "allowFrom": allow_from,
+            "groupPolicy": group_policy,
+            "groupAllowFrom": [],
+            "requireMention": require_mention
+        })
+    };
+    
+    // Gateway 정보
+    let gateway = {
+        let gw = config.get("gateway");
+        json!({
+            "port": gw.and_then(|g| g.get("port")).and_then(|p| p.as_u64()).unwrap_or(18789),
+            "bind": gw.and_then(|g| g.get("bind")).and_then(|b| b.as_str()).unwrap_or("loopback"),
+            "authMode": gw.and_then(|g| g.get("auth")).and_then(|a| a.get("mode")).and_then(|m| m.as_str()).unwrap_or("token"),
+            "token": "***",  // 마스킹
+            "password": ""
+        })
+    };
+    
+    // Integrations (env에서)
+    let integrations = config.get("env")
+        .and_then(|e| e.get("vars"))
+        .cloned()
+        .unwrap_or(json!({}));
+    
+    json!({
+        "model": model,
+        "messenger": messenger,
+        "gateway": gateway,
+        "integrations": integrations
+    })
+}
+
 pub async fn get_config_summary() -> Result<String, String> {
     let config = read_existing_config();
     

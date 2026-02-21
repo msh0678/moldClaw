@@ -446,6 +446,11 @@ async fn validate_config() -> Result<bool, String> {
 }
 
 #[tauri::command]
+fn get_full_config() -> serde_json::Value {
+    openclaw::get_full_config()
+}
+
+#[tauri::command]
 async fn get_config_summary() -> Result<String, String> {
     openclaw::get_config_summary().await
 }
@@ -1088,6 +1093,7 @@ pub fn run() {
             // Onboard
             run_full_onboard,
             validate_config,
+            get_full_config,
             get_config_summary,
             generate_token,
             is_onboarding_completed,

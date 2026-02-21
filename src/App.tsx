@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import Loading from './components/Loading'
 import ExpiredScreen from './components/ExpiredScreen'
@@ -73,11 +73,51 @@ const initialConfig: FullConfig = {
 function App() {
   const [appState, setAppState] = useState<AppState>('loading')
   const [currentPage, setCurrentPage] = useState<Page>('dashboard')
-  const [config] = useState<FullConfig>(initialConfig)
+  const [config, setConfig] = useState<FullConfig>(initialConfig)
   const [expiredAcknowledged, setExpiredAcknowledged] = useState(false)
   const [uninstallState, setUninstallState] = useState<UninstallState>('idle')
   const [uninstallError, setUninstallError] = useState<string | null>(null)
   const { appStatus, loading: statusLoading } = useAppStatus()
+
+  // 실제 config 로드
+  const loadConfig = useCallback(async () => {
+    try {
+      const result = await invoke<FullConfig>('get_full_config')
+      if (result) {
+        // 기본값과 병합 (누락된 필드 대비)
+        setConfig(prev => ({
+          ...prev,
+          model: result.model || prev.model,
+          messenger: {
+            ...prev.messenger,
+            type: result.messenger?.type || prev.messenger.type,
+            token: result.messenger?.token || prev.messenger.token,
+            dmPolicy: result.messenger?.dmPolicy || prev.messenger.dmPolicy,
+            allowFrom: result.messenger?.allowFrom || prev.messenger.allowFrom,
+            groupPolicy: result.messenger?.groupPolicy || prev.messenger.groupPolicy,
+            groupAllowFrom: result.messenger?.groupAllowFrom || prev.messenger.groupAllowFrom,
+            requireMention: result.messenger?.requireMention ?? prev.messenger.requireMention,
+          },
+          gateway: {
+            ...prev.gateway,
+            port: result.gateway?.port || prev.gateway.port,
+            bind: result.gateway?.bind || prev.gateway.bind,
+            authMode: result.gateway?.authMode || prev.gateway.authMode,
+          },
+          integrations: result.integrations || prev.integrations,
+        }))
+      }
+    } catch (err) {
+      console.error('Config 로드 실패:', err)
+    }
+  }, [])
+
+  // 앱 상태 변경 시 config 새로고침
+  useEffect(() => {
+    if (appState === 'settings' || appState === 'main') {
+      loadConfig()
+    }
+  }, [appState, loadConfig])
 
   // 삭제 시작
   const handleStartUninstall = async () => {
