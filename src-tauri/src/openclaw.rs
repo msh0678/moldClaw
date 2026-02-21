@@ -481,7 +481,12 @@ pub async fn add_model_to_config(
             set_nested_value(
                 &mut config,
                 &["models", "providers", provider, "baseUrl"],
-                json!("https://generativelanguage.googleapis.com/v1"),
+                json!("https://generativelanguage.googleapis.com/v1beta"),
+            );
+            set_nested_value(
+                &mut config,
+                &["models", "providers", provider, "api"],
+                json!("google-generative-ai"),
             );
         }
         _ => {}
@@ -504,6 +509,8 @@ pub async fn add_model_to_config(
     );
     
     // auth.profiles 추가
+    // mode: "api_key" (사용자가 API 키를 직접 입력하는 경우)
+    // mode: "token" (OAuth 토큰인 경우 - Anthropic Console 등)
     let profile_id = format!("{}:default", provider);
     set_nested_value(
         &mut config,
@@ -513,7 +520,7 @@ pub async fn add_model_to_config(
     set_nested_value(
         &mut config,
         &["auth", "profiles", &profile_id, "mode"],
-        json!("token"),
+        json!("api_key"),  // API 키 입력 시 "api_key" 사용
     );
     
     write_config(&config)?;
@@ -555,6 +562,7 @@ fn create_model_info(model: &str) -> Value {
             "name": "GPT-4o",
             "reasoning": false,
             "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
             "contextWindow": 128000,
             "maxTokens": 16384
         }),
@@ -563,6 +571,7 @@ fn create_model_info(model: &str) -> Value {
             "name": "GPT-4o Mini",
             "reasoning": false,
             "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
             "contextWindow": 128000,
             "maxTokens": 16384
         }),
@@ -571,6 +580,7 @@ fn create_model_info(model: &str) -> Value {
             "name": model,
             "reasoning": false,
             "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
             "contextWindow": 128000,
             "maxTokens": 8192
         })
@@ -600,6 +610,12 @@ pub async fn add_channel_to_config(
     // 채널별 설정
     match channel {
         "telegram" => {
+            // Telegram은 botToken 사용 (OpenClaw 공식 형식)
+            set_nested_value(
+                &mut config,
+                &["channels", "telegram", "enabled"],
+                json!(true),
+            );
             set_nested_value(
                 &mut config,
                 &["channels", "telegram", "botToken"],
@@ -792,7 +808,12 @@ pub async fn configure_model(provider: &str, model: &str, api_key: &str) -> Resu
             set_nested_value(
                 &mut config,
                 &["models", "providers", provider, "baseUrl"],
-                json!("https://generativelanguage.googleapis.com/v1"),
+                json!("https://generativelanguage.googleapis.com/v1beta"),
+            );
+            set_nested_value(
+                &mut config,
+                &["models", "providers", provider, "api"],
+                json!("google-generative-ai"),
             );
         }
         _ => {}
@@ -983,6 +1004,7 @@ Be the assistant you'd actually want to talk to. Concise when needed, thorough w
 pub async fn configure_telegram(token: &str, dm_policy: &str) -> Result<(), String> {
     let mut config = read_existing_config();
 
+    set_nested_value(&mut config, &["channels", "telegram", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "telegram", "botToken"], json!(token));
     set_nested_value(&mut config, &["channels", "telegram", "dmPolicy"], json!(dm_policy));
 
@@ -1008,6 +1030,7 @@ pub async fn configure_telegram_full(
 ) -> Result<(), String> {
     let mut config = read_existing_config();
 
+    set_nested_value(&mut config, &["channels", "telegram", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "telegram", "botToken"], json!(token));
     set_nested_value(&mut config, &["channels", "telegram", "dmPolicy"], json!(dm_policy));
     
@@ -1040,7 +1063,9 @@ pub async fn configure_telegram_full(
 pub async fn configure_discord(token: &str, dm_policy: &str) -> Result<(), String> {
     let mut config = read_existing_config();
 
+    set_nested_value(&mut config, &["channels", "discord", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
+    set_nested_value(&mut config, &["channels", "discord", "dm", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "discord", "dm", "policy"], json!(dm_policy));
     
     // allowFrom 설정 (open일 때는 ["*"])
@@ -1067,7 +1092,9 @@ pub async fn configure_discord_full(
 ) -> Result<(), String> {
     let mut config = read_existing_config();
 
+    set_nested_value(&mut config, &["channels", "discord", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
+    set_nested_value(&mut config, &["channels", "discord", "dm", "enabled"], json!(true));
     set_nested_value(&mut config, &["channels", "discord", "dm", "policy"], json!(dm_policy));
     
     // dm.allowFrom 설정
@@ -1085,9 +1112,11 @@ pub async fn configure_discord_full(
 }
 
 /// WhatsApp 설정 (페어링 모드)
+/// WhatsApp은 QR 코드 페어링 방식 (토큰 없음)
 pub async fn configure_whatsapp(dm_policy: &str) -> Result<(), String> {
     let mut config = read_existing_config();
 
+    // WhatsApp 타입에는 enabled 없음 (계정별로 enabled 있음)
     set_nested_value(&mut config, &["channels", "whatsapp", "dmPolicy"], json!(dm_policy));
 
     // 기본 그룹 설정 (멘션 필요)
