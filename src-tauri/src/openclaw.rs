@@ -497,11 +497,14 @@ pub async fn add_model_to_config(
     set_nested_value(&mut config, &["wizard", "lastRunCommand"], json!("configure"));
     
     // 모델 프로바이더 설정
-    set_nested_value(
-        &mut config,
-        &["models", "providers", provider, "apiKey"],
-        json!(api_key),
-    );
+    // API 키가 비어있으면 기존 값 유지 (재설정 시 키 증발 방지)
+    if !api_key.is_empty() {
+        set_nested_value(
+            &mut config,
+            &["models", "providers", provider, "apiKey"],
+            json!(api_key),
+        );
+    }
     
     // 프로바이더별 baseUrl 설정
     match provider {
