@@ -1361,11 +1361,16 @@ pub async fn login_whatsapp() -> Result<String, String> {
     #[cfg(not(windows))]
     {
         // Linux/Mac: 새 터미널 창에서 실행
-        // xterm, gnome-terminal, konsole 등 시도
+        // 각 터미널의 "명령 완료까지 대기" 옵션 사용
         let terminals = [
-            ("gnome-terminal", vec!["--", "openclaw", "channels", "login", "--channel", "whatsapp"]),
-            ("konsole", vec!["-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
-            ("xterm", vec!["-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
+            // gnome-terminal: --wait 옵션으로 명령 완료까지 대기
+            ("gnome-terminal", vec!["--wait", "--", "openclaw", "channels", "login", "--channel", "whatsapp"]),
+            // konsole: --hold로 창 유지, -e로 명령 실행
+            ("konsole", vec!["--hold", "-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
+            // xfce4-terminal: --hold로 창 유지
+            ("xfce4-terminal", vec!["--hold", "-e", "openclaw channels login --channel whatsapp"]),
+            // xterm: -hold로 창 유지
+            ("xterm", vec!["-hold", "-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
         ];
         
         for (term, args) in terminals.iter() {
@@ -1376,12 +1381,12 @@ pub async fn login_whatsapp() -> Result<String, String> {
                 if status.success() {
                     return Ok("WhatsApp 인증 완료!".to_string());
                 } else {
-                    return Err("WhatsApp 인증이 취소되었거나 실패했습니다.".to_string());
+                    return Err("WhatsApp 인증이 취소되었거나 실패했습니다. 터미널 창이 닫혔다면 다시 시도해주세요.".to_string());
                 }
             }
         }
         
-        Err("터미널을 찾을 수 없습니다. 수동으로 'openclaw channels login'을 실행하세요.".to_string())
+        Err("터미널을 찾을 수 없습니다. 수동으로 'openclaw channels login --channel whatsapp'을 실행하세요.".to_string())
     }
 }
 
