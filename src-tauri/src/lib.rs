@@ -450,6 +450,50 @@ fn get_full_config() -> serde_json::Value {
     openclaw::get_full_config()
 }
 
+// ===== 부분 읽기/업데이트 (재설정용) =====
+
+#[tauri::command]
+fn get_model_config() -> serde_json::Value {
+    openclaw::get_model_config()
+}
+
+#[tauri::command]
+fn get_messenger_config() -> serde_json::Value {
+    openclaw::get_messenger_config()
+}
+
+#[tauri::command]
+fn get_integrations_config() -> serde_json::Value {
+    openclaw::get_integrations_config()
+}
+
+#[tauri::command]
+async fn update_model_config(provider: String, model: String, api_key: String) -> Result<(), String> {
+    openclaw::update_model_config(&provider, &model, &api_key).await
+}
+
+#[tauri::command]
+async fn update_messenger_config(
+    channel: String,
+    token: String,
+    dm_policy: String,
+    allow_from: Vec<String>,
+    group_policy: String,
+    require_mention: bool,
+) -> Result<(), String> {
+    openclaw::update_messenger_config(&channel, &token, &dm_policy, &allow_from, &group_policy, require_mention).await
+}
+
+#[tauri::command]
+async fn update_integrations_config(integrations: serde_json::Value) -> Result<(), String> {
+    openclaw::update_integrations_config(integrations).await
+}
+
+#[tauri::command]
+fn has_config() -> bool {
+    openclaw::has_config()
+}
+
 #[tauri::command]
 async fn get_config_summary() -> Result<String, String> {
     openclaw::get_config_summary().await
@@ -1094,6 +1138,13 @@ pub fn run() {
             run_full_onboard,
             validate_config,
             get_full_config,
+            get_model_config,
+            get_messenger_config,
+            get_integrations_config,
+            update_model_config,
+            update_messenger_config,
+            update_integrations_config,
+            has_config,
             get_config_summary,
             generate_token,
             is_onboarding_completed,

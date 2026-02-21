@@ -1580,6 +1580,236 @@ pub fn get_full_config() -> Value {
     })
 }
 
+// ===== 부분 읽기 함수들 (재설정용) =====
+
+/// 현재 모델 설정만 읽기
+pub fn get_model_config() -> Value {
+    let config = read_existing_config();
+    
+    if let Some(model_val) = config.get("agents")
+        .and_then(|a| a.get("defaults"))
+        .and_then(|d| d.get("model"))
+    {
+        // model이 객체인 경우 (primary 필드)
+        let model_id = if let Some(primary) = model_val.get("primary").and_then(|p| p.as_str()) {
+            primary.to_string()
+        } else if let Some(s) = model_val.as_str() {
+            s.to_string()
+        } else {
+            return json!(null);
+        };
+        
+        if model_id.is_empty() {
+            return json!(null);
+        }
+        
+        // provider/model 파싱
+        let parts: Vec<&str> = model_id.split('/').collect();
+        let provider = parts.first().unwrap_or(&"").to_string();
+        let model_name = if parts.len() > 1 {
+            parts[1..].join("/")
+        } else {
+            model_id.clone()
+        };
+        
+        // API 키 존재 여부
+        let has_api_key = config.get("auth")
+            .and_then(|a| a.get("profiles"))
+            .map(|p| !p.as_object().map(|o| o.is_empty()).unwrap_or(true))
+            .unwrap_or(false);
+        
+        json!({
+            "provider": provider,
+            "model": model_name,
+            "hasApiKey": has_api_key
+        })
+    } else {
+        json!(null)
+    }
+}
+
+/// 현재 메신저 설정만 읽기
+pub fn get_messenger_config() -> Value {
+    let config = read_existing_config();
+    let channels = config.get("channels");
+    
+    // Telegram 확인
+    if let Some(tg) = channels.and_then(|c| c.get("telegram")) {
+        if tg.get("enabled").and_then(|e| e.as_bool()).unwrap_or(true) {
+            return json!({
+                "type": "telegram",
+                "hasToken": tg.get("botToken").and_then(|t| t.as_str()).map(|s| !s.is_empty()).unwrap_or(false),
+                "dmPolicy": tg.get("dmPolicy").and_then(|d| d.as_str()).unwrap_or("pairing"),
+                "allowFrom": tg.get("allowFrom").and_then(|a| a.as_array()).map(|arr| 
+                    arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>()
+                ).unwrap_or_default(),
+                "groupPolicy": tg.get("groupPolicy").and_then(|g| g.as_str()).unwrap_or("allowlist"),
+                "requireMention": tg.get("groups").and_then(|g| g.get("*")).and_then(|s| s.get("requireMention")).and_then(|r| r.as_bool()).unwrap_or(true)
+            });
+        }
+    }
+    
+    // Discord 확인
+    if let Some(dc) = channels.and_then(|c| c.get("discord")) {
+        if dc.get("enabled").and_then(|e| e.as_bool()).unwrap_or(true) {
+            return json!({
+                "type": "discord",
+                "hasToken": dc.get("token").and_then(|t| t.as_str()).map(|s| !s.is_empty()).unwrap_or(false),
+                "dmPolicy": dc.get("dm").and_then(|d| d.get("policy")).and_then(|p| p.as_str()).unwrap_or("pairing"),
+                "allowFrom": dc.get("dm").and_then(|d| d.get("allowFrom")).and_then(|a| a.as_array()).map(|arr| 
+                    arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>()
+                ).unwrap_or_default(),
+                "groupPolicy": dc.get("groupPolicy").and_then(|g| g.as_str()).unwrap_or("allowlist"),
+                "requireMention": true
+            });
+        }
+    }
+    
+    // WhatsApp 확인
+    if let Some(wa) = channels.and_then(|c| c.get("whatsapp")) {
+        if wa.get("enabled").and_then(|e| e.as_bool()).unwrap_or(true) {
+            return json!({
+                "type": "whatsapp",
+                "hasToken": false,  // WhatsApp은 토큰 없음
+                "isLinked": check_whatsapp_linked(),
+                "dmPolicy": wa.get("dmPolicy").and_then(|d| d.as_str()).unwrap_or("pairing"),
+                "allowFrom": wa.get("allowFrom").and_then(|a| a.as_array()).map(|arr| 
+                    arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>()
+                ).unwrap_or_default(),
+                "groupPolicy": wa.get("groupPolicy").and_then(|g| g.as_str()).unwrap_or("allowlist"),
+                "requireMention": wa.get("groups").and_then(|g| g.get("*")).and_then(|s| s.get("requireMention")).and_then(|r| r.as_bool()).unwrap_or(true)
+            });
+        }
+    }
+    
+    json!(null)
+}
+
+/// 현재 부가기능(통합) 설정만 읽기
+pub fn get_integrations_config() -> Value {
+    let config = read_existing_config();
+    
+    config.get("env")
+        .and_then(|e| e.get("vars"))
+        .cloned()
+        .unwrap_or(json!({}))
+}
+
+// ===== 부분 업데이트 함수들 (재설정용) =====
+
+/// 모델 설정만 업데이트 (기존 config에 패치)
+pub async fn update_model_config(provider: &str, model: &str, api_key: &str) -> Result<(), String> {
+    // 기존 add_model_to_config 재사용
+    add_model_to_config(provider, model, api_key).await
+}
+
+/// 메신저 설정만 업데이트 (기존 config에 패치)
+pub async fn update_messenger_config(
+    channel: &str,
+    token: &str,
+    dm_policy: &str,
+    allow_from: &[String],
+    group_policy: &str,
+    require_mention: bool,
+) -> Result<(), String> {
+    let mut config = read_existing_config();
+    
+    // config가 없으면 에러
+    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        return Err("Config가 없습니다.".to_string());
+    }
+    
+    // 기존 채널 비활성화 (중복 방지)
+    for ch in ["telegram", "discord", "whatsapp"] {
+        if ch != channel {
+            if config.get("channels").and_then(|c| c.get(ch)).is_some() {
+                set_nested_value(&mut config, &["channels", ch, "enabled"], json!(false));
+            }
+        }
+    }
+    
+    // meta.lastTouchedAt 업데이트
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
+    
+    // 새 채널 설정
+    match channel {
+        "telegram" => {
+            set_nested_value(&mut config, &["channels", "telegram", "enabled"], json!(true));
+            if !token.is_empty() {
+                set_nested_value(&mut config, &["channels", "telegram", "botToken"], json!(token));
+            }
+            set_nested_value(&mut config, &["channels", "telegram", "dmPolicy"], json!(dm_policy));
+            if !allow_from.is_empty() {
+                set_nested_value(&mut config, &["channels", "telegram", "allowFrom"], json!(allow_from));
+            }
+            set_nested_value(&mut config, &["channels", "telegram", "groupPolicy"], json!(group_policy));
+            set_nested_value(&mut config, &["channels", "telegram", "groups", "*", "requireMention"], json!(require_mention));
+        }
+        "discord" => {
+            set_nested_value(&mut config, &["channels", "discord", "enabled"], json!(true));
+            if !token.is_empty() {
+                set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
+            }
+            set_nested_value(&mut config, &["channels", "discord", "dm", "enabled"], json!(true));
+            set_nested_value(&mut config, &["channels", "discord", "dm", "policy"], json!(dm_policy));
+            if !allow_from.is_empty() {
+                set_nested_value(&mut config, &["channels", "discord", "dm", "allowFrom"], json!(allow_from));
+            }
+            set_nested_value(&mut config, &["channels", "discord", "groupPolicy"], json!(group_policy));
+        }
+        "whatsapp" => {
+            set_nested_value(&mut config, &["channels", "whatsapp", "enabled"], json!(true));
+            set_nested_value(&mut config, &["channels", "whatsapp", "dmPolicy"], json!(dm_policy));
+            if !allow_from.is_empty() {
+                set_nested_value(&mut config, &["channels", "whatsapp", "allowFrom"], json!(allow_from));
+            }
+            set_nested_value(&mut config, &["channels", "whatsapp", "groupPolicy"], json!(group_policy));
+            set_nested_value(&mut config, &["channels", "whatsapp", "groups", "*", "requireMention"], json!(require_mention));
+        }
+        _ => return Err(format!("지원하지 않는 채널: {}", channel)),
+    }
+    
+    // 저장
+    write_config(&config)?;
+    Ok(())
+}
+
+/// 부가기능(통합) 설정만 업데이트 (기존 config에 패치)
+pub async fn update_integrations_config(integrations: Value) -> Result<(), String> {
+    let mut config = read_existing_config();
+    
+    // config가 없으면 에러
+    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        return Err("Config가 없습니다.".to_string());
+    }
+    
+    // meta.lastTouchedAt 업데이트
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
+    
+    // integrations를 env.vars에 머지
+    if let Some(vars) = integrations.as_object() {
+        for (key, value) in vars {
+            if let Some(v) = value.as_str() {
+                if !v.is_empty() {
+                    set_nested_value(&mut config, &["env", "vars", key], json!(v));
+                }
+            }
+        }
+    }
+    
+    // 저장
+    write_config(&config)?;
+    Ok(())
+}
+
+/// Config 존재 여부 확인
+pub fn has_config() -> bool {
+    let config = read_existing_config();
+    !config.as_object().map(|o| o.is_empty()).unwrap_or(true)
+}
+
 pub async fn get_config_summary() -> Result<String, String> {
     let config = read_existing_config();
     

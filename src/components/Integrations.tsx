@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import type { IntegrationConfig } from '../App'
 
 interface IntegrationsProps {
-  initialValues: IntegrationConfig
-  onUpdate: (integrations: IntegrationConfig) => void
+  initialValues: IntegrationConfig | null  // null이면 editMode에서 직접 로드
+  onUpdate?: (integrations: IntegrationConfig) => void  // 온보딩용
   onComplete: () => void
   onBack: () => void
   onSkip: () => void
-  editMode?: boolean  // Summary에서 수정 모드로 진입했을 때
+  editMode?: boolean
 }
 
 interface Integration {
@@ -58,145 +59,30 @@ const INTEGRATIONS: Integration[] = [
     id: 'minimax',
     name: 'MiniMax',
     category: 'AI 모델',
-    icon: '🔷',
+    icon: '🤖',
     envVar: 'MINIMAX_API_KEY',
-    description: 'MiniMax M2.1 모델',
-    guideUrl: 'https://www.minimax.ai/',
+    description: '중국 AI 모델 (abab 시리즈)',
+    guideUrl: 'https://api.minimax.chat/',
     guideSteps: [
       'MiniMax 계정 생성',
-      'API 키 발급',
+      'API Management → Create Key',
       '키 복사',
     ],
     placeholder: 'eyJ...',
   },
-  {
-    id: 'moonshot',
-    name: 'Moonshot (Kimi)',
-    category: 'AI 모델',
-    icon: '🌙',
-    envVar: 'MOONSHOT_API_KEY',
-    description: 'Moonshot AI의 Kimi 모델',
-    guideUrl: 'https://platform.moonshot.cn/',
-    guideSteps: [
-      'Moonshot 계정 생성',
-      'API 관리 → 키 생성',
-      '키 복사',
-    ],
-    placeholder: 'sk-...',
-  },
-  {
-    id: 'zai',
-    name: 'Z.AI (GLM)',
-    category: 'AI 모델',
-    icon: '🇨🇳',
-    envVar: 'ZAI_API_KEY',
-    description: 'Z.AI GLM-4.7 모델',
-    guideUrl: 'https://z.ai/',
-    guideSteps: [
-      'Z.AI 계정 생성',
-      'API 키 발급',
-      '키 복사',
-    ],
-    placeholder: '...',
-  },
-  {
-    id: 'kimi',
-    name: 'Kimi Coding',
-    category: 'AI 모델',
-    icon: '🌙',
-    envVar: 'KIMI_API_KEY',
-    description: 'Kimi Coding 전용 API',
-    guideUrl: 'https://platform.moonshot.cn/',
-    guideSteps: [
-      'Moonshot 계정에서 Coding API 키 발급',
-    ],
-    placeholder: 'sk-...',
-  },
-  {
-    id: 'opencode',
-    name: 'OpenCode Zen',
-    category: 'AI 모델',
-    icon: '💜',
-    envVar: 'OPENCODE_API_KEY',
-    description: '멀티 모델 게이트웨이',
-    guideUrl: 'https://opencode.ai/auth',
-    guideSteps: [
-      'OpenCode 계정 생성',
-      'API 키 발급',
-    ],
-    placeholder: '...',
-  },
-  {
-    id: 'synthetic',
-    name: 'Synthetic',
-    category: 'AI 모델',
-    icon: '🧪',
-    envVar: 'SYNTHETIC_API_KEY',
-    description: 'Anthropic 호환 프록시',
-    guideUrl: 'https://synthetic.new/',
-    guideSteps: [
-      'Synthetic 계정 생성',
-      'API 키 발급',
-    ],
-    placeholder: 'sk-...',
-  },
-  {
-    id: 'venice',
-    name: 'Venice',
-    category: 'AI 모델',
-    icon: '🎭',
-    envVar: 'VENICE_API_KEY',
-    description: 'Venice AI 모델',
-    guideUrl: 'https://venice.ai/',
-    guideSteps: [
-      'Venice 계정 생성',
-      'API 키 발급',
-    ],
-    placeholder: '...',
-  },
-  {
-    id: 'xiaomi',
-    name: 'Xiaomi',
-    category: 'AI 모델',
-    icon: '📱',
-    envVar: 'XIAOMI_API_KEY',
-    description: 'Xiaomi AI 모델',
-    guideUrl: 'https://www.mi.com/',
-    guideSteps: [
-      'Xiaomi 개발자 계정 생성',
-      'API 키 발급',
-    ],
-    placeholder: '...',
-  },
-  {
-    id: 'vercel',
-    name: 'Vercel AI Gateway',
-    category: 'AI 모델',
-    icon: '▲',
-    envVar: 'VERCEL_GATEWAY_API_KEY',
-    description: 'Vercel AI 게이트웨이',
-    guideUrl: 'https://vercel.com/docs/ai',
-    guideSteps: [
-      'Vercel 계정 생성',
-      'AI Gateway 설정',
-      'API 키 발급',
-    ],
-    placeholder: '...',
-  },
-  
   // 외부 도구
   {
     id: 'brave',
     name: 'Brave Search',
     category: '외부 도구',
-    icon: '🦁',
-    envVar: 'BRAVE_API_KEY',
-    description: '웹 검색 기능 활성화',
+    icon: '🔍',
+    envVar: 'BRAVE_SEARCH_API_KEY',
+    description: '웹 검색 기능 (구글 대안)',
     guideUrl: 'https://brave.com/search/api/',
     guideSteps: [
-      'Brave Search API 페이지 접속',
-      'Get Started → API 키 발급',
-      '무료 플랜: 월 2000회 검색',
+      'Brave Search API 가입',
+      'Dashboard → API Keys',
+      '키 복사 (무료 2,000회/월)',
     ],
     placeholder: 'BSA...',
   },
@@ -230,7 +116,6 @@ const INTEGRATIONS: Integration[] = [
     ],
     placeholder: 'sk_...',
   },
-
   // 추가 메신저
   {
     id: 'slack',
@@ -312,12 +197,36 @@ const CATEGORIES = ['AI 모델', '외부 도구', '메신저']
 export default function Integrations({ initialValues, onUpdate, onComplete, onBack, onSkip, editMode = false }: IntegrationsProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('AI 모델')
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [values, setValues] = useState<IntegrationConfig>(initialValues)
+  const [values, setValues] = useState<IntegrationConfig>(initialValues || {})
+  const [loading, setLoading] = useState(false)
 
-  // 초기값이 변경되면 상태 업데이트
+  // editMode일 때 현재 설정 로드
   useEffect(() => {
-    setValues(initialValues)
+    if (editMode && !initialValues) {
+      loadCurrentConfig()
+    }
+  }, [editMode, initialValues])
+
+  // initialValues가 있으면 상태 업데이트
+  useEffect(() => {
+    if (initialValues) {
+      setValues(initialValues)
+    }
   }, [initialValues])
+
+  const loadCurrentConfig = async () => {
+    setLoading(true)
+    try {
+      const config = await invoke<IntegrationConfig>('get_integrations_config')
+      if (config) {
+        setValues(config)
+      }
+    } catch (err) {
+      console.error('부가기능 설정 로드 실패:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredIntegrations = INTEGRATIONS.filter(i => i.category === selectedCategory)
 
@@ -326,13 +235,40 @@ export default function Integrations({ initialValues, onUpdate, onComplete, onBa
     setValues(newValues)
   }
 
-  const handleContinue = () => {
-    // 현재까지의 모든 값을 부모에게 전달
-    onUpdate(values)
-    onComplete()
+  const handleContinue = async () => {
+    // editMode일 때는 직접 저장
+    if (editMode) {
+      setLoading(true)
+      try {
+        await invoke('update_integrations_config', { integrations: values })
+        onComplete()
+      } catch (err) {
+        console.error('부가기능 설정 저장 실패:', err)
+        alert(`저장 실패: ${err}`)
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      // 온보딩 모드 - 상위 컴포넌트에서 처리
+      if (onUpdate) {
+        onUpdate(values)
+      }
+      onComplete()
+    }
   }
 
   const configuredCount = Object.values(values).filter(v => v && v.length > 0).length
+
+  if (loading && editMode && Object.keys(values).length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-forge-copper/30 border-t-forge-copper rounded-full mx-auto mb-4" />
+          <p className="text-forge-muted">설정 로드 중...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex flex-col p-6">
@@ -361,7 +297,7 @@ export default function Integrations({ initialValues, onUpdate, onComplete, onBa
             <div className="text-4xl mb-3">🔗</div>
             <h2 className="text-2xl font-bold mb-2">외부 서비스 연동</h2>
             <p className="text-gray-400 text-sm">
-              추가 기능을 위한 API 키를 설정하세요 (선택)
+              {editMode ? '외부 서비스 설정을 변경합니다' : '추가 기능을 위한 API 키를 설정하세요 (선택)'}
             </p>
             {configuredCount > 0 && (
               <p className="text-green-400 text-sm mt-2">
@@ -476,15 +412,16 @@ export default function Integrations({ initialValues, onUpdate, onComplete, onBa
           {/* 계속/확인 버튼 */}
           <button
             onClick={handleContinue}
-            className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl font-semibold hover:opacity-90 transition-opacity"
+            disabled={loading}
+            className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            {editMode 
+            {loading ? '저장 중...' : editMode 
               ? (configuredCount > 0 ? `✓ ${configuredCount}개 설정 확인` : '✓ 확인')
               : (configuredCount > 0 ? `${configuredCount}개 설정 완료 →` : '건너뛰고 계속 →')}
           </button>
 
           <p className="text-center text-xs text-gray-500 mt-4">
-            설정은 최종 확인 후 저장됩니다
+            {editMode ? '변경사항이 즉시 저장됩니다' : '설정은 최종 확인 후 저장됩니다'}
           </p>
         </div>
       </div>

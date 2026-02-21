@@ -5,10 +5,30 @@ import type { MessengerConfig } from '../App'
 type Messenger = 'telegram' | 'discord' | 'whatsapp'
 
 interface MessengerSelectProps {
-  initialConfig: MessengerConfig
+  initialConfig: MessengerConfig | null  // null이면 editMode에서 직접 로드
   onComplete: (config: MessengerConfig) => void
   onBack: () => void
-  editMode?: boolean  // Summary에서 수정 모드로 진입했을 때
+  editMode?: boolean
+}
+
+interface LoadedMessengerConfig {
+  type: string
+  hasToken: boolean
+  isLinked?: boolean
+  dmPolicy: string
+  allowFrom: string[]
+  groupPolicy: string
+  requireMention: boolean
+}
+
+const defaultMessengerConfig: MessengerConfig = {
+  type: null,
+  token: '',
+  dmPolicy: 'pairing',
+  allowFrom: [],
+  groupPolicy: 'allowlist',
+  groupAllowFrom: [],
+  requireMention: true,
 }
 
 const messengers = [
@@ -22,6 +42,7 @@ const messengers = [
     cons: ['Telegram 계정 필요'],
     recommended: true,
     needsToken: true,
+    needsQr: false,
     tokenLabel: 'Bot Token',
     tokenPlaceholder: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
     guideUrl: 'https://t.me/BotFather',
@@ -42,7 +63,7 @@ const messengers = [
     cons: ['휴대폰 필요', '웹 세션 유지 필요'],
     recommended: false,
     needsToken: false,
-    needsQr: true,  // QR 인증 필요
+    needsQr: true,
     tokenLabel: '',
     tokenPlaceholder: '',
     guideUrl: '',
@@ -63,6 +84,7 @@ const messengers = [
     cons: ['Developer Portal 설정 복잡', 'Intent 활성화 필수'],
     recommended: false,
     needsToken: true,
+    needsQr: false,
     tokenLabel: 'Bot Token',
     tokenPlaceholder: 'MTIzNDU2Nzg5MDEyMzQ1Njc4.Gg...',
     guideUrl: 'https://discord.com/developers/applications',
@@ -78,19 +100,34 @@ const messengers = [
 ]
 
 export default function MessengerSelect({ initialConfig, onComplete, onBack, editMode = false }: MessengerSelectProps) {
-  const [selectedMessenger, setSelectedMessenger] = useState<Messenger | null>(initialConfig.type)
-  const [token, setToken] = useState(initialConfig.token)
+  const [selectedMessenger, setSelectedMessenger] = useState<Messenger | null>(initialConfig?.type || null)
+  const [token, setToken] = useState(initialConfig?.token || '')
+  const [dmPolicy, setDmPolicy] = useState(initialConfig?.dmPolicy || 'pairing')
   const [showGuide, setShowGuide] = useState(false)
+  const [loading, setLoading] = useState(false)
   
   // WhatsApp QR 인증 상태
   const [whatsappLinked, setWhatsappLinked] = useState(false)
   const [qrLoading, setQrLoading] = useState(false)
   const [qrError, setQrError] = useState<string | null>(null)
+  
+  // 기존 토큰 존재 여부 (editMode)
+  const [hasExistingToken, setHasExistingToken] = useState(false)
 
-  // 초기값 변경 시 상태 업데이트
+  // editMode일 때 현재 설정 로드
   useEffect(() => {
-    setSelectedMessenger(initialConfig.type)
-    setToken(initialConfig.token)
+    if (editMode && !initialConfig) {
+      loadCurrentConfig()
+    }
+  }, [editMode, initialConfig])
+
+  // initialConfig가 있으면 상태 업데이트
+  useEffect(() => {
+    if (initialConfig) {
+      setSelectedMessenger(initialConfig.type)
+      setToken(initialConfig.token)
+      setDmPolicy(initialConfig.dmPolicy)
+    }
   }, [initialConfig])
 
   // WhatsApp 선택 시 인증 상태 확인
@@ -99,6 +136,27 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
       checkWhatsappStatus()
     }
   }, [selectedMessenger])
+
+  const loadCurrentConfig = async () => {
+    setLoading(true)
+    try {
+      const config = await invoke<LoadedMessengerConfig | null>('get_messenger_config')
+      if (config && config.type) {
+        setSelectedMessenger(config.type as Messenger)
+        setDmPolicy(config.dmPolicy)
+        setHasExistingToken(config.hasToken)
+        setShowGuide(true)
+        
+        if (config.type === 'whatsapp' && config.isLinked) {
+          setWhatsappLinked(true)
+        }
+      }
+    } catch (err) {
+      console.error('메신저 설정 로드 실패:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const checkWhatsappStatus = async () => {
     try {
@@ -115,12 +173,10 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
     
     try {
       await invoke<string>('login_whatsapp')
-      // 인증 성공
       setWhatsappLinked(true)
       setQrError(null)
     } catch (err) {
       setQrError(String(err))
-      // 그래도 상태 확인 (창을 닫았을 수 있음)
       await checkWhatsappStatus()
     } finally {
       setQrLoading(false)
@@ -129,32 +185,72 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
 
   const selectedInfo = messengers.find(m => m.id === selectedMessenger)
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!selectedMessenger) return
-    if (selectedInfo?.needsToken && !token) return
+    if (selectedInfo?.needsToken && !token && !hasExistingToken) return
     if (selectedMessenger === 'whatsapp' && !whatsappLinked) return
 
-    onComplete({
-      ...initialConfig,
-      type: selectedMessenger,
-      token: token,
-    })
+    // editMode일 때는 직접 저장
+    if (editMode) {
+      setLoading(true)
+      try {
+        await invoke('update_messenger_config', {
+          channel: selectedMessenger,
+          token: token,  // 빈 문자열이면 기존 토큰 유지
+          dmPolicy: dmPolicy,
+          allowFrom: [],
+          groupPolicy: 'allowlist',
+          requireMention: true,
+        })
+        onComplete({
+          ...defaultMessengerConfig,
+          type: selectedMessenger,
+          token: token,
+          dmPolicy: dmPolicy,
+        })
+      } catch (err) {
+        console.error('메신저 설정 저장 실패:', err)
+        alert(`저장 실패: ${err}`)
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      // 온보딩 모드
+      onComplete({
+        ...defaultMessengerConfig,
+        type: selectedMessenger,
+        token: token,
+        dmPolicy: dmPolicy,
+      })
+    }
   }
 
   // 유효성 검사
   const isValid = (() => {
     if (!selectedMessenger) return false
-    if (selectedInfo?.needsToken && token.length <= 10) return false
+    if (selectedInfo?.needsToken && !token && !hasExistingToken) return false
     if (selectedMessenger === 'whatsapp' && !whatsappLinked) return false
     return true
   })()
 
   // 버튼 텍스트 결정
   const getButtonText = () => {
+    if (loading) return '저장 중...'
     if (!selectedMessenger) return '메신저를 선택하세요'
-    if (selectedInfo?.needsToken && !token) return '토큰을 입력하세요'
+    if (selectedInfo?.needsToken && !token && !hasExistingToken) return '토큰을 입력하세요'
     if (selectedMessenger === 'whatsapp' && !whatsappLinked) return 'QR 인증이 필요합니다'
     return editMode ? '✓ 확인' : '다음 →'
+  }
+
+  if (loading && editMode && !selectedMessenger) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-forge-copper/30 border-t-forge-copper rounded-full mx-auto mb-4" />
+          <p className="text-forge-muted">설정 로드 중...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -173,7 +269,9 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
           <div className="text-center mb-6">
             <div className="text-4xl mb-3">💬</div>
             <h2 className="text-2xl font-bold mb-2">메신저 연결</h2>
-            <p className="text-gray-400 text-sm">AI와 대화할 메신저를 선택하고 연결하세요</p>
+            <p className="text-gray-400 text-sm">
+              {editMode ? '메신저 설정을 변경합니다' : 'AI와 대화할 메신저를 선택하고 연결하세요'}
+            </p>
           </div>
 
           {/* forgeClaw 릴레이 방식 (준비 중) */}
@@ -214,10 +312,14 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
                 onClick={() => {
                   setSelectedMessenger(m.id)
                   setShowGuide(true)
-                  // WhatsApp이 아닌 경우 QR 상태 초기화
                   if (m.id !== 'whatsapp') {
                     setWhatsappLinked(false)
                     setQrError(null)
+                  }
+                  // 다른 메신저로 변경 시 기존 토큰 무효화
+                  if (editMode && m.id !== selectedMessenger) {
+                    setHasExistingToken(false)
+                    setToken('')
                   }
                 }}
                 className={`w-full p-4 glass rounded-xl text-left transition-all hover:bg-white/10 relative ${
@@ -245,7 +347,6 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
                     </div>
                     <p className="text-sm text-gray-400 mb-2">{m.desc}</p>
                     
-                    {/* 장점 */}
                     <div className="flex flex-wrap gap-1 mb-1">
                       {m.pros.slice(0, 2).map((pro, i) => (
                         <span key={i} className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded">
@@ -254,7 +355,6 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
                       ))}
                     </div>
                     
-                    {/* 단점 */}
                     {m.cons.length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {m.cons.slice(0, 1).map((con, i) => (
@@ -288,7 +388,6 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
                 )}
               </div>
 
-              {/* 가이드 단계 */}
               <ol className="space-y-2 mb-4">
                 {selectedInfo.guideSteps.map((step, i) => (
                   <li key={i} className={`text-sm ${step.includes('⚠️') ? 'text-yellow-400' : 'text-gray-400'}`}>
@@ -302,12 +401,15 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
                 <div>
                   <label className="block text-sm font-medium mb-2 text-gray-300">
                     {selectedInfo.tokenLabel}
+                    {editMode && hasExistingToken && (
+                      <span className="ml-2 text-green-400 text-xs">✓ 기존 토큰 있음</span>
+                    )}
                   </label>
                   <input
                     type="text"
                     value={token}
                     onChange={(e) => setToken(e.target.value)}
-                    placeholder={selectedInfo.tokenPlaceholder}
+                    placeholder={editMode && hasExistingToken ? '(변경하려면 새 토큰 입력)' : selectedInfo.tokenPlaceholder}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm font-mono"
                   />
                   <p className="mt-2 text-xs text-gray-500">
@@ -319,7 +421,6 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
               {/* WhatsApp QR 인증 */}
               {selectedMessenger === 'whatsapp' && (
                 <div className="space-y-4">
-                  {/* 인증 상태 표시 */}
                   {whatsappLinked ? (
                     <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
                       <div className="flex items-center gap-3">
@@ -342,7 +443,6 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
                     </div>
                   )}
 
-                  {/* QR 열기 버튼 */}
                   <button
                     onClick={handleQrLogin}
                     disabled={qrLoading}
@@ -358,17 +458,12 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
                         QR 코드 창 열림 - 스캔 대기 중...
                       </>
                     ) : whatsappLinked ? (
-                      <>
-                        🔄 다시 인증하기 (선택)
-                      </>
+                      <>🔄 다시 인증하기 (선택)</>
                     ) : (
-                      <>
-                        📷 QR 코드 열기
-                      </>
+                      <>📷 QR 코드 열기</>
                     )}
                   </button>
 
-                  {/* 에러 메시지 */}
                   {qrError && (
                     <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
                       <p className="text-sm text-red-400">{qrError}</p>
@@ -378,7 +473,6 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
                     </div>
                   )}
 
-                  {/* 안내 */}
                   <p className="text-xs text-gray-500 text-center">
                     💡 QR 버튼 클릭 시 터미널 창이 열립니다.<br />
                     휴대폰 WhatsApp에서 QR을 스캔하면 자동으로 완료됩니다.
@@ -391,13 +485,12 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
           {/* 다음/확인 버튼 */}
           <button
             onClick={handleComplete}
-            disabled={!isValid}
+            disabled={!isValid || loading}
             className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
           >
             {getButtonText()}
           </button>
 
-          {/* 안내 */}
           <p className="text-center text-xs text-gray-500 mt-4">
             나중에 설정 파일에서 다른 메신저를 추가할 수 있습니다<br />
             <code className="text-indigo-400">~/.openclaw/openclaw.json</code>

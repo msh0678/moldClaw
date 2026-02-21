@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import type { ModelConfig } from '../App'
 
 interface ModelSetupProps {
@@ -6,8 +7,14 @@ interface ModelSetupProps {
   onComplete: (config: ModelConfig) => void
   onBack: () => void
   onGoToDashboard?: () => void
-  isOnboarding?: boolean  // 온보딩 모드일 때 첫 단계 강조
-  editMode?: boolean  // Summary에서 수정 모드로 진입했을 때
+  isOnboarding?: boolean
+  editMode?: boolean
+}
+
+interface LoadedModelConfig {
+  provider: string
+  model: string
+  hasApiKey: boolean
 }
 
 const providers = [
@@ -48,16 +55,21 @@ const providers = [
 ]
 
 export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDashboard, isOnboarding = false, editMode = false }: ModelSetupProps) {
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(
-    initialConfig?.provider || null
-  )
-  const [selectedModel, setSelectedModel] = useState<string | null>(
-    initialConfig?.model || null
-  )
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(initialConfig?.provider || null)
+  const [selectedModel, setSelectedModel] = useState<string | null>(initialConfig?.model || null)
   const [apiKey, setApiKey] = useState(initialConfig?.apiKey || '')
   const [showKey, setShowKey] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [hasExistingKey, setHasExistingKey] = useState(false)
 
-  // 초기값이 변경되면 상태 업데이트
+  // editMode일 때 현재 설정 로드
+  useEffect(() => {
+    if (editMode && !initialConfig) {
+      loadCurrentConfig()
+    }
+  }, [editMode, initialConfig])
+
+  // initialConfig가 있으면 상태 업데이트
   useEffect(() => {
     if (initialConfig) {
       setSelectedProvider(initialConfig.provider)
@@ -66,10 +78,58 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
     }
   }, [initialConfig])
 
+  const loadCurrentConfig = async () => {
+    setLoading(true)
+    try {
+      const config = await invoke<LoadedModelConfig | null>('get_model_config')
+      if (config) {
+        setSelectedProvider(config.provider)
+        setSelectedModel(config.model)
+        setHasExistingKey(config.hasApiKey)
+        // API 키는 보안상 로드하지 않음 - 변경 시에만 입력
+      }
+    } catch (err) {
+      console.error('모델 설정 로드 실패:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const provider = providers.find(p => p.id === selectedProvider)
 
-  const handleSubmit = () => {
-    if (selectedProvider && selectedModel && apiKey) {
+  const handleSubmit = async () => {
+    if (!selectedProvider || !selectedModel) return
+    
+    // editMode일 때는 직접 저장
+    if (editMode) {
+      // API 키가 비어있고 기존 키가 있으면 기존 키 유지 (빈 문자열 전달)
+      const keyToSave = apiKey || (hasExistingKey ? '' : '')
+      
+      if (!keyToSave && !hasExistingKey) {
+        alert('API 키를 입력해주세요.')
+        return
+      }
+
+      setLoading(true)
+      try {
+        await invoke('update_model_config', {
+          provider: selectedProvider,
+          model: selectedModel,
+          apiKey: keyToSave,
+        })
+        onComplete({ provider: selectedProvider, model: selectedModel, apiKey: keyToSave })
+      } catch (err) {
+        console.error('모델 설정 저장 실패:', err)
+        alert(`저장 실패: ${err}`)
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      // 온보딩 모드 - 상위 컴포넌트에서 처리
+      if (!apiKey) {
+        alert('API 키를 입력해주세요.')
+        return
+      }
       onComplete({
         provider: selectedProvider,
         model: selectedModel,
@@ -78,7 +138,19 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
     }
   }
 
-  const isValid = selectedProvider && selectedModel && apiKey.length > 10
+  // editMode에서는 기존 키가 있으면 API 키 입력 필수 아님
+  const isValid = selectedProvider && selectedModel && (apiKey.length > 10 || (editMode && hasExistingKey))
+
+  if (loading && editMode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-forge-copper/30 border-t-forge-copper rounded-full mx-auto mb-4" />
+          <p className="text-forge-muted">설정 로드 중...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex flex-col p-6">
@@ -107,7 +179,9 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
           <div className="text-center mb-6">
             <div className="text-4xl mb-3">🤖</div>
             <h2 className="text-2xl font-bold mb-2">AI 모델 설정</h2>
-            <p className="text-gray-400 text-sm">사용할 AI와 API 키를 입력하세요</p>
+            <p className="text-gray-400 text-sm">
+              {editMode ? '모델 설정을 변경합니다' : '사용할 AI와 API 키를 입력하세요'}
+            </p>
           </div>
 
           {/* 프로바이더 선택 */}
@@ -127,6 +201,8 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
                   onClick={() => {
                     setSelectedProvider(p.id)
                     setSelectedModel(null)
+                    setHasExistingKey(false)  // 프로바이더 변경 시 기존 키 무효화
+                    setApiKey('')
                   }}
                   className={`p-3 rounded-xl text-center transition-all ${
                     selectedProvider === p.id
@@ -168,7 +244,12 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
           {selectedModel && provider && (
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-gray-300">API 키</label>
+                <label className="text-sm font-medium text-gray-300">
+                  API 키
+                  {editMode && hasExistingKey && (
+                    <span className="ml-2 text-green-400 text-xs">✓ 기존 키 있음</span>
+                  )}
+                </label>
                 <a
                   href={provider.keyUrl}
                   target="_blank"
@@ -183,7 +264,7 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
                   type={showKey ? 'text' : 'password'}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={provider.keyPlaceholder}
+                  placeholder={editMode && hasExistingKey ? '(변경하려면 새 키 입력)' : provider.keyPlaceholder}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm font-mono pr-12"
                 />
                 <button
@@ -202,10 +283,10 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
           {/* 다음/확인 버튼 */}
           <button
             onClick={handleSubmit}
-            disabled={!isValid}
+            disabled={!isValid || loading}
             className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
           >
-            {editMode ? '✓ 확인' : '다음 →'}
+            {loading ? '저장 중...' : editMode ? '✓ 확인' : '다음 →'}
           </button>
         </div>
       </div>
