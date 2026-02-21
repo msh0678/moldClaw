@@ -53,6 +53,26 @@ pub fn get_openclaw_version_sync() -> Option<String> {
     run_openclaw_command(&["--version"]).ok()
 }
 
+/// 채널 플러그인 활성화 (Discord 제외 - 기본 활성화)
+/// Telegram, WhatsApp, Signal 등은 먼저 plugins enable 필요
+pub fn enable_channel_plugin(channel: &str) -> Result<(), String> {
+    // Discord는 기본 활성화되어 있어 skip
+    if channel == "discord" {
+        return Ok(());
+    }
+    
+    run_openclaw_command(&["plugins", "enable", channel])
+        .map(|_| ())
+        .map_err(|e| format!("플러그인 활성화 실패 ({}): {}", channel, e))
+}
+
+/// 채널 추가 (openclaw channels add --channel <name>)
+pub fn add_channel(channel: &str) -> Result<(), String> {
+    run_openclaw_command(&["channels", "add", "--channel", channel])
+        .map(|_| ())
+        .map_err(|e| format!("채널 추가 실패 ({}): {}", channel, e))
+}
+
 /// Windows CMD 실행 헬퍼 (CREATE_NO_WINDOW 플래그 포함)
 #[cfg(windows)]
 fn run_cmd_silent(args: &[&str]) -> std::io::Result<std::process::Output> {
@@ -1059,6 +1079,13 @@ Be the assistant you'd actually want to talk to. Concise when needed, thorough w
 
 /// Telegram 설정 (botToken + 정책)
 pub async fn configure_telegram(token: &str, dm_policy: &str) -> Result<(), String> {
+    // 1. 플러그인 활성화 (Discord 제외한 채널은 필수)
+    enable_channel_plugin("telegram")?;
+    
+    // 2. 채널 추가 (openclaw channels add --channel telegram)
+    add_channel("telegram")?;
+    
+    // 3. Config 설정
     let mut config = read_existing_config();
 
     set_nested_value(&mut config, &["channels", "telegram", "enabled"], json!(true));
@@ -1085,6 +1112,13 @@ pub async fn configure_telegram_full(
     group_allow_from: Vec<String>,
     require_mention: bool,
 ) -> Result<(), String> {
+    // 1. 플러그인 활성화
+    enable_channel_plugin("telegram")?;
+    
+    // 2. 채널 추가
+    add_channel("telegram")?;
+    
+    // 3. Config 설정
     let mut config = read_existing_config();
 
     set_nested_value(&mut config, &["channels", "telegram", "enabled"], json!(true));
@@ -1171,6 +1205,13 @@ pub async fn configure_discord_full(
 /// WhatsApp 설정 (페어링 모드)
 /// WhatsApp은 QR 코드 페어링 방식 (토큰 없음)
 pub async fn configure_whatsapp(dm_policy: &str) -> Result<(), String> {
+    // 1. 플러그인 활성화 (WhatsApp은 기본 비활성화)
+    enable_channel_plugin("whatsapp")?;
+    
+    // 2. 채널 추가 (openclaw channels add --channel whatsapp)
+    add_channel("whatsapp")?;
+    
+    // 3. Config 설정
     let mut config = read_existing_config();
 
     // WhatsApp 타입에는 enabled 없음 (계정별로 enabled 있음)
@@ -1195,6 +1236,13 @@ pub async fn configure_whatsapp_full(
     group_allow_from: Vec<String>,
     require_mention: bool,
 ) -> Result<(), String> {
+    // 1. 플러그인 활성화
+    enable_channel_plugin("whatsapp")?;
+    
+    // 2. 채널 추가
+    add_channel("whatsapp")?;
+    
+    // 3. Config 설정
     let mut config = read_existing_config();
 
     set_nested_value(&mut config, &["channels", "whatsapp", "dmPolicy"], json!(dm_policy));
@@ -1335,6 +1383,13 @@ pub async fn start_whatsapp_pairing() -> Result<String, String> {
 /// WhatsApp QR 로그인 (openclaw channels login)
 /// 터미널 창에서 QR 코드를 표시하고, 인증 완료까지 대기
 pub async fn login_whatsapp() -> Result<String, String> {
+    // 1. 플러그인 활성화 (WhatsApp은 기본 비활성화)
+    enable_channel_plugin("whatsapp")?;
+    
+    // 2. 채널 추가 (이미 있으면 무시)
+    let _ = add_channel("whatsapp");
+    
+    // 3. QR 로그인 실행
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -1717,6 +1772,12 @@ pub async fn update_messenger_config(
     group_policy: &str,
     require_mention: bool,
 ) -> Result<(), String> {
+    // 플러그인 활성화 (Discord 제외 - 기본 활성화)
+    enable_channel_plugin(channel)?;
+    
+    // 채널 추가 (이미 있으면 무시됨)
+    let _ = add_channel(channel); // 이미 있으면 에러 발생할 수 있어서 무시
+    
     let mut config = read_existing_config();
     
     // config가 없으면 에러
