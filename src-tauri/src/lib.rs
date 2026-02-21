@@ -811,28 +811,220 @@ async fn open_workspace_folder() -> Result<(), String> {
     open_file(workspace_path.to_string_lossy().to_string()).await
 }
 
-/// 대화 기록 조회
+/// 대화 기록 조회 (openclaw sessions list 사용)
 #[tauri::command]
 async fn get_conversations() -> Result<String, String> {
-    // TODO: 실제 대화 기록 조회 구현
-    Ok(serde_json::json!({
-        "conversations": []
-    }).to_string())
+    use std::process::Command;
+    
+    // openclaw sessions list 명령어 실행
+    #[cfg(windows)]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("cmd")
+            .args(["/C", "openclaw sessions list --json"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    
+    #[cfg(not(windows))]
+    let output = Command::new("openclaw")
+        .args(["sessions", "list", "--json"])
+        .output();
+    
+    match output {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            
+            // JSON 파싱 시도
+            if let Ok(sessions) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                // sessions 배열을 conversations 형식으로 변환
+                let conversations: Vec<serde_json::Value> = sessions
+                    .as_array()
+                    .unwrap_or(&vec![])
+                    .iter()
+                    .map(|s| {
+                        let session_key = s.get("sessionKey")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown");
+                        let channel = extract_channel_from_session_key(session_key);
+                        let last_message = s.get("lastMessage")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let timestamp = s.get("updatedAt")
+                            .or_else(|| s.get("createdAt"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        
+                        serde_json::json!({
+                            "id": session_key,
+                            "channel": channel,
+                            "lastMessage": truncate_message(&last_message, 100),
+                            "timestamp": format_timestamp(&timestamp),
+                            "messageCount": s.get("messageCount").and_then(|v| v.as_u64()).unwrap_or(0)
+                        })
+                    })
+                    .collect();
+                
+                return Ok(serde_json::json!({
+                    "conversations": conversations
+                }).to_string());
+            }
+            
+            // JSON 파싱 실패시 빈 배열
+            Ok(serde_json::json!({ "conversations": [] }).to_string())
+        }
+        Ok(out) => {
+            // 명령어 실패 - stderr 확인
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            eprintln!("sessions list 실패: {}", stderr);
+            Ok(serde_json::json!({ "conversations": [] }).to_string())
+        }
+        Err(e) => {
+            eprintln!("sessions list 실행 오류: {}", e);
+            Ok(serde_json::json!({ "conversations": [] }).to_string())
+        }
+    }
 }
 
-/// Gateway 로그 조회
+/// 세션 키에서 채널 추출 (예: "channel:telegram:123" -> "telegram")
+fn extract_channel_from_session_key(key: &str) -> String {
+    let parts: Vec<&str> = key.split(':').collect();
+    if parts.len() >= 2 {
+        match parts[0] {
+            "channel" => parts[1].to_string(),
+            "agent" => "webchat".to_string(),
+            _ => parts[0].to_string(),
+        }
+    } else {
+        "unknown".to_string()
+    }
+}
+
+/// 메시지 자르기
+fn truncate_message(msg: &str, max_len: usize) -> String {
+    if msg.len() > max_len {
+        format!("{}...", &msg[..max_len])
+    } else {
+        msg.to_string()
+    }
+}
+
+/// 타임스탬프 포맷 (ISO -> 읽기 쉬운 형식)
+fn format_timestamp(ts: &str) -> String {
+    // ISO 8601 형식 파싱 시도
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(ts) {
+        let local = dt.with_timezone(&chrono::Local);
+        local.format("%m/%d %H:%M").to_string()
+    } else {
+        ts.to_string()
+    }
+}
+
+/// Gateway 로그 조회 (cache-trace.jsonl 파싱)
 #[tauri::command]
 async fn get_gateway_logs() -> Result<String, String> {
-    // TODO: 실제 로그 조회 구현
-    Ok(serde_json::json!({
-        "logs": []
-    }).to_string())
+    use std::io::{BufRead, BufReader};
+    use std::fs::File;
+    
+    let log_path = dirs::home_dir()
+        .map(|h| h.join(".openclaw").join("logs").join("cache-trace.jsonl"))
+        .unwrap_or_default();
+    
+    if !log_path.exists() {
+        return Ok(serde_json::json!({ "logs": [] }).to_string());
+    }
+    
+    // 파일 읽기 (최근 100줄만)
+    let file = File::open(&log_path)
+        .map_err(|e| format!("로그 파일 열기 실패: {}", e))?;
+    
+    let reader = BufReader::new(file);
+    let lines: Vec<String> = reader.lines()
+        .filter_map(|l| l.ok())
+        .collect();
+    
+    // 최근 100줄만 처리 (역순으로)
+    let recent_lines: Vec<&String> = lines.iter().rev().take(100).collect();
+    
+    let mut logs: Vec<serde_json::Value> = Vec::new();
+    
+    for line in recent_lines.into_iter().rev() {
+        if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
+            // 로그 레벨 결정
+            let level = determine_log_level(&entry);
+            
+            // 타임스탬프
+            let timestamp = entry.get("ts")
+                .and_then(|v| v.as_str())
+                .map(|s| format_timestamp(s))
+                .unwrap_or_default();
+            
+            // 메시지 구성
+            let stage = entry.get("stage")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            
+            let message = if let Some(err) = entry.get("errorMessage").and_then(|v| v.as_str()) {
+                err.to_string()
+            } else if let Some(prompt) = entry.get("prompt").and_then(|v| v.as_str()) {
+                truncate_message(prompt, 200)
+            } else {
+                format!("[{}] {}", 
+                    entry.get("sessionKey").and_then(|v| v.as_str()).unwrap_or(""),
+                    stage
+                )
+            };
+            
+            // 소스
+            let source = entry.get("provider")
+                .and_then(|v| v.as_str())
+                .or_else(|| entry.get("modelId").and_then(|v| v.as_str()))
+                .map(|s| s.to_string());
+            
+            logs.push(serde_json::json!({
+                "timestamp": timestamp,
+                "level": level,
+                "message": message,
+                "source": source
+            }));
+        }
+    }
+    
+    Ok(serde_json::json!({ "logs": logs }).to_string())
+}
+
+/// 로그 엔트리에서 레벨 결정
+fn determine_log_level(entry: &serde_json::Value) -> &'static str {
+    // 에러 메시지가 있으면 error
+    if entry.get("errorMessage").is_some() {
+        return "error";
+    }
+    
+    // stage별 레벨 결정
+    let stage = entry.get("stage").and_then(|v| v.as_str()).unwrap_or("");
+    match stage {
+        s if s.contains("error") => "error",
+        s if s.contains("warn") => "warn",
+        "prompt:before" | "prompt:after" => "debug",
+        _ => "info",
+    }
 }
 
 /// Gateway 로그 삭제
 #[tauri::command]
 async fn clear_gateway_logs() -> Result<(), String> {
-    // TODO: 실제 로그 삭제 구현
+    let log_path = dirs::home_dir()
+        .map(|h| h.join(".openclaw").join("logs").join("cache-trace.jsonl"))
+        .unwrap_or_default();
+    
+    if log_path.exists() {
+        std::fs::remove_file(&log_path)
+            .map_err(|e| format!("로그 파일 삭제 실패: {}", e))?;
+    }
+    
     Ok(())
 }
 
