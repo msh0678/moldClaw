@@ -1232,16 +1232,17 @@ pub async fn configure_whatsapp(dm_policy: &str) -> Result<(), String> {
     // 2. 채널 추가 (openclaw channels add --channel whatsapp)
     add_channel("whatsapp")?;
     
-    // 3. Config 설정
+    // 3. Config 설정 (multi-account 구조 사용)
     let mut config = read_existing_config();
 
-    // WhatsApp 타입에는 enabled 없음 (계정별로 enabled 있음)
-    set_nested_value(&mut config, &["channels", "whatsapp", "dmPolicy"], json!(dm_policy));
+    // WhatsApp은 multi-account 구조: channels.whatsapp.accounts.default
+    set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "enabled"], json!(true));
+    set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "dmPolicy"], json!(dm_policy));
 
     // 기본 그룹 설정 (멘션 필요)
     set_nested_value(
         &mut config,
-        &["channels", "whatsapp", "groups", "*", "requireMention"],
+        &["channels", "whatsapp", "accounts", "default", "groups", "*", "requireMention"],
         json!(true),
     );
 
@@ -1263,28 +1264,30 @@ pub async fn configure_whatsapp_full(
     // 2. 채널 추가
     add_channel("whatsapp")?;
     
-    // 3. Config 설정
+    // 3. Config 설정 (multi-account 구조 사용)
     let mut config = read_existing_config();
 
-    set_nested_value(&mut config, &["channels", "whatsapp", "dmPolicy"], json!(dm_policy));
+    // WhatsApp은 multi-account 구조: channels.whatsapp.accounts.default
+    set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "enabled"], json!(true));
+    set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "dmPolicy"], json!(dm_policy));
     
     // allowFrom
     if !allow_from.is_empty() {
-        set_nested_value(&mut config, &["channels", "whatsapp", "allowFrom"], json!(allow_from));
+        set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "allowFrom"], json!(allow_from));
     }
     
-    // 그룹 정책
+    // 그룹 정책 (최상위 레벨)
     set_nested_value(&mut config, &["channels", "whatsapp", "groupPolicy"], json!(group_policy));
     
     // groupAllowFrom
     if !group_allow_from.is_empty() {
-        set_nested_value(&mut config, &["channels", "whatsapp", "groupAllowFrom"], json!(group_allow_from));
+        set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "groupAllowFrom"], json!(group_allow_from));
     }
     
     // 그룹 설정
     set_nested_value(
         &mut config,
-        &["channels", "whatsapp", "groups", "*", "requireMention"],
+        &["channels", "whatsapp", "accounts", "default", "groups", "*", "requireMention"],
         json!(require_mention),
     );
 
@@ -1807,11 +1810,18 @@ pub async fn update_messenger_config(
     }
     
     // 기존 채널 비활성화 (중복 방지)
-    for ch in ["telegram", "discord", "whatsapp"] {
+    // WhatsApp은 multi-account 구조라서 enabled 위치가 다름
+    for ch in ["telegram", "discord"] {
         if ch != channel {
             if config.get("channels").and_then(|c| c.get(ch)).is_some() {
                 set_nested_value(&mut config, &["channels", ch, "enabled"], json!(false));
             }
+        }
+    }
+    // WhatsApp 비활성화는 accounts.default.enabled 사용
+    if channel != "whatsapp" {
+        if config.get("channels").and_then(|c| c.get("whatsapp")).is_some() {
+            set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "enabled"], json!(false));
         }
     }
     
@@ -1846,14 +1856,16 @@ pub async fn update_messenger_config(
             set_nested_value(&mut config, &["channels", "discord", "groupPolicy"], json!(group_policy));
         }
         "whatsapp" => {
-            // WhatsAppConfig에는 enabled 필드가 없음 (multi-account 구조에서만 사용)
-            // 단일 계정 모드에서는 설정만 하면 자동 활성화
-            set_nested_value(&mut config, &["channels", "whatsapp", "dmPolicy"], json!(dm_policy));
+            // WhatsApp은 multi-account 구조 사용 (공식 스키마)
+            // channels.whatsapp.accounts.default.enabled 사용
+            set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "enabled"], json!(true));
+            set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "dmPolicy"], json!(dm_policy));
             if !allow_from.is_empty() {
-                set_nested_value(&mut config, &["channels", "whatsapp", "allowFrom"], json!(allow_from));
+                set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "allowFrom"], json!(allow_from));
             }
+            set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "groups", "*", "requireMention"], json!(require_mention));
+            // 최상위 레벨에도 기본값 설정 (호환성)
             set_nested_value(&mut config, &["channels", "whatsapp", "groupPolicy"], json!(group_policy));
-            set_nested_value(&mut config, &["channels", "whatsapp", "groups", "*", "requireMention"], json!(require_mention));
         }
         _ => return Err(format!("지원하지 않는 채널: {}", channel)),
     }
