@@ -23,6 +23,7 @@ export default function Files() {
   const [activeTab, setActiveTab] = useState<Tab>('workspace')
   const [files, setFiles] = useState<FileItem[]>([])
   const [conversations, setConversations] = useState<ConversationItem[]>([])
+  const [totalConversations, setTotalConversations] = useState(0)
   const [loading, setLoading] = useState(true)
   const [workspacePath, setWorkspacePath] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -58,10 +59,12 @@ export default function Files() {
       const result = await invoke<string>('get_conversations')
       const parsed = JSON.parse(result)
       setConversations(parsed.conversations || [])
+      setTotalConversations(parsed.totalCount || 0)
       setError(null)
     } catch (err) {
       console.error('대화 기록 로드 실패:', err)
       setConversations([])
+      setTotalConversations(0)
       // 에러는 조용히 처리
     } finally {
       setLoading(false)
@@ -198,6 +201,15 @@ export default function Files() {
       {/* 대화 기록 탭 */}
       {activeTab === 'history' && (
         <div>
+          {/* 안내 문구 */}
+          {!loading && totalConversations > 20 && (
+            <div className="card p-3 mb-4 bg-forge-copper/10 border-forge-copper/30">
+              <p className="text-sm text-forge-muted">
+                📋 전체 {totalConversations}개 중 <strong className="text-forge-text">최근 20개</strong>만 표시됩니다.
+              </p>
+            </div>
+          )}
+
           {loading ? (
             <div className="card p-8 text-center">
               <div className="animate-pulse text-forge-muted">대화 기록 로딩 중...</div>

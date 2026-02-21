@@ -839,7 +839,7 @@ async fn get_conversations() -> Result<String, String> {
             // JSON 파싱 시도
             if let Ok(sessions) = serde_json::from_str::<serde_json::Value>(&stdout) {
                 // sessions 배열을 conversations 형식으로 변환
-                let conversations: Vec<serde_json::Value> = sessions
+                let mut conversations: Vec<(String, serde_json::Value)> = sessions
                     .as_array()
                     .unwrap_or(&vec![])
                     .iter()
@@ -852,24 +852,38 @@ async fn get_conversations() -> Result<String, String> {
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                             .to_string();
-                        let timestamp = s.get("updatedAt")
+                        let timestamp_raw = s.get("updatedAt")
                             .or_else(|| s.get("createdAt"))
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                             .to_string();
                         
-                        serde_json::json!({
+                        (timestamp_raw.clone(), serde_json::json!({
                             "id": session_key,
                             "channel": channel,
                             "lastMessage": truncate_message(&last_message, 100),
-                            "timestamp": format_timestamp(&timestamp),
+                            "timestamp": format_timestamp(&timestamp_raw),
                             "messageCount": s.get("messageCount").and_then(|v| v.as_u64()).unwrap_or(0)
-                        })
+                        }))
                     })
                     .collect();
                 
+                // 최신순 정렬 (updatedAt 기준, 내림차순)
+                conversations.sort_by(|a, b| b.0.cmp(&a.0));
+                
+                // 최근 20개만 반환
+                let recent_conversations: Vec<serde_json::Value> = conversations
+                    .into_iter()
+                    .take(20)
+                    .map(|(_, v)| v)
+                    .collect();
+                
+                let total_count = sessions.as_array().map(|a| a.len()).unwrap_or(0);
+                
                 return Ok(serde_json::json!({
-                    "conversations": conversations
+                    "conversations": recent_conversations,
+                    "totalCount": total_count,
+                    "displayedCount": recent_conversations.len()
                 }).to_string());
             }
             
