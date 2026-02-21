@@ -7,6 +7,7 @@ interface MessengerSelectProps {
   initialConfig: MessengerConfig
   onComplete: (config: MessengerConfig) => void
   onBack: () => void
+  editMode?: boolean  // Summary에서 수정 모드로 진입했을 때
 }
 
 const messengers = [
@@ -73,7 +74,7 @@ const messengers = [
   },
 ]
 
-export default function MessengerSelect({ initialConfig, onComplete, onBack }: MessengerSelectProps) {
+export default function MessengerSelect({ initialConfig, onComplete, onBack, editMode = false }: MessengerSelectProps) {
   const [selectedMessenger, setSelectedMessenger] = useState<Messenger | null>(initialConfig.type)
   const [token, setToken] = useState(initialConfig.token)
   const [showGuide, setShowGuide] = useState(false)
@@ -101,12 +102,12 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack }: M
 
   return (
     <div className="min-h-screen flex flex-col p-6 overflow-auto">
-      {/* 뒤로가기 */}
+      {/* 뒤로가기/취소 */}
       <button 
         onClick={onBack}
         className="text-gray-400 hover:text-white mb-4 flex items-center gap-2"
       >
-        ← 뒤로
+        ← {editMode ? '취소' : '뒤로'}
       </button>
 
       <div className="flex-1 flex flex-col items-center">
@@ -265,7 +266,7 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack }: M
             </div>
           )}
 
-          {/* 다음 버튼 */}
+          {/* 다음/확인 버튼 */}
           <button
             onClick={handleComplete}
             disabled={!isValid}
@@ -274,7 +275,7 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack }: M
             {selectedMessenger 
               ? (selectedInfo?.needsToken && !token 
                   ? '토큰을 입력하세요' 
-                  : '다음 →')
+                  : editMode ? '✓ 확인' : '다음 →')
               : '메신저를 선택하세요'}
           </button>
 

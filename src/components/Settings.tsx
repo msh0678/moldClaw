@@ -15,7 +15,7 @@ interface SettingsProps {
   onCancel?: () => void  // 대시보드로 돌아가기 (onboard 모드에서는 undefined)
 }
 
-const initialConfig: FullConfig = {
+const defaultConfig: FullConfig = {
   model: null,
   messenger: {
     type: null,
@@ -36,20 +36,103 @@ const initialConfig: FullConfig = {
   integrations: {},
 }
 
+// 설정 비교 함수들
+function isModelChanged(original: ModelConfig | null, current: ModelConfig | null): boolean {
+  if (!original && !current) return false
+  if (!original || !current) return true
+  return original.provider !== current.provider || 
+         original.model !== current.model || 
+         original.apiKey !== current.apiKey
+}
+
+function isMessengerChanged(original: MessengerConfig, current: MessengerConfig): boolean {
+  return original.type !== current.type ||
+         original.token !== current.token ||
+         original.dmPolicy !== current.dmPolicy ||
+         original.groupPolicy !== current.groupPolicy ||
+         original.requireMention !== current.requireMention ||
+         JSON.stringify(original.allowFrom) !== JSON.stringify(current.allowFrom)
+}
+
+function isIntegrationsChanged(original: IntegrationConfig, current: IntegrationConfig): boolean {
+  return JSON.stringify(original) !== JSON.stringify(current)
+}
+
 export default function Settings({ isOnboarding, initialConfig: propConfig, onComplete, onCancel }: SettingsProps) {
   const [step, setStep] = useState<SettingsStep>(isOnboarding ? 'ai' : 'menu')
-  const [config, setConfig] = useState<FullConfig>(propConfig || initialConfig)
-  const [returnTo, setReturnTo] = useState<SettingsStep | null>(null)  // Summary에서 수정 후 돌아갈 위치
+  const [config, setConfig] = useState<FullConfig>(propConfig || defaultConfig)
+  
+  // 원본 config (변경 비교용) - 재설정 시에만 사용
+  const [originalConfig] = useState<FullConfig>(propConfig || defaultConfig)
+  
+  // Summary에서 수정 시 true, 메뉴에서 직접 접근도 재설정이면 true
+  const [editMode, setEditMode] = useState(false)
 
-  // 설정 업데이트 핸들러들
+  // 재설정 모드인지 (첫 실행이 아닐 때)
+  const isReconfigureMode = !isOnboarding
+
+  // 메뉴에서 설정 페이지로 이동할 때 editMode 활성화 (재설정 모드)
+  const handleGoToStep = (targetStep: SettingsStep) => {
+    if (isReconfigureMode) {
+      setEditMode(true)
+    }
+    setStep(targetStep)
+  }
+
+  // Summary에서 수정 버튼 클릭 시
+  const handleEditFromSummary = (targetStep: SettingsStep) => {
+    setEditMode(true)
+    setStep(targetStep)
+  }
+
+  // 설정 완료 후 Summary로 돌아가기 (editMode일 때)
+  const handleConfirmAndReturn = () => {
+    setEditMode(false)
+    setStep('summary')
+  }
+
+  // 취소하고 Summary로 돌아가기 (변경 취소)
+  const handleCancelEdit = () => {
+    // 현재 편집 중인 항목만 원본으로 복원할 수도 있지만,
+    // 여기서는 단순히 Summary로 돌아감 (이미 config는 변경됨)
+    // 완전한 취소를 원하면 originalConfig에서 복원 필요
+    setEditMode(false)
+    setStep('summary')
+  }
+
+  // 설정 업데이트 핸들러들 - editMode일 때 바로 Summary로
   const handleModelUpdate = (modelConfig: ModelConfig) => {
     setConfig(prev => ({ ...prev, model: modelConfig }))
-    setStep('messenger')
+    if (editMode) {
+      handleConfirmAndReturn()
+    } else {
+      setStep('messenger')
+    }
   }
 
   const handleMessengerComplete = (messengerConfig: MessengerConfig) => {
     setConfig(prev => ({ ...prev, messenger: messengerConfig }))
-    setStep('features')
+    if (editMode) {
+      handleConfirmAndReturn()
+    } else {
+      setStep('features')
+    }
+  }
+
+  const handleIntegrationsComplete = () => {
+    if (editMode) {
+      handleConfirmAndReturn()
+    } else {
+      setStep('browser')
+    }
+  }
+
+  const handleBrowserComplete = () => {
+    if (editMode) {
+      handleConfirmAndReturn()
+    } else {
+      setStep('summary')
+    }
   }
 
   const handleIntegrationsUpdate = (integrations: IntegrationConfig) => {
@@ -64,12 +147,10 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
     setConfig(prev => ({ ...prev, gateway: { ...prev.gateway, ...gatewayConfig } }))
   }
 
-  // 뒤로가기
+  // 뒤로가기 - editMode일 때는 Summary로
   const handleBack = () => {
-    // Summary에서 수정으로 온 경우, 다시 Summary로 돌아감
-    if (returnTo) {
-      setStep(returnTo)
-      setReturnTo(null)
+    if (editMode) {
+      handleCancelEdit()
       return
     }
 
@@ -87,7 +168,11 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
         setStep('features')
         break
       case 'summary':
-        setStep('browser')
+        if (isOnboarding) {
+          setStep('browser')
+        } else {
+          setStep('menu')
+        }
         break
       case 'connect':
         setStep('summary')
@@ -95,11 +180,14 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
     }
   }
 
-  // Summary에서 수정 버튼 클릭 시 사용
-  const handleEditFromSummary = (targetStep: SettingsStep) => {
-    setReturnTo('summary')
-    setStep(targetStep)
-  }
+  // 변경 여부 계산
+  const modelChanged = isModelChanged(originalConfig.model, config.model)
+  const messengerChanged = isMessengerChanged(originalConfig.messenger, config.messenger)
+  const integrationsChanged = isIntegrationsChanged(originalConfig.integrations, config.integrations)
+  const hasAnyChanges = modelChanged || messengerChanged || integrationsChanged
+
+  // 필수 설정 완료 여부 (첫 실행 시)
+  const hasRequiredSettings = config.model && config.messenger.type
 
   // 메뉴 화면 (일반 설정 모드)
   if (step === 'menu') {
@@ -124,7 +212,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
         {/* 설정 메뉴 */}
         <div className="space-y-3">
           <button
-            onClick={() => setStep('ai')}
+            onClick={() => handleGoToStep('ai')}
             className="w-full card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors text-left"
           >
             <span className="text-3xl">🤖</span>
@@ -136,7 +224,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
           </button>
 
           <button
-            onClick={() => setStep('messenger')}
+            onClick={() => handleGoToStep('messenger')}
             className="w-full card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors text-left"
           >
             <span className="text-3xl">💬</span>
@@ -148,7 +236,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
           </button>
 
           <button
-            onClick={() => setStep('features')}
+            onClick={() => handleGoToStep('features')}
             className="w-full card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors text-left"
           >
             <span className="text-3xl">🔧</span>
@@ -160,7 +248,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
           </button>
 
           <button
-            onClick={() => setStep('browser')}
+            onClick={() => handleGoToStep('browser')}
             className="w-full card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors text-left"
           >
             <span className="text-3xl">🌐</span>
@@ -196,6 +284,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
         onBack={handleBack}
         onGoToDashboard={!isOnboarding ? onCancel : undefined}
         isOnboarding={isOnboarding}
+        editMode={editMode}
       />
     )
   }
@@ -207,6 +296,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
         initialConfig={config.messenger}
         onComplete={handleMessengerComplete}
         onBack={handleBack}
+        editMode={editMode}
       />
     )
   }
@@ -217,9 +307,10 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
       <Integrations
         initialValues={config.integrations}
         onUpdate={handleIntegrationsUpdate}
-        onComplete={() => setStep('browser')}
-        onSkip={() => setStep('browser')}
+        onComplete={handleIntegrationsComplete}
+        onSkip={handleIntegrationsComplete}
         onBack={handleBack}
+        editMode={editMode}
       />
     )
   }
@@ -231,7 +322,7 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
         {/* 뒤로가기 + 대시보드 버튼 */}
         <div className="p-6 flex items-center justify-between">
           <button onClick={handleBack} className="text-forge-muted hover:text-forge-text">
-            ← 뒤로
+            ← {editMode ? '취소' : '뒤로'}
           </button>
           {!isOnboarding && onCancel && (
             <button onClick={onCancel} className="text-forge-muted hover:text-forge-text text-sm">
@@ -256,14 +347,15 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
         </div>
         
         <BrowserControl
-          onNext={() => setStep('summary')}
+          onNext={handleBrowserComplete}
           onBack={handleBack}
+          editMode={editMode}
         />
       </div>
     )
   }
 
-  // Summary
+  // Summary - 설정 한눈에 보기
   if (step === 'summary') {
     return (
       <div className="min-h-screen flex flex-col p-6">
@@ -284,7 +376,9 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
             <div className="text-center mb-8">
               <div className="text-4xl mb-3">📋</div>
               <h2 className="text-2xl font-bold text-forge-text mb-2">설정 확인</h2>
-              <p className="text-forge-muted">아래 설정으로 진행합니다</p>
+              <p className="text-forge-muted">
+                {isOnboarding ? '아래 설정으로 진행합니다' : '변경할 항목을 선택하세요'}
+              </p>
             </div>
 
             {/* 설정 요약 */}
@@ -298,10 +392,20 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
                 {config.model ? (
                   <div>
                     <p className="text-forge-text font-medium">{config.model.model}</p>
-                    <p className="text-sm text-forge-muted">{config.model.provider} · API 키 설정됨</p>
+                    <p className="text-sm text-forge-muted">
+                      {config.model.provider} · API 키 설정됨
+                      {isReconfigureMode && !modelChanged && (
+                        <span className="ml-2 text-forge-success">✓ 변경 없음</span>
+                      )}
+                      {isReconfigureMode && modelChanged && (
+                        <span className="ml-2 text-forge-copper">● 변경됨</span>
+                      )}
+                    </p>
                   </div>
                 ) : (
-                  <p className="text-forge-error">⚠️ 설정 필요</p>
+                  <p className="text-forge-error">
+                    {isOnboarding ? '⚠️ 설정 필요' : '⚠️ 설정되지 않음'}
+                  </p>
                 )}
               </div>
 
@@ -319,11 +423,21 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
                     </span>
                     <div>
                       <p className="text-forge-text font-medium capitalize">{config.messenger.type}</p>
-                      <p className="text-sm text-forge-muted">DM: {config.messenger.dmPolicy}</p>
+                      <p className="text-sm text-forge-muted">
+                        DM: {config.messenger.dmPolicy}
+                        {isReconfigureMode && !messengerChanged && (
+                          <span className="ml-2 text-forge-success">✓ 변경 없음</span>
+                        )}
+                        {isReconfigureMode && messengerChanged && (
+                          <span className="ml-2 text-forge-copper">● 변경됨</span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-forge-error">⚠️ 선택 필요</p>
+                  <p className="text-forge-error">
+                    {isOnboarding ? '⚠️ 선택 필요' : '⚠️ 설정되지 않음'}
+                  </p>
                 )}
               </div>
 
@@ -336,20 +450,52 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
                 {Object.keys(config.integrations).filter(k => config.integrations[k]?.length > 0).length > 0 ? (
                   <p className="text-forge-text">
                     {Object.keys(config.integrations).filter(k => config.integrations[k]?.length > 0).length}개 서비스 설정됨
+                    {isReconfigureMode && !integrationsChanged && (
+                      <span className="ml-2 text-forge-success">✓ 변경 없음</span>
+                    )}
+                    {isReconfigureMode && integrationsChanged && (
+                      <span className="ml-2 text-forge-copper">● 변경됨</span>
+                    )}
                   </p>
                 ) : (
-                  <p className="text-forge-muted">설정된 서비스 없음 (선택사항)</p>
+                  <p className="text-forge-muted">
+                    설정된 서비스 없음 (선택사항)
+                    {isReconfigureMode && !integrationsChanged && (
+                      <span className="ml-2 text-forge-success">✓ 변경 없음</span>
+                    )}
+                  </p>
                 )}
               </div>
             </div>
 
+            {/* 변경 요약 (재설정 모드) */}
+            {isReconfigureMode && (
+              <div className="mb-6 text-center">
+                {hasAnyChanges ? (
+                  <p className="text-forge-copper text-sm">
+                    ● 변경된 항목이 있습니다. 저장하면 Gateway가 재시작됩니다.
+                  </p>
+                ) : (
+                  <p className="text-forge-success text-sm">
+                    ✓ 변경된 항목이 없습니다.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* 다음 버튼 */}
             <button
               onClick={() => setStep('connect')}
-              disabled={!config.model || !config.messenger.type}
+              disabled={isOnboarding && !hasRequiredSettings}
               className="w-full py-4 btn-primary rounded-xl disabled:opacity-50"
             >
-              다음: 연결 설정 →
+              {isOnboarding ? (
+                '다음: 연결 설정 →'
+              ) : hasAnyChanges ? (
+                '저장 및 Gateway 재시작 →'
+              ) : (
+                '연결 상태 확인 →'
+              )}
             </button>
           </div>
         </div>
@@ -362,6 +508,8 @@ export default function Settings({ isOnboarding, initialConfig: propConfig, onCo
     return (
       <Connect
         config={config}
+        originalConfig={isReconfigureMode ? originalConfig : undefined}
+        hasChanges={hasAnyChanges}
         onMessengerConfigUpdate={handleMessengerConfigUpdate}
         onGatewayConfigUpdate={handleGatewayConfigUpdate}
         onComplete={onComplete}

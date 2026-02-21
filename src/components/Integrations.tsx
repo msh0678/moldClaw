@@ -7,6 +7,7 @@ interface IntegrationsProps {
   onComplete: () => void
   onBack: () => void
   onSkip: () => void
+  editMode?: boolean  // Summary에서 수정 모드로 진입했을 때
 }
 
 interface Integration {
@@ -308,7 +309,7 @@ const INTEGRATIONS: Integration[] = [
 
 const CATEGORIES = ['AI 모델', '외부 도구', '메신저']
 
-export default function Integrations({ initialValues, onUpdate, onComplete, onBack, onSkip }: IntegrationsProps) {
+export default function Integrations({ initialValues, onUpdate, onComplete, onBack, onSkip, editMode = false }: IntegrationsProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('AI 모델')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [values, setValues] = useState<IntegrationConfig>(initialValues)
@@ -341,14 +342,16 @@ export default function Integrations({ initialValues, onUpdate, onComplete, onBa
           onClick={onBack}
           className="text-gray-400 hover:text-white flex items-center gap-2"
         >
-          ← 뒤로
+          ← {editMode ? '취소' : '뒤로'}
         </button>
-        <button
-          onClick={onSkip}
-          className="text-gray-400 hover:text-white text-sm"
-        >
-          건너뛰기 →
-        </button>
+        {!editMode && (
+          <button
+            onClick={onSkip}
+            className="text-gray-400 hover:text-white text-sm"
+          >
+            건너뛰기 →
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -470,12 +473,14 @@ export default function Integrations({ initialValues, onUpdate, onComplete, onBa
             })}
           </div>
 
-          {/* 계속 버튼 */}
+          {/* 계속/확인 버튼 */}
           <button
             onClick={handleContinue}
             className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl font-semibold hover:opacity-90 transition-opacity"
           >
-            {configuredCount > 0 ? `${configuredCount}개 설정 완료 →` : '건너뛰고 계속 →'}
+            {editMode 
+              ? (configuredCount > 0 ? `✓ ${configuredCount}개 설정 확인` : '✓ 확인')
+              : (configuredCount > 0 ? `${configuredCount}개 설정 완료 →` : '건너뛰고 계속 →')}
           </button>
 
           <p className="text-center text-xs text-gray-500 mt-4">

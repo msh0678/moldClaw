@@ -7,6 +7,7 @@ interface ModelSetupProps {
   onBack: () => void
   onGoToDashboard?: () => void
   isOnboarding?: boolean  // 온보딩 모드일 때 첫 단계 강조
+  editMode?: boolean  // Summary에서 수정 모드로 진입했을 때
 }
 
 const providers = [
@@ -46,7 +47,7 @@ const providers = [
   },
 ]
 
-export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDashboard, isOnboarding = false }: ModelSetupProps) {
+export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDashboard, isOnboarding = false, editMode = false }: ModelSetupProps) {
   const [selectedProvider, setSelectedProvider] = useState<string | null>(
     initialConfig?.provider || null
   )
@@ -87,7 +88,7 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
           onClick={onBack}
           className="text-gray-400 hover:text-white flex items-center gap-2"
         >
-          ← 뒤로
+          ← {editMode ? '취소' : '뒤로'}
         </button>
         
         {onGoToDashboard && (
@@ -198,13 +199,13 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
             </div>
           )}
 
-          {/* 다음 버튼 */}
+          {/* 다음/확인 버튼 */}
           <button
             onClick={handleSubmit}
             disabled={!isValid}
             className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
           >
-            다음 →
+            {editMode ? '✓ 확인' : '다음 →'}
           </button>
         </div>
       </div>

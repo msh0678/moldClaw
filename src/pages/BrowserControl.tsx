@@ -8,9 +8,10 @@ const CHROME_EXTENSION_URL = 'https://chromewebstore.google.com/detail/openclaw-
 interface BrowserControlProps {
   onNext: () => void;
   onBack: () => void;
+  editMode?: boolean;  // Summary에서 수정 모드로 진입했을 때
 }
 
-export const BrowserControl: React.FC<BrowserControlProps> = ({ onNext, onBack }) => {
+export const BrowserControl: React.FC<BrowserControlProps> = ({ onNext, onBack, editMode = false }) => {
   const [isInstalling, setIsInstalling] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -141,7 +142,7 @@ export const BrowserControl: React.FC<BrowserControlProps> = ({ onNext, onBack }
             onClick={handleNext}
             className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700"
           >
-            완료
+            {editMode ? '✓ 확인' : '완료'}
           </button>
         </div>
       )}

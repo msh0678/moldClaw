@@ -4,6 +4,8 @@ import type { FullConfig, MessengerConfig, GatewayConfig } from '../App'
 
 interface ConnectProps {
   config: FullConfig
+  originalConfig?: FullConfig  // 재설정 모드에서 원본 config (변경 비교용)
+  hasChanges?: boolean  // 변경점이 있는지 여부
   onMessengerConfigUpdate: (config: Partial<MessengerConfig>) => void
   onGatewayConfigUpdate: (config: Partial<GatewayConfig>) => void
   onComplete: () => void
@@ -41,7 +43,7 @@ const GATEWAY_BINDS = [
   { value: 'auto', label: '자동', desc: 'Tailscale이 있으면 tailnet, 없으면 loopback' },
 ]
 
-export default function Connect({ config, onMessengerConfigUpdate, onGatewayConfigUpdate, onComplete, onBack }: ConnectProps) {
+export default function Connect({ config, originalConfig: _originalConfig, hasChanges: _hasChanges = true, onMessengerConfigUpdate, onGatewayConfigUpdate, onComplete, onBack }: ConnectProps) {
   const [token, setToken] = useState(config.messenger.token)
   const [dmPolicy, setDmPolicy] = useState(config.messenger.dmPolicy)
   const [allowFrom, setAllowFrom] = useState(config.messenger.allowFrom.join('\n'))
