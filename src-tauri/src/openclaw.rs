@@ -427,6 +427,33 @@ pub async fn create_official_config(
     Ok(gateway_token)
 }
 
+// =============================================================================
+// API 키/토큰 자동 감지 (OpenClaw 공식 형식 준수)
+// =============================================================================
+
+/// API 키/토큰 형식에 따라 auth.profiles.mode 자동 결정
+/// 
+/// ## 토큰 형식별 mode:
+/// - Anthropic OAuth 토큰: `sk-ant-oat01-xxx` (80자+) → "token"
+/// - Anthropic API 키: `sk-ant-api-xxx` 등 → "api_key"  
+/// - OpenAI API 키: `sk-xxx`, `sk-proj-xxx` → "api_key"
+/// - Google API 키: `AIza...` → "api_key"
+/// - 기타 모든 경우 → "api_key" (기본값)
+fn detect_auth_mode(provider: &str, api_key: &str) -> &'static str {
+    match provider {
+        "anthropic" => {
+            // Anthropic OAuth 토큰: sk-ant-oat01- (최소 80자)
+            if api_key.starts_with("sk-ant-oat01-") && api_key.len() >= 80 {
+                "token"
+            } else {
+                "api_key"
+            }
+        }
+        // OpenAI, Google 등 다른 프로바이더는 모두 api_key
+        _ => "api_key"
+    }
+}
+
 /// Config에 모델 설정 추가 (기존 설정 보존)
 pub async fn add_model_to_config(
     provider: &str,
@@ -509,8 +536,8 @@ pub async fn add_model_to_config(
     );
     
     // auth.profiles 추가
-    // mode: "api_key" (사용자가 API 키를 직접 입력하는 경우)
-    // mode: "token" (OAuth 토큰인 경우 - Anthropic Console 등)
+    // 토큰 형식에 따라 mode 자동 결정
+    let auth_mode = detect_auth_mode(provider, api_key);
     let profile_id = format!("{}:default", provider);
     set_nested_value(
         &mut config,
@@ -520,7 +547,7 @@ pub async fn add_model_to_config(
     set_nested_value(
         &mut config,
         &["auth", "profiles", &profile_id, "mode"],
-        json!("api_key"),  // API 키 입력 시 "api_key" 사용
+        json!(auth_mode),
     );
     
     write_config(&config)?;
@@ -887,6 +914,20 @@ pub async fn configure_model(provider: &str, model: &str, api_key: &str) -> Resu
         &mut config,
         &["tools", "exec", "ask"],
         json!("off"),
+    );
+
+    // auth.profiles 추가 (토큰 형식에 따라 mode 자동 결정)
+    let auth_mode = detect_auth_mode(provider, api_key);
+    let profile_id = format!("{}:default", provider);
+    set_nested_value(
+        &mut config,
+        &["auth", "profiles", &profile_id, "provider"],
+        json!(provider),
+    );
+    set_nested_value(
+        &mut config,
+        &["auth", "profiles", &profile_id, "mode"],
+        json!(auth_mode),
     );
 
     write_config(&config)?;
