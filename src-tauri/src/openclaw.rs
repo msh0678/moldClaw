@@ -1759,7 +1759,8 @@ pub async fn update_messenger_config(
             set_nested_value(&mut config, &["channels", "discord", "groupPolicy"], json!(group_policy));
         }
         "whatsapp" => {
-            set_nested_value(&mut config, &["channels", "whatsapp", "enabled"], json!(true));
+            // WhatsAppConfig에는 enabled 필드가 없음 (multi-account 구조에서만 사용)
+            // 단일 계정 모드에서는 설정만 하면 자동 활성화
             set_nested_value(&mut config, &["channels", "whatsapp", "dmPolicy"], json!(dm_policy));
             if !allow_from.is_empty() {
                 set_nested_value(&mut config, &["channels", "whatsapp", "allowFrom"], json!(allow_from));
