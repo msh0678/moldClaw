@@ -1004,6 +1004,22 @@ You wake up fresh each session. These files are your continuity:
 - **Long-term:** `MEMORY.md`
 
 Capture what matters. Decisions, context, things to remember.
+
+## ⏰ Reminders & Scheduling (중요!)
+
+알림, 리마인더, 예약 작업은 **반드시 OpenClaw cron job**을 사용하세요.
+
+### 필수 규칙:
+- ✅ **cron 도구 사용**: 모든 알림/리마인더는 `cron` 도구로 예약
+- ❌ **Windows 스케줄러 사용 금지**: OS 스케줄러 직접 사용하지 마세요
+- ❌ **Heartbeat으로 리마인더 구현 금지**: heartbeat은 주기적 체크용, 리마인더용 아님
+
+### 예시:
+- "내일 9시에 알려줘" → `cron` 도구로 예약
+- "30분 후에 리마인드" → `cron` 도구로 예약
+- "매일 아침 날씨 알려줘" → `cron` 도구로 반복 작업 설정
+
+이 규칙을 따르면 moldClaw UI에서 알림을 관리할 수 있습니다.
 "#;
         fs::write(&agents_md, content)
             .map_err(|e| format!("AGENTS.md 생성 실패: {}", e))?;
