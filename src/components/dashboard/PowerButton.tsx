@@ -203,16 +203,16 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
       {/* ===== 아이콘 / 로고 ===== */}
       <div className="relative z-10 flex flex-col items-center">
         <img 
-          src="/app-icon.png" 
-          alt="moldClaw" 
+          src="/power-button.png" 
+          alt="전원" 
           className={`
             w-20 h-20 object-contain transition-all duration-500
-            ${isRunning ? 'opacity-100' : 'opacity-60'}
+            ${isRunning ? 'opacity-100 brightness-110' : 'opacity-70'}
           `}
           style={{
             filter: isRunning 
-              ? 'drop-shadow(0 0 25px rgba(232, 107, 42, 0.7))' 
-              : 'none',
+              ? 'drop-shadow(0 0 20px rgba(232, 107, 42, 0.6))' 
+              : 'grayscale(20%)',
           }}
         />
         

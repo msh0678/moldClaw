@@ -98,6 +98,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'together',
     name: 'Together AI',
     icon: '🤝',
+    logo: 'https://cdn.simpleicons.org/togetherai/0EA5E9',
     color: '#0EA5E9',
     models: [
       { id: 'meta-llama/Llama-3.1-70B-Instruct-Turbo', name: 'Llama 3.1 70B Turbo', desc: '빠른 Llama' },
@@ -111,6 +112,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'cerebras',
     name: 'Cerebras',
     icon: '🧠',
+    logo: 'https://cdn.simpleicons.org/cerebras/00D4AA',
     color: '#00D4AA',
     models: [
       { id: 'llama3.1-70b', name: 'Llama 3.1 70B', desc: '초고속 추론' },
@@ -161,6 +163,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'voyage',
     name: 'Voyage',
     icon: '🚀',
+    logo: 'https://cdn.simpleicons.org/voyager/7C3AED',
     color: '#7C3AED',
     models: [
       { id: 'voyage-3', name: 'Voyage 3', desc: '임베딩 모델' },
@@ -173,6 +176,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'minimax',
     name: 'MiniMax',
     icon: '🤖',
+    logo: 'https://cdn.simpleicons.org/mind/8B5CF6',
     color: '#8B5CF6',
     models: [
       { id: 'abab6.5s-chat', name: 'abab6.5s', desc: '고성능 모델' },
@@ -185,6 +189,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'moonshot',
     name: 'Moonshot',
     icon: '🌙',
+    logo: 'https://cdn.simpleicons.org/moonrepo/1E40AF',
     color: '#1E40AF',
     models: [
       { id: 'moonshot-v1-128k', name: 'Moonshot v1 128K', desc: '긴 컨텍스트' },
@@ -211,6 +216,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'venice',
     name: 'Venice AI',
     icon: '🏛️',
+    logo: 'https://cdn.simpleicons.org/v/DC2626',
     color: '#DC2626',
     models: [
       { id: 'llama-3.1-405b', name: 'Llama 3.1 405B', desc: '프라이버시 중심' },

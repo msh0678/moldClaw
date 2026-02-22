@@ -59,7 +59,7 @@ export default function OrbitButton({
         top: `calc(50% + ${y}px)`,
         transform: 'translate(-50%, -50%)',
       }}
-      title={label}
+      // title 제거 - 커스텀 라벨과 중복 방지
     >
       {/* 배경 - solid & opaque, 모든 버튼 동일 스타일 */}
       <div className={`
