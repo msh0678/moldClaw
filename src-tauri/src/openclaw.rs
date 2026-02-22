@@ -1995,6 +1995,7 @@ pub async fn update_messenger_config(
 }
 
 /// 부가기능(통합) 설정만 업데이트 (기존 config에 패치)
+/// 빈 값("")은 해당 키를 삭제함
 pub async fn update_integrations_config(integrations: Value) -> Result<(), String> {
     let mut config = read_existing_config();
     
@@ -2007,11 +2008,21 @@ pub async fn update_integrations_config(integrations: Value) -> Result<(), Strin
     let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
     
-    // integrations를 env.vars에 머지
+    // integrations를 env.vars에 머지 (빈 값은 삭제)
     if let Some(vars) = integrations.as_object() {
         for (key, value) in vars {
             if let Some(v) = value.as_str() {
-                if !v.is_empty() {
+                if v.is_empty() {
+                    // 빈 값이면 해당 키 삭제
+                    if let Some(env) = config.get_mut("env") {
+                        if let Some(env_vars) = env.get_mut("vars") {
+                            if let Some(obj) = env_vars.as_object_mut() {
+                                obj.remove(key);
+                            }
+                        }
+                    }
+                } else {
+                    // 값이 있으면 설정
                     set_nested_value(&mut config, &["env", "vars", key], json!(v));
                 }
             }

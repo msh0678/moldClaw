@@ -1,6 +1,6 @@
 // PowerButton - 금환일식(Annular Eclipse) 스타일 전원 버튼
-// 켜진 상태: 용광로 일렁거림 (빈 공간 없이)
-// 시작 중: 테두리를 도는 밝은 빛
+// 켜진 상태: 용광로 일렁거림 (빈 공간 없이, opacity 기반)
+// 시작 중: 밝은 테두리 회전 빛
 // 성공 시: 테두리 빛이 페이지로 퍼져나감
 
 import { useState, useEffect } from 'react';
@@ -44,60 +44,71 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
         <>
           <div className="absolute inset-0 rounded-full animate-success-ripple-1"
             style={{
-              border: '2px solid rgba(232, 107, 42, 0.8)',
-              boxShadow: '0 0 20px rgba(232, 107, 42, 0.5)',
+              border: '3px solid rgba(232, 107, 42, 0.9)',
+              boxShadow: '0 0 30px rgba(232, 107, 42, 0.6), 0 0 60px rgba(232, 107, 42, 0.3)',
             }}
           />
           <div className="absolute inset-0 rounded-full animate-success-ripple-2"
             style={{
-              border: '1px solid rgba(245, 166, 35, 0.6)',
-              boxShadow: '0 0 15px rgba(245, 166, 35, 0.4)',
+              border: '2px solid rgba(245, 166, 35, 0.7)',
+              boxShadow: '0 0 20px rgba(245, 166, 35, 0.5)',
             }}
           />
         </>
       )}
 
-      {/* ===== 시작 중: 금환일식 스타일 회전 빛 ===== */}
+      {/* ===== 시작 중: 금환일식 스타일 회전 빛 (더 밝게) ===== */}
       {isStarting && (
         <div className="absolute inset-0 rounded-full">
-          {/* 고정된 테두리 (버튼과 함께 유지) */}
-          <div className="absolute inset-0 rounded-full border-2 border-forge-amber/40" />
+          {/* 고정된 테두리 */}
+          <div className="absolute inset-0 rounded-full border-2 border-forge-amber/50" />
           
-          {/* 회전하는 밝은 빛 */}
+          {/* 외곽 글로우 */}
+          <div 
+            className="absolute -inset-2 rounded-full animate-pulse-glow"
+            style={{
+              boxShadow: '0 0 40px 10px rgba(245, 166, 35, 0.3), 0 0 80px 20px rgba(245, 166, 35, 0.15)',
+            }}
+          />
+          
+          {/* 회전하는 밝은 빛 (더 두껍고 밝게) */}
           <div className="absolute inset-0 animate-eclipse-rotate">
-            <svg viewBox="0 0 200 200" className="w-full h-full" style={{ filter: 'url(#eclipseGlow)' }}>
+            <svg viewBox="0 0 200 200" className="w-full h-full">
               <defs>
-                {/* 금환일식 그라데이션 - 중앙 밝고 양쪽 어두움 */}
+                {/* 더 밝은 그라데이션 */}
                 <linearGradient id="eclipseGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="rgba(255, 255, 255, 0)" />
-                  <stop offset="15%" stopColor="rgba(255, 220, 150, 0.3)" />
-                  <stop offset="35%" stopColor="rgba(255, 200, 100, 0.7)" />
+                  <stop offset="10%" stopColor="rgba(255, 220, 150, 0.4)" />
+                  <stop offset="30%" stopColor="rgba(255, 200, 100, 0.8)" />
                   <stop offset="50%" stopColor="rgba(255, 255, 255, 1)" />
-                  <stop offset="65%" stopColor="rgba(255, 200, 100, 0.7)" />
-                  <stop offset="85%" stopColor="rgba(255, 220, 150, 0.3)" />
+                  <stop offset="70%" stopColor="rgba(255, 200, 100, 0.8)" />
+                  <stop offset="90%" stopColor="rgba(255, 220, 150, 0.4)" />
                   <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
                 </linearGradient>
-                {/* 글로우 필터 */}
+                {/* 강화된 글로우 필터 */}
                 <filter id="eclipseGlow" x="-100%" y="-100%" width="300%" height="300%">
-                  <feGaussianBlur stdDeviation="2" result="blur1" />
-                  <feGaussianBlur stdDeviation="4" result="blur2" />
+                  <feGaussianBlur stdDeviation="3" result="blur1" />
+                  <feGaussianBlur stdDeviation="6" result="blur2" />
+                  <feGaussianBlur stdDeviation="10" result="blur3" />
                   <feMerge>
+                    <feMergeNode in="blur3" />
                     <feMergeNode in="blur2" />
                     <feMergeNode in="blur1" />
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
               </defs>
-              {/* 메인 arc - 약 60도 (더 밝고 선명하게) */}
+              {/* 메인 arc - 더 두껍게 (strokeWidth 6) */}
               <circle
                 cx="100"
                 cy="100"
                 r="86"
                 fill="none"
                 stroke="url(#eclipseGrad)"
-                strokeWidth="4"
+                strokeWidth="6"
                 strokeLinecap="round"
                 strokeDasharray="90 488"
+                filter="url(#eclipseGlow)"
               />
             </svg>
           </div>
@@ -108,7 +119,7 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
               <defs>
                 <linearGradient id="trailGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="rgba(255, 200, 100, 0)" />
-                  <stop offset="50%" stopColor="rgba(255, 200, 100, 0.3)" />
+                  <stop offset="50%" stopColor="rgba(255, 200, 100, 0.5)" />
                   <stop offset="100%" stopColor="rgba(255, 200, 100, 0)" />
                 </linearGradient>
               </defs>
@@ -118,9 +129,9 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
                 r="86"
                 fill="none"
                 stroke="url(#trailGrad)"
-                strokeWidth="2"
+                strokeWidth="3"
                 strokeLinecap="round"
-                strokeDasharray="50 530"
+                strokeDasharray="60 520"
               />
             </svg>
           </div>
@@ -135,40 +146,47 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
           : 'bg-forge-dark'}
       `} />
 
-      {/* ===== 켜진 상태: 용광로 일렁거림 (빈 공간 없이) ===== */}
+      {/* ===== 켜진 상태: 용광로 일렁거림 (opacity 기반, 빈 공간 없음) ===== */}
       {isRunning && (
         <div className="absolute inset-0 rounded-full overflow-hidden">
-          {/* 베이스 그라데이션 (빈 공간 방지) */}
+          {/* 베이스 레이어 (항상 표시, 빈 공간 방지) */}
           <div 
-            className="absolute bottom-0 left-0 right-0 h-2/3"
+            className="absolute bottom-0 left-0 right-0 h-3/4"
             style={{
-              background: 'linear-gradient(to top, rgba(232, 107, 42, 0.5), rgba(232, 107, 42, 0.2) 60%, transparent)',
+              background: 'linear-gradient(to top, rgba(232, 107, 42, 0.6) 0%, rgba(232, 107, 42, 0.3) 50%, transparent 100%)',
             }}
           />
-          {/* 일렁거리는 레이어 1 */}
+          
+          {/* 일렁거리는 레이어 1 - opacity 기반 */}
           <div 
-            className="absolute bottom-0 left-0 right-0 h-1/2 animate-forge-wave-1"
+            className="absolute bottom-0 left-0 right-0 h-2/3 animate-forge-flicker-1"
             style={{
-              background: 'linear-gradient(to top, rgba(232, 107, 42, 0.6), transparent)',
-              transformOrigin: 'bottom center',
+              background: 'radial-gradient(ellipse at 50% 100%, rgba(232, 107, 42, 0.8) 0%, rgba(232, 107, 42, 0.4) 40%, transparent 70%)',
             }}
           />
-          {/* 일렁거리는 레이어 2 */}
+          
+          {/* 일렁거리는 레이어 2 - 다른 타이밍 */}
           <div 
-            className="absolute bottom-0 left-0 right-0 h-1/3 animate-forge-wave-2"
+            className="absolute bottom-0 left-0 right-0 h-1/2 animate-forge-flicker-2"
             style={{
-              background: 'linear-gradient(to top, rgba(245, 166, 35, 0.5), transparent)',
-              transformOrigin: 'bottom center',
+              background: 'radial-gradient(ellipse at 50% 100%, rgba(245, 166, 35, 0.7) 0%, rgba(245, 166, 35, 0.3) 50%, transparent 80%)',
             }}
           />
-          {/* 일렁거리는 레이어 3 (가장 밝음) */}
+          
+          {/* 밝은 하이라이트 레이어 */}
           <div 
-            className="absolute bottom-0 left-0 right-0 h-1/4 animate-forge-wave-3"
+            className="absolute bottom-0 left-0 right-0 h-1/3 animate-forge-flicker-3"
             style={{
-              background: 'linear-gradient(to top, rgba(255, 200, 100, 0.4), transparent)',
-              transformOrigin: 'bottom center',
+              background: 'radial-gradient(ellipse at 50% 100%, rgba(255, 220, 150, 0.6) 0%, transparent 60%)',
             }}
           />
+          
+          {/* 불꽃 파티클 효과 */}
+          <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-1/2 h-1/4">
+            <div className="absolute w-2 h-2 bg-orange-400/60 rounded-full animate-spark-1" style={{ left: '20%' }} />
+            <div className="absolute w-1.5 h-1.5 bg-yellow-400/50 rounded-full animate-spark-2" style={{ left: '50%' }} />
+            <div className="absolute w-1 h-1 bg-orange-300/40 rounded-full animate-spark-3" style={{ left: '80%' }} />
+          </div>
         </div>
       )}
 
@@ -176,7 +194,7 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
       <div className={`
         absolute inset-0 rounded-full border-2 transition-all duration-500
         ${isRunning 
-          ? 'border-forge-copper/70' 
+          ? 'border-forge-copper/80' 
           : isStarting 
             ? 'border-transparent' 
             : 'border-white/20'}
@@ -193,7 +211,7 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
           `}
           style={{
             filter: isRunning 
-              ? 'drop-shadow(0 0 20px rgba(232, 107, 42, 0.6))' 
+              ? 'drop-shadow(0 0 25px rgba(232, 107, 42, 0.7))' 
               : 'none',
           }}
         />
@@ -218,49 +236,44 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
           to { transform: rotate(360deg); }
         }
         
-        @keyframes forge-wave-1 {
-          0%, 100% { 
-            opacity: 0.7;
-            transform: scaleY(1) scaleX(1);
-          }
-          25% { 
-            opacity: 0.9;
-            transform: scaleY(1.05) scaleX(0.98);
-          }
-          50% { 
-            opacity: 0.8;
-            transform: scaleY(0.95) scaleX(1.02);
-          }
-          75% { 
-            opacity: 1;
-            transform: scaleY(1.08) scaleX(0.97);
-          }
+        @keyframes pulse-glow {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
         }
         
-        @keyframes forge-wave-2 {
-          0%, 100% { 
-            opacity: 0.6;
-            transform: scaleY(1) scaleX(1);
-          }
-          33% { 
-            opacity: 0.8;
-            transform: scaleY(1.1) scaleX(0.95);
-          }
-          66% { 
-            opacity: 0.7;
-            transform: scaleY(0.9) scaleX(1.05);
-          }
+        /* 용광로 일렁거림 - opacity 기반 (빈 공간 없음) */
+        @keyframes forge-flicker-1 {
+          0%, 100% { opacity: 0.7; filter: brightness(1); }
+          25% { opacity: 0.9; filter: brightness(1.1); }
+          50% { opacity: 0.75; filter: brightness(0.95); }
+          75% { opacity: 0.95; filter: brightness(1.15); }
         }
         
-        @keyframes forge-wave-3 {
-          0%, 100% { 
-            opacity: 0.5;
-            transform: scaleY(1);
-          }
-          50% { 
-            opacity: 0.8;
-            transform: scaleY(1.15);
-          }
+        @keyframes forge-flicker-2 {
+          0%, 100% { opacity: 0.6; filter: brightness(1); }
+          33% { opacity: 0.85; filter: brightness(1.2); }
+          66% { opacity: 0.7; filter: brightness(1.05); }
+        }
+        
+        @keyframes forge-flicker-3 {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 0.9; }
+        }
+        
+        /* 불꽃 파티클 */
+        @keyframes spark-rise-1 {
+          0% { transform: translateY(0) scale(1); opacity: 0.6; }
+          100% { transform: translateY(-30px) scale(0.3); opacity: 0; }
+        }
+        
+        @keyframes spark-rise-2 {
+          0% { transform: translateY(0) scale(1); opacity: 0.5; }
+          100% { transform: translateY(-25px) scale(0.2); opacity: 0; }
+        }
+        
+        @keyframes spark-rise-3 {
+          0% { transform: translateY(0) scale(1); opacity: 0.4; }
+          100% { transform: translateY(-20px) scale(0.1); opacity: 0; }
         }
         
         @keyframes success-ripple {
@@ -283,18 +296,36 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
           animation-delay: -0.2s;
         }
         
-        .animate-forge-wave-1 {
-          animation: forge-wave-1 2s ease-in-out infinite;
+        .animate-pulse-glow {
+          animation: pulse-glow 1.5s ease-in-out infinite;
         }
         
-        .animate-forge-wave-2 {
-          animation: forge-wave-2 1.8s ease-in-out infinite;
+        .animate-forge-flicker-1 {
+          animation: forge-flicker-1 1.8s ease-in-out infinite;
+        }
+        
+        .animate-forge-flicker-2 {
+          animation: forge-flicker-2 1.5s ease-in-out infinite;
           animation-delay: 0.3s;
         }
         
-        .animate-forge-wave-3 {
-          animation: forge-wave-3 1.5s ease-in-out infinite;
+        .animate-forge-flicker-3 {
+          animation: forge-flicker-3 1.2s ease-in-out infinite;
           animation-delay: 0.6s;
+        }
+        
+        .animate-spark-1 {
+          animation: spark-rise-1 1.5s ease-out infinite;
+        }
+        
+        .animate-spark-2 {
+          animation: spark-rise-2 1.8s ease-out infinite;
+          animation-delay: 0.5s;
+        }
+        
+        .animate-spark-3 {
+          animation: spark-rise-3 2s ease-out infinite;
+          animation-delay: 1s;
         }
         
         .animate-success-ripple-1 {

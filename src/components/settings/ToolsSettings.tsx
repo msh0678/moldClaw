@@ -1,6 +1,7 @@
 // ToolsSettings - 도구(Tools) 설정 섹션
 
 import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import type { FullConfig, SettingsMode } from '../../types/config';
 
 interface ToolsSettingsProps {
@@ -199,14 +200,25 @@ export default function ToolsSettings({
     setDisconnectTarget(tool);
   };
 
-  const confirmDisconnect = () => {
+  const confirmDisconnect = async () => {
     if (!disconnectTarget) return;
     
-    const newIntegrations = { ...config.integrations };
-    delete newIntegrations[disconnectTarget.envVar];
-    
-    updateConfig({ integrations: newIntegrations });
-    setDisconnectTarget(null);
+    try {
+      // 백엔드에 빈 값 전달 → 삭제됨
+      await invoke('update_integrations_config', {
+        integrations: { [disconnectTarget.envVar]: '' }
+      });
+      
+      // 상태 업데이트
+      const newIntegrations = { ...config.integrations };
+      delete newIntegrations[disconnectTarget.envVar];
+      updateConfig({ integrations: newIntegrations });
+      
+      setDisconnectTarget(null);
+    } catch (err) {
+      console.error('연결 해제 실패:', err);
+      alert(`연결 해제 실패: ${err}`);
+    }
   };
 
   return (

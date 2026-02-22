@@ -1,6 +1,9 @@
 // MessengerSettings - 메신저 설정 섹션
+// WhatsApp: QR 코드 모달
+// Slack: 2개 토큰 (botToken + appToken)
 
 import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import type { FullConfig, SettingsMode, Messenger } from '../../types/config';
 import { ALL_MESSENGERS } from '../../data/messengers';
 
@@ -23,80 +26,332 @@ export default function MessengerSettings({
 
   const isConfigured = (messengerId: Messenger) => config.messenger.type === messengerId;
 
+  // WhatsApp 전용 모달
+  const WhatsAppModal = () => {
+    const [status, setStatus] = useState<'init' | 'waiting' | 'connected' | 'error'>('init');
+    const [qrCode, setQrCode] = useState<string | null>(null);
+
+    const startConnection = async () => {
+      setStatus('waiting');
+      try {
+        // WhatsApp QR 코드 요청
+        const qr = await invoke<string>('get_whatsapp_qr');
+        setQrCode(qr);
+      } catch (err) {
+        console.error('WhatsApp QR 실패:', err);
+        setStatus('error');
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-forge-muted">
+          WhatsApp Web을 통해 연결합니다. 휴대폰의 WhatsApp 앱이 필요합니다.
+        </p>
+        
+        <ol className="space-y-2 text-sm text-forge-muted">
+          <li className="flex gap-2">
+            <span className="text-forge-copper">1.</span>
+            아래 "QR 코드 생성" 버튼 클릭
+          </li>
+          <li className="flex gap-2">
+            <span className="text-forge-copper">2.</span>
+            휴대폰 WhatsApp → 설정 → 연결된 기기
+          </li>
+          <li className="flex gap-2">
+            <span className="text-forge-copper">3.</span>
+            "기기 연결" → QR 코드 스캔
+          </li>
+        </ol>
+
+        {status === 'init' && (
+          <button
+            onClick={startConnection}
+            className="w-full py-3 rounded-xl btn-primary mt-4"
+          >
+            QR 코드 생성
+          </button>
+        )}
+
+        {status === 'waiting' && (
+          <div className="text-center py-6">
+            {qrCode ? (
+              <div className="bg-white p-4 rounded-xl inline-block">
+                <img src={qrCode} alt="WhatsApp QR" className="w-48 h-48" />
+              </div>
+            ) : (
+              <div className="animate-spin w-8 h-8 border-2 border-forge-copper/30 border-t-forge-copper rounded-full mx-auto" />
+            )}
+            <p className="text-sm text-forge-muted mt-4">휴대폰으로 QR 코드를 스캔하세요</p>
+          </div>
+        )}
+
+        {status === 'error' && (
+          <div className="text-center py-4">
+            <p className="text-forge-error">연결 실패. 다시 시도해주세요.</p>
+            <button
+              onClick={() => setStatus('init')}
+              className="mt-4 px-4 py-2 rounded-lg bg-[#252836] text-forge-text"
+            >
+              다시 시도
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Slack 전용 모달 (2개 토큰)
+  const SlackModal = () => {
+    const [botToken, setBotToken] = useState('');
+    const [appToken, setAppToken] = useState('');
+    const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+
+    const handleSlackConnect = async () => {
+      if (!botToken || !appToken) {
+        alert('Bot Token과 App Token 모두 필요합니다.');
+        return;
+      }
+
+      try {
+        // Slack 설정 저장
+        await invoke('update_messenger_config', {
+          channel: 'slack',
+          token: botToken,
+          dmPolicy,
+          allowFrom: [],
+          groupPolicy: 'pairing',
+          requireMention: true,
+        });
+        
+        // App Token도 별도 저장
+        await invoke('set_slack_app_token', { appToken });
+        
+        updateConfig({
+          messenger: {
+            ...config.messenger,
+            type: 'slack' as Messenger,
+            token: botToken,
+            dmPolicy,
+          }
+        });
+      } catch (err) {
+        console.error('Slack 연결 실패:', err);
+        alert(`Slack 연결 실패: ${err}`);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-forge-muted">
+          Slack 앱을 생성하고 두 개의 토큰이 필요합니다.
+        </p>
+        
+        <ol className="space-y-2 text-sm text-forge-muted">
+          <li className="flex gap-2">
+            <span className="text-forge-copper">1.</span>
+            <a href="https://api.slack.com/apps" target="_blank" rel="noopener" className="text-forge-copper hover:underline">
+              api.slack.com/apps
+            </a>에서 앱 생성
+          </li>
+          <li className="flex gap-2">
+            <span className="text-forge-copper">2.</span>
+            OAuth &amp; Permissions → Bot Token (xoxb-)
+          </li>
+          <li className="flex gap-2">
+            <span className="text-forge-copper">3.</span>
+            Socket Mode 활성화 → App Token (xapp-)
+          </li>
+        </ol>
+
+        {/* Bot Token */}
+        <div>
+          <label className="block text-sm font-medium text-forge-muted mb-2">
+            Bot Token (xoxb-)
+          </label>
+          <input
+            type="password"
+            value={botToken}
+            onChange={(e) => setBotToken(e.target.value)}
+            placeholder="xoxb-..."
+            className="
+              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+              focus:outline-none focus:border-forge-copper text-sm font-mono
+            "
+          />
+        </div>
+
+        {/* App Token */}
+        <div>
+          <label className="block text-sm font-medium text-forge-muted mb-2">
+            App Token (xapp-)
+          </label>
+          <input
+            type="password"
+            value={appToken}
+            onChange={(e) => setAppToken(e.target.value)}
+            placeholder="xapp-..."
+            className="
+              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+              focus:outline-none focus:border-forge-copper text-sm font-mono
+            "
+          />
+        </div>
+
+        {/* DM 정책 */}
+        <div>
+          <label className="block text-sm font-medium text-forge-muted mb-2">
+            DM 접근 정책
+          </label>
+          <select
+            value={dmPolicy}
+            onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
+            className="
+              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+              focus:outline-none focus:border-forge-copper text-sm
+            "
+          >
+            <option value="pairing">페어링 (코드 승인 필요)</option>
+            <option value="allowlist">허용 목록만</option>
+            <option value="open">모두 허용 ⚠️</option>
+          </select>
+        </div>
+
+        <button
+          onClick={handleSlackConnect}
+          disabled={!botToken || !appToken}
+          className="
+            w-full py-3 rounded-xl btn-primary mt-4
+            disabled:opacity-50 disabled:cursor-not-allowed
+          "
+        >
+          연결
+        </button>
+      </div>
+    );
+  };
+
+  // 기본 메신저 모달
+  const DefaultMessengerModal = ({ messenger }: { messenger: typeof ALL_MESSENGERS[0] }) => {
+    const [token, setToken] = useState('');
+    const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+
+    const handleConnect = async () => {
+      try {
+        await invoke('update_messenger_config', {
+          channel: messenger.id,
+          token: token || '',
+          dmPolicy,
+          allowFrom: [],
+          groupPolicy: 'pairing',
+          requireMention: true,
+        });
+        
+        updateConfig({
+          messenger: {
+            ...config.messenger,
+            type: messenger.id,
+            token: token || config.messenger.token,
+            dmPolicy,
+          }
+        });
+      } catch (err) {
+        console.error('메신저 연결 실패:', err);
+        alert(`연결 실패: ${err}`);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-forge-muted">{messenger.desc}</p>
+        
+        {/* 가이드 단계 */}
+        {messenger.guideSteps && (
+          <ol className="space-y-2 text-sm text-forge-muted">
+            {messenger.guideSteps.map((step, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-forge-copper">{i + 1}.</span>
+                {step}
+              </li>
+            ))}
+          </ol>
+        )}
+        
+        {/* 토큰 입력 */}
+        {messenger.needsToken && (
+          <div>
+            <label className="block text-sm font-medium text-forge-muted mb-2">
+              {messenger.tokenLabel || 'Bot Token'}
+            </label>
+            <input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder={messenger.tokenPlaceholder}
+              className="
+                w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+                focus:outline-none focus:border-forge-copper text-sm font-mono
+              "
+            />
+          </div>
+        )}
+
+        {/* DM 정책 */}
+        <div>
+          <label className="block text-sm font-medium text-forge-muted mb-2">
+            DM 접근 정책
+          </label>
+          <select
+            value={dmPolicy}
+            onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
+            className="
+              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+              focus:outline-none focus:border-forge-copper text-sm
+            "
+          >
+            <option value="pairing">페어링 (코드 승인 필요)</option>
+            <option value="allowlist">허용 목록만</option>
+            <option value="open">모두 허용 ⚠️</option>
+          </select>
+        </div>
+
+        {/* 공식 문서 링크 */}
+        {messenger.guideUrl && (
+          <a
+            href={messenger.guideUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-center text-sm text-forge-copper hover:text-forge-amber"
+          >
+            공식 문서 열기 →
+          </a>
+        )}
+
+        <button
+          onClick={handleConnect}
+          disabled={messenger.needsToken && !token}
+          className="
+            w-full py-3 rounded-xl btn-primary mt-4
+            disabled:opacity-50 disabled:cursor-not-allowed
+          "
+        >
+          연결
+        </button>
+      </div>
+    );
+  };
+
   const handleConnect = (messenger: typeof ALL_MESSENGERS[0], e: React.MouseEvent) => {
     e.stopPropagation();
     
-    const MessengerModal = () => {
-      const [token, setToken] = useState('');
-      const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
-      
-      return (
-        <div className="space-y-4">
-          <p className="text-sm text-forge-muted">{messenger.desc}</p>
-          
-          {/* 토큰 입력 */}
-          {messenger.needsToken && (
-            <div>
-              <label className="block text-sm font-medium text-forge-muted mb-2">
-                {messenger.tokenLabel || 'Bot Token'}
-              </label>
-              <input
-                type="password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder={messenger.tokenPlaceholder}
-                className="
-                  w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-                  focus:outline-none focus:border-forge-copper text-sm font-mono
-                "
-              />
-            </div>
-          )}
-
-          {/* DM 정책 */}
-          <div>
-            <label className="block text-sm font-medium text-forge-muted mb-2">
-              DM 접근 정책
-            </label>
-            <select
-              value={dmPolicy}
-              onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
-              className="
-                w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-                focus:outline-none focus:border-forge-copper text-sm
-              "
-            >
-              <option value="pairing">페어링 (코드 승인 필요)</option>
-              <option value="allowlist">허용 목록만</option>
-              <option value="open">모두 허용 ⚠️</option>
-            </select>
-          </div>
-
-          {/* 연결 버튼 */}
-          <button
-            onClick={() => {
-              updateConfig({
-                messenger: {
-                  ...config.messenger,
-                  type: messenger.id,
-                  token: token || config.messenger.token,
-                  dmPolicy,
-                }
-              });
-            }}
-            disabled={messenger.needsToken && !token && !config.messenger.token}
-            className="
-              w-full py-3 rounded-xl btn-primary mt-4
-              disabled:opacity-50 disabled:cursor-not-allowed
-            "
-          >
-            연결
-          </button>
-        </div>
-      );
-    };
-
-    openModal(`${messenger.name} 연결`, <MessengerModal />);
+    // 메신저별 전용 모달
+    if (messenger.id === 'whatsapp') {
+      openModal('WhatsApp 연결', <WhatsAppModal />);
+    } else if (messenger.id === 'slack') {
+      openModal('Slack 연결', <SlackModal />);
+    } else {
+      openModal(`${messenger.name} 연결`, <DefaultMessengerModal messenger={messenger} />);
+    }
   };
 
   const handleDisconnect = (messenger: typeof ALL_MESSENGERS[0], e: React.MouseEvent) => {
@@ -104,18 +359,35 @@ export default function MessengerSettings({
     setDisconnectTarget(messenger);
   };
 
-  const confirmDisconnect = () => {
+  const confirmDisconnect = async () => {
     if (!disconnectTarget) return;
     
-    updateConfig({
-      messenger: {
-        ...config.messenger,
-        type: '' as Messenger,
+    try {
+      // 채널 설정 제거 (빈 값 전달)
+      await invoke('update_messenger_config', {
+        channel: disconnectTarget.id,
         token: '',
         dmPolicy: 'pairing',
-      }
-    });
-    setDisconnectTarget(null);
+        allowFrom: [],
+        groupPolicy: 'pairing',
+        requireMention: true,
+      });
+      
+      // 상태 업데이트
+      updateConfig({
+        messenger: {
+          ...config.messenger,
+          type: '' as Messenger,
+          token: '',
+          dmPolicy: 'pairing',
+        }
+      });
+      
+      setDisconnectTarget(null);
+    } catch (err) {
+      console.error('연결 해제 실패:', err);
+      alert(`연결 해제 실패: ${err}`);
+    }
   };
 
   return (
