@@ -312,7 +312,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
               ❌ Node.js 24+는 일부 네이티브 모듈과 호환되지 않습니다.
             </p>
             <p className="text-gray-300 text-sm">
-              OpenClaw의 일부 기능(Discord 음성 등)이 정상 작동하지 않을 수 있습니다.
+              설치 중 빌드 오류가 발생할 수 있습니다.
             </p>
           </div>
           
