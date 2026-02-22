@@ -265,9 +265,9 @@ pub fn install_openclaw_global() -> Result<String, String> {
         return Err("npm이 설치되어 있지 않습니다. Node.js를 먼저 설치해주세요.".to_string());
     }
     
-    // npm install -g openclaw 실행
+    // npm install -g openclaw 실행 (--ignore-scripts로 빌드 스크립트 건너뛰기)
     let output = Command::new("cmd")
-        .args(["/C", "npm install -g openclaw"])
+        .args(["/C", "npm install -g openclaw --ignore-scripts"])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("npm 실행 실패: {}", e))?;
@@ -725,9 +725,10 @@ pub fn install_openclaw_with_recovery() -> Result<String, String> {
         eprintln!("⚠️ 백신 감지됨: {}. 설치 실패 시 실시간 감시 중지 필요할 수 있음.", av);
     }
     
-    // 1차 시도
+    // 1차 시도 (--ignore-scripts로 빌드 스크립트 건너뛰기 - node-llama-cpp 빌드 무한대기 방지)
+    eprintln!("npm install -g openclaw 실행 중 (ignore-scripts)...");
     let output = Command::new("cmd")
-        .args(["/C", "npm install -g openclaw"])
+        .args(["/C", "npm install -g openclaw --ignore-scripts"])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("npm 실행 실패: {}", e))?;
@@ -762,7 +763,7 @@ pub fn install_openclaw_with_recovery() -> Result<String, String> {
             std::thread::sleep(std::time::Duration::from_secs(2));
             
             let retry_output = Command::new("cmd")
-                .args(["/C", "npm install -g openclaw"])
+                .args(["/C", "npm install -g openclaw --ignore-scripts"])
                 .creation_flags(CREATE_NO_WINDOW)
                 .output()
                 .map_err(|e| format!("재시도 실패: {}", e))?;
