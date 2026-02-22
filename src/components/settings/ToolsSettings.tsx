@@ -7,6 +7,7 @@ import type { FullConfig, SettingsMode } from '../../types/config';
 interface ToolsSettingsProps {
   config: FullConfig;
   updateConfig: (updates: Partial<FullConfig>) => void;
+  commitConfig: (newConfig: FullConfig) => void;  // 저장 성공 시 호출
   mode: SettingsMode;
   openModal: (title: string, component: React.ReactNode) => void;
   closeModal: () => void;
@@ -139,6 +140,7 @@ const TOOLS: Tool[] = [
 export default function ToolsSettings({
   config,
   updateConfig,
+  commitConfig,
   mode: _mode,
   openModal,
   closeModal: _closeModal,
@@ -209,10 +211,11 @@ export default function ToolsSettings({
         integrations: { [disconnectTarget.envVar]: '' }
       });
       
-      // 상태 업데이트
+      // 상태 업데이트 + 변경 트래킹
       const newIntegrations = { ...config.integrations };
       delete newIntegrations[disconnectTarget.envVar];
-      updateConfig({ integrations: newIntegrations });
+      const newConfig = { ...config, integrations: newIntegrations };
+      commitConfig(newConfig);
       
       setDisconnectTarget(null);
     } catch (err) {

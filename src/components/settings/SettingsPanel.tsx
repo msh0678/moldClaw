@@ -1,6 +1,7 @@
 // SettingsPanel - 설정 페이지 메인 컴포넌트
 // 좌측 패널 + 우측 콘텐츠 레이아웃
 // 각 섹션에서 개별 저장, 사이드바 이동 시 미저장 변경사항 삭제
+// 설정 변경 트래킹: 닫을 때 실제 변경이 있으면 Gateway 재시작
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
@@ -24,8 +25,12 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [mode, setMode] = useState<SettingsMode>('advanced');
   const [config, setConfig] = useState<FullConfig>(defaultFullConfig);
   const [loading, setLoading] = useState(true);
+  const [isClosing, setIsClosing] = useState(false);
   
-  // 저장된 상태 (섹션 이동 시 리셋용)
+  // 변경 트래킹 refs
+  // initialConfigRef: 설정 패널 열 때의 상태 (불변, 비교 기준)
+  const initialConfigRef = useRef<FullConfig>(defaultFullConfig);
+  // savedConfigRef: 저장할 때마다 업데이트 (섹션 이동 시 리셋용 + 닫을 때 비교용)
   const savedConfigRef = useRef<FullConfig>(defaultFullConfig);
   
   // 모달 상태
@@ -62,7 +67,10 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
       };
 
       setConfig(loadedConfig);
-      savedConfigRef.current = loadedConfig;
+      // 초기 상태 저장 (비교 기준 - 불변)
+      initialConfigRef.current = JSON.parse(JSON.stringify(loadedConfig));
+      // 현재 저장된 상태
+      savedConfigRef.current = JSON.parse(JSON.stringify(loadedConfig));
     } catch (err) {
       console.error('설정 로드 실패:', err);
     } finally {
@@ -99,9 +107,12 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   };
 
   // 설정 저장 완료 시 호출 (savedConfig 업데이트)
+  // 각 섹션에서 invoke 성공 후 반드시 호출해야 함
   const commitConfig = (newConfig: FullConfig) => {
-    savedConfigRef.current = newConfig;
+    // Deep copy로 저장 (참조 문제 방지)
+    savedConfigRef.current = JSON.parse(JSON.stringify(newConfig));
     setConfig(newConfig);
+    console.log('[Settings] 설정 저장 완료:', newConfig);
   };
 
   // 현재 섹션 렌더링
@@ -133,11 +144,37 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
     }
   };
 
-  // 대시보드로 나가기 (미저장 변경사항 삭제)
-  const handleClose = () => {
-    // savedConfig로 리셋 후 종료
-    setConfig(savedConfigRef.current);
-    onClose();
+  // 대시보드로 나가기 (변경사항 있으면 Gateway 재시작)
+  const handleClose = async () => {
+    if (isClosing) return;
+    setIsClosing(true);
+    
+    try {
+      // 설정 진입 시점과 현재 저장된 상태 비교
+      const initialJson = JSON.stringify(initialConfigRef.current);
+      const savedJson = JSON.stringify(savedConfigRef.current);
+      const hasRealChanges = initialJson !== savedJson;
+      
+      console.log('[Settings] 변경 여부 체크:', {
+        hasRealChanges,
+        initial: initialConfigRef.current,
+        saved: savedConfigRef.current,
+      });
+      
+      if (hasRealChanges) {
+        console.log('[Settings] 설정 변경 감지 - Gateway 재시작');
+        try {
+          await invoke('restart_gateway');
+        } catch (err) {
+          console.error('[Settings] Gateway 재시작 실패:', err);
+          // 재시작 실패해도 설정 패널은 닫음
+        }
+      }
+    } finally {
+      setConfig(savedConfigRef.current);
+      setIsClosing(false);
+      onClose();
+    }
   };
 
   if (loading) {

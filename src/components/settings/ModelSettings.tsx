@@ -1,12 +1,14 @@
 // ModelSettings - AI 모델 설정 섹션
 
 import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import type { FullConfig, SettingsMode, ModelConfig, AIProvider } from '../../types/config';
 import { ALL_PROVIDERS } from '../../data/providers';
 
 interface ModelSettingsProps {
   config: FullConfig;
   updateConfig: (updates: Partial<FullConfig>) => void;
+  commitConfig: (newConfig: FullConfig) => void;  // 저장 성공 시 호출
   mode: SettingsMode;
   openModal: (title: string, component: React.ReactNode) => void;
   closeModal: () => void;
@@ -14,7 +16,8 @@ interface ModelSettingsProps {
 
 export default function ModelSettings({
   config,
-  updateConfig,
+  updateConfig: _updateConfig,
+  commitConfig,
   mode: _mode,
   openModal: _openModal,
   closeModal: _closeModal,
@@ -36,16 +39,43 @@ export default function ModelSettings({
     setApiKey('');
   };
 
-  const handleSaveModel = () => {
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleSaveModel = async () => {
     if (!selectedProvider || !selectedModel) return;
     
-    const newModel: ModelConfig = {
-      provider: selectedProvider,
-      model: selectedModel,
-      apiKey: apiKey || config.model?.apiKey || '',
-    };
+    setSaving(true);
+    setSaveError(null);
     
-    updateConfig({ model: newModel });
+    try {
+      // Rust 백엔드에 저장
+      await invoke('update_model_config', {
+        provider: selectedProvider,
+        model: selectedModel,
+        apiKey: apiKey || '',  // 빈 문자열이면 기존 키 유지
+      });
+      
+      // 새 설정 객체 생성
+      const newModel: ModelConfig = {
+        provider: selectedProvider,
+        model: selectedModel,
+        apiKey: apiKey || config.model?.apiKey || '',
+      };
+      
+      const newConfig = { ...config, model: newModel };
+      
+      // 저장 성공 - commitConfig 호출 (변경 트래킹용)
+      commitConfig(newConfig);
+      
+      // API 키 입력 필드 초기화 (저장됐으므로)
+      setApiKey('');
+    } catch (err) {
+      console.error('모델 설정 저장 실패:', err);
+      setSaveError(String(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -171,16 +201,23 @@ export default function ModelSettings({
 
       {/* 적용 버튼 */}
       {selectedModel && (
-        <button
-          onClick={handleSaveModel}
-          disabled={!selectedProvider || !selectedModel || (!apiKey && !config.model?.apiKey)}
-          className="
-            w-full py-3 rounded-xl btn-primary
-            disabled:opacity-50 disabled:cursor-not-allowed
-          "
-        >
-          변경 적용
-        </button>
+        <>
+          {saveError && (
+            <div className="mb-3 p-3 rounded-xl bg-forge-error/10 border border-forge-error/30 text-forge-error text-sm">
+              {saveError}
+            </div>
+          )}
+          <button
+            onClick={handleSaveModel}
+            disabled={saving || !selectedProvider || !selectedModel || (!apiKey && !config.model?.apiKey)}
+            className="
+              w-full py-3 rounded-xl btn-primary
+              disabled:opacity-50 disabled:cursor-not-allowed
+            "
+          >
+            {saving ? '저장 중...' : '변경 적용'}
+          </button>
+        </>
       )}
     </div>
   );

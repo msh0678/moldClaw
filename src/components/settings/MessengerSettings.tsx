@@ -10,6 +10,7 @@ import { ALL_MESSENGERS } from '../../data/messengers';
 interface MessengerSettingsProps {
   config: FullConfig;
   updateConfig: (updates: Partial<FullConfig>) => void;
+  commitConfig: (newConfig: FullConfig) => void;  // 저장 성공 시 호출
   mode: SettingsMode;
   openModal: (title: string, component: React.ReactNode) => void;
   closeModal: () => void;
@@ -17,7 +18,8 @@ interface MessengerSettingsProps {
 
 export default function MessengerSettings({
   config,
-  updateConfig,
+  updateConfig: _updateConfig,
+  commitConfig,
   mode: _mode,
   openModal,
   closeModal: _closeModal,
@@ -43,15 +45,17 @@ export default function MessengerSettings({
         // 성공 시 연결 완료
         setStatus('connected');
         
-        // 메신저 설정 업데이트
-        updateConfig({
+        // 메신저 설정 업데이트 + 변경 트래킹
+        const newConfig = {
+          ...config,
           messenger: {
             ...config.messenger,
             type: 'whatsapp' as Messenger,
             token: '', // WhatsApp은 토큰 없음
-            dmPolicy: 'pairing',
+            dmPolicy: 'pairing' as const,
           }
-        });
+        };
+        commitConfig(newConfig);
       } catch (err) {
         console.error('WhatsApp QR 실패:', err);
         setErrorMsg(String(err));
@@ -155,14 +159,17 @@ export default function MessengerSettings({
         // App Token도 별도 저장
         await invoke('set_slack_app_token', { appToken });
         
-        updateConfig({
+        // 변경 트래킹용 commitConfig
+        const newConfig = {
+          ...config,
           messenger: {
             ...config.messenger,
             type: 'slack' as Messenger,
             token: botToken,
             dmPolicy,
           }
-        });
+        };
+        commitConfig(newConfig);
       } catch (err) {
         console.error('Slack 연결 실패:', err);
         alert(`Slack 연결 실패: ${err}`);
@@ -275,14 +282,17 @@ export default function MessengerSettings({
           requireMention: true,
         });
         
-        updateConfig({
+        // 변경 트래킹용 commitConfig
+        const newConfig = {
+          ...config,
           messenger: {
             ...config.messenger,
             type: messenger.id,
             token: token || config.messenger.token,
             dmPolicy,
           }
-        });
+        };
+        commitConfig(newConfig);
       } catch (err) {
         console.error('메신저 연결 실패:', err);
         alert(`연결 실패: ${err}`);
@@ -395,21 +405,23 @@ export default function MessengerSettings({
       await invoke('update_messenger_config', {
         channel: disconnectTarget.id,
         token: '',
-        dmPolicy: 'pairing',
+        dmPolicy: 'pairing' as const,
         allowFrom: [],
         groupPolicy: 'pairing',
         requireMention: true,
       });
       
-      // 상태 업데이트
-      updateConfig({
+      // 변경 트래킹용 commitConfig
+      const newConfig = {
+        ...config,
         messenger: {
           ...config.messenger,
           type: '' as Messenger,
           token: '',
-          dmPolicy: 'pairing',
+          dmPolicy: 'pairing' as const,
         }
-      });
+      };
+      commitConfig(newConfig);
       
       setDisconnectTarget(null);
     } catch (err) {
