@@ -27,18 +27,34 @@ export default function MessengerSettings({
   const isConfigured = (messengerId: Messenger) => config.messenger.type === messengerId;
 
   // WhatsApp 전용 모달
+  // OpenClaw WhatsApp QR은 터미널 창에서 ASCII로 표시됨
   const WhatsAppModal = () => {
     const [status, setStatus] = useState<'init' | 'waiting' | 'connected' | 'error'>('init');
-    const [qrCode, setQrCode] = useState<string | null>(null);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     const startConnection = async () => {
       setStatus('waiting');
+      setErrorMsg(null);
       try {
-        // WhatsApp QR 코드 요청
-        const qr = await invoke<string>('get_whatsapp_qr');
-        setQrCode(qr);
+        // 터미널 창에서 QR 코드 표시 (login_whatsapp)
+        const result = await invoke<string>('login_whatsapp');
+        console.log('WhatsApp 결과:', result);
+        
+        // 성공 시 연결 완료
+        setStatus('connected');
+        
+        // 메신저 설정 업데이트
+        updateConfig({
+          messenger: {
+            ...config.messenger,
+            type: 'whatsapp' as Messenger,
+            token: '', // WhatsApp은 토큰 없음
+            dmPolicy: 'pairing',
+          }
+        });
       } catch (err) {
         console.error('WhatsApp QR 실패:', err);
+        setErrorMsg(String(err));
         setStatus('error');
       }
     };
@@ -56,11 +72,11 @@ export default function MessengerSettings({
           </li>
           <li className="flex gap-2">
             <span className="text-forge-copper">2.</span>
-            휴대폰 WhatsApp → 설정 → 연결된 기기
+            <strong>터미널 창이 열립니다</strong> (QR 코드 표시)
           </li>
           <li className="flex gap-2">
             <span className="text-forge-copper">3.</span>
-            "기기 연결" → QR 코드 스캔
+            휴대폰 WhatsApp → 설정 → 연결된 기기 → QR 스캔
           </li>
         </ol>
 
@@ -69,29 +85,41 @@ export default function MessengerSettings({
             onClick={startConnection}
             className="w-full py-3 rounded-xl btn-primary mt-4"
           >
-            QR 코드 생성
+            📷 QR 코드 생성
           </button>
         )}
 
         {status === 'waiting' && (
           <div className="text-center py-6">
-            {qrCode ? (
-              <div className="bg-white p-4 rounded-xl inline-block">
-                <img src={qrCode} alt="WhatsApp QR" className="w-48 h-48" />
-              </div>
-            ) : (
-              <div className="animate-spin w-8 h-8 border-2 border-forge-copper/30 border-t-forge-copper rounded-full mx-auto" />
-            )}
-            <p className="text-sm text-forge-muted mt-4">휴대폰으로 QR 코드를 스캔하세요</p>
+            <div className="animate-spin w-8 h-8 border-2 border-forge-copper/30 border-t-forge-copper rounded-full mx-auto" />
+            <p className="text-sm text-forge-amber mt-4 font-medium">
+              터미널 창이 열렸습니다!
+            </p>
+            <p className="text-xs text-forge-muted mt-2">
+              터미널에서 QR 코드를 휴대폰으로 스캔하세요.<br />
+              완료되면 자동으로 연결됩니다.
+            </p>
+          </div>
+        )}
+
+        {status === 'connected' && (
+          <div className="text-center py-4">
+            <div className="w-12 h-12 rounded-full bg-forge-success/20 mx-auto flex items-center justify-center mb-3">
+              <span className="text-2xl">✓</span>
+            </div>
+            <p className="text-forge-success font-medium">WhatsApp 연결 완료!</p>
           </div>
         )}
 
         {status === 'error' && (
           <div className="text-center py-4">
-            <p className="text-forge-error">연결 실패. 다시 시도해주세요.</p>
+            <p className="text-forge-error font-medium">연결 실패</p>
+            {errorMsg && (
+              <p className="text-xs text-forge-muted mt-2 break-words">{errorMsg}</p>
+            )}
             <button
               onClick={() => setStatus('init')}
-              className="mt-4 px-4 py-2 rounded-lg bg-[#252836] text-forge-text"
+              className="mt-4 px-4 py-2 rounded-lg bg-[#252836] text-forge-text hover:bg-[#2d303f] transition-colors"
             >
               다시 시도
             </button>
