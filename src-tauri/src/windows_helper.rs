@@ -69,7 +69,8 @@ pub fn run_elevated_script(script: &str) -> Result<String, String> {
 pub struct PrerequisiteStatus {
     pub node_installed: bool,
     pub node_version: Option<String>,
-    pub node_compatible: bool,  // >= 22.12.0
+    pub node_compatible: bool,  // >= 22.12.0 && < 24.0
+    pub node_too_new: bool,     // >= 24.0 (네이티브 모듈 호환성 문제)
     pub npm_installed: bool,
     // 확장된 환경 검사
     pub vc_redist_installed: bool,
@@ -83,6 +84,9 @@ pub fn check_prerequisites() -> PrerequisiteStatus {
     let node_compatible = node_version.as_ref()
         .map(|v| is_node_version_compatible(v))
         .unwrap_or(false);
+    let node_too_new = node_version.as_ref()
+        .map(|v| is_node_version_too_new(v))
+        .unwrap_or(false);
     
     let disk_space_gb = get_available_disk_space_gb();
     
@@ -90,6 +94,7 @@ pub fn check_prerequisites() -> PrerequisiteStatus {
         node_installed: node_version.is_some(),
         node_version,
         node_compatible,
+        node_too_new,
         npm_installed: is_npm_installed(),
         vc_redist_installed: is_vc_redist_installed(),
         disk_space_gb,
@@ -205,8 +210,22 @@ pub fn is_node_version_compatible(version: &str) -> bool {
     let major: u32 = parts[0].parse().unwrap_or(0);
     let minor: u32 = parts[1].parse().unwrap_or(0);
     
-    // 22.12.0 이상 필요
-    major > 22 || (major == 22 && minor >= 12)
+    // 22.12.0 이상, 24 미만 필요 (24+는 네이티브 모듈 호환성 문제)
+    // Node.js 23도 Current라 LTS인 22를 권장
+    (major == 22 && minor >= 12) || major == 23
+}
+
+/// Node.js 버전이 너무 최신인지 확인 (24+)
+pub fn is_node_version_too_new(version: &str) -> bool {
+    let version = version.trim_start_matches('v');
+    let parts: Vec<&str> = version.split('.').collect();
+    
+    if parts.is_empty() {
+        return false;
+    }
+    
+    let major: u32 = parts[0].parse().unwrap_or(0);
+    major >= 24
 }
 
 /// winget으로 Node.js LTS 설치 (UAC 프롬프트 표시)
