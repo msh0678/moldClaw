@@ -75,9 +75,163 @@ fn get_openclaw_version() -> Option<String> {
 
 // ===== 설치 =====
 
+/// OpenClaw 설치 상태 검증 (설치 여부 + 실제 작동 여부)
+#[tauri::command]
+fn verify_openclaw_status() -> serde_json::Value {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        // 1. openclaw 명령어 존재 여부
+        let exists = std::process::Command::new("cmd")
+            .args(["/C", "where openclaw"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        
+        // 2. 실제 버전 출력 가능 여부
+        let version_output = std::process::Command::new("cmd")
+            .args(["/C", "openclaw --version"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        
+        let (works, version) = match version_output {
+            Ok(o) if o.status.success() => {
+                let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                (true, Some(v))
+            }
+            _ => (false, None),
+        };
+        
+        // 3. 불완전 설치 판단: 명령어는 있는데 작동 안 함
+        let incomplete = exists && !works;
+        
+        serde_json::json!({
+            "exists": exists,
+            "works": works,
+            "version": version,
+            "incomplete": incomplete
+        })
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let exists = std::process::Command::new("which")
+            .args(["openclaw"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        
+        let version_output = std::process::Command::new("openclaw")
+            .args(["--version"])
+            .output();
+        
+        let (works, version) = match version_output {
+            Ok(o) if o.status.success() => {
+                let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                (true, Some(v))
+            }
+            _ => (false, None),
+        };
+        
+        let incomplete = exists && !works;
+        
+        serde_json::json!({
+            "exists": exists,
+            "works": works,
+            "version": version,
+            "incomplete": incomplete
+        })
+    }
+}
+
+/// 불완전한 OpenClaw 설치 정리
+#[tauri::command]
+async fn cleanup_incomplete_openclaw() -> Result<String, String> {
+    eprintln!("불완전한 OpenClaw 설치 정리 시작...");
+    
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        // 1. npm uninstall 시도
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "npm uninstall -g openclaw"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        
+        // 2. 강제 삭제 (npm prefix 경로)
+        let prefix_output = std::process::Command::new("cmd")
+            .args(["/C", "npm config get prefix"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        
+        if let Ok(output) = prefix_output {
+            let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !prefix.is_empty() {
+                let files_to_remove = [
+                    format!("{}\\openclaw", prefix),
+                    format!("{}\\openclaw.cmd", prefix),
+                    format!("{}\\openclaw.ps1", prefix),
+                    format!("{}\\node_modules\\openclaw", prefix),
+                ];
+                
+                for file_path in &files_to_remove {
+                    let path = std::path::Path::new(file_path);
+                    if path.exists() {
+                        if path.is_dir() {
+                            let _ = std::fs::remove_dir_all(path);
+                        } else {
+                            let _ = std::fs::remove_file(path);
+                        }
+                        eprintln!("정리됨: {}", file_path);
+                    }
+                }
+            }
+        }
+        
+        // 3. npm 캐시 정리
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "npm cache clean --force"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        
+        eprintln!("불완전한 설치 정리 완료");
+        Ok("불완전한 설치가 정리되었습니다.".to_string())
+    }
+    
+    #[cfg(not(windows))]
+    {
+        // npm uninstall
+        let _ = std::process::Command::new("npm")
+            .args(["uninstall", "-g", "openclaw"])
+            .output();
+        
+        // npm 캐시 정리
+        let _ = std::process::Command::new("npm")
+            .args(["cache", "clean", "--force"])
+            .output();
+        
+        Ok("불완전한 설치가 정리되었습니다.".to_string())
+    }
+}
+
 /// OpenClaw 설치 (npm install -g openclaw) - 에러 자동 복구 포함
 #[tauri::command]
 async fn install_openclaw() -> Result<String, String> {
+    // 설치 전 불완전 설치 확인 및 정리
+    let status = verify_openclaw_status();
+    if status["incomplete"].as_bool().unwrap_or(false) {
+        eprintln!("불완전한 이전 설치 감지 - 정리 후 재설치");
+        let _ = cleanup_incomplete_openclaw().await;
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+    
     #[cfg(windows)]
     {
         // 에러 핸들링 및 자동 복구 시스템 사용
@@ -86,7 +240,7 @@ async fn install_openclaw() -> Result<String, String> {
     #[cfg(not(windows))]
     {
         let output = std::process::Command::new("npm")
-            .args(["install", "-g", "openclaw"])
+            .args(["install", "-g", "openclaw", "--ignore-scripts"])
             .output()
             .map_err(|e| format!("npm 실행 실패: {}", e))?;
         
@@ -243,13 +397,15 @@ async fn restart_gateway() -> Result<String, String> {
     openclaw::restart_gateway().await
 }
 
-/// OpenClaw 삭제 (npm uninstall + 설정 폴더 삭제)
+/// OpenClaw 삭제 (npm uninstall + 설정 폴더 삭제 + 검증)
 #[tauri::command]
 async fn uninstall_openclaw() -> Result<String, String> {
     eprintln!("OpenClaw 삭제 시작...");
+    let mut warnings: Vec<String> = vec![];
     
     // 1. 먼저 Gateway 종료
     let _ = openclaw::stop_gateway().await;
+    std::thread::sleep(std::time::Duration::from_secs(1));
     
     // 2. npm uninstall
     #[cfg(windows)]
@@ -257,17 +413,54 @@ async fn uninstall_openclaw() -> Result<String, String> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
-        let _ = std::process::Command::new("cmd")
+        let uninstall_result = std::process::Command::new("cmd")
             .args(["/C", "npm uninstall -g openclaw"])
             .creation_flags(CREATE_NO_WINDOW)
             .output();
+        
+        match uninstall_result {
+            Ok(output) => {
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    eprintln!("npm uninstall 경고: {}", stderr);
+                    warnings.push(format!("npm uninstall 경고: {}", stderr));
+                }
+            }
+            Err(e) => {
+                eprintln!("npm uninstall 실행 실패: {}", e);
+                warnings.push(format!("npm uninstall 실행 실패: {}", e));
+            }
+        }
+        
+        // npm uninstall 후에도 남아있으면 강제 삭제 시도
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        if is_openclaw_installed_sync() {
+            eprintln!("npm uninstall 후에도 openclaw 존재 - 강제 삭제 시도");
+            if let Err(e) = force_remove_openclaw() {
+                warnings.push(format!("강제 삭제 실패: {}", e));
+            }
+        }
     }
     
     #[cfg(not(windows))]
     {
-        let _ = std::process::Command::new("npm")
+        let uninstall_result = std::process::Command::new("npm")
             .args(["uninstall", "-g", "openclaw"])
             .output();
+        
+        match uninstall_result {
+            Ok(output) => {
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    eprintln!("npm uninstall 경고: {}", stderr);
+                    warnings.push(format!("npm uninstall 경고: {}", stderr));
+                }
+            }
+            Err(e) => {
+                eprintln!("npm uninstall 실행 실패: {}", e);
+                warnings.push(format!("npm uninstall 실행 실패: {}", e));
+            }
+        }
     }
     
     // 3. 설정 폴더 삭제
@@ -275,20 +468,113 @@ async fn uninstall_openclaw() -> Result<String, String> {
         // ~/.openclaw 삭제
         let openclaw_dir = home.join(".openclaw");
         if openclaw_dir.exists() {
-            let _ = std::fs::remove_dir_all(&openclaw_dir);
-            eprintln!("~/.openclaw 삭제됨");
+            match std::fs::remove_dir_all(&openclaw_dir) {
+                Ok(_) => eprintln!("~/.openclaw 삭제됨"),
+                Err(e) => {
+                    eprintln!("~/.openclaw 삭제 실패: {}", e);
+                    warnings.push(format!("~/.openclaw 삭제 실패: {}", e));
+                }
+            }
         }
         
         // ~/.config/openclaw 삭제
         let config_dir = home.join(".config").join("openclaw");
         if config_dir.exists() {
-            let _ = std::fs::remove_dir_all(&config_dir);
-            eprintln!("~/.config/openclaw 삭제됨");
+            match std::fs::remove_dir_all(&config_dir) {
+                Ok(_) => eprintln!("~/.config/openclaw 삭제됨"),
+                Err(e) => {
+                    eprintln!("~/.config/openclaw 삭제 실패: {}", e);
+                    warnings.push(format!("~/.config/openclaw 삭제 실패: {}", e));
+                }
+            }
         }
     }
     
-    eprintln!("OpenClaw 삭제 완료");
-    Ok("OpenClaw가 성공적으로 삭제되었습니다.".to_string())
+    // 4. 삭제 검증
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let still_installed = is_openclaw_installed_sync();
+    
+    if still_installed {
+        eprintln!("경고: 삭제 후에도 openclaw가 감지됨");
+        warnings.push("삭제 후에도 openclaw CLI가 감지됩니다. 수동 삭제가 필요할 수 있습니다.".to_string());
+    }
+    
+    eprintln!("OpenClaw 삭제 완료 (경고: {}개)", warnings.len());
+    
+    if warnings.is_empty() {
+        Ok("OpenClaw가 성공적으로 삭제되었습니다.".to_string())
+    } else {
+        Ok(format!("OpenClaw 삭제 완료 (일부 경고 발생):\n{}", warnings.join("\n")))
+    }
+}
+
+/// OpenClaw 설치 여부 확인 (동기)
+fn is_openclaw_installed_sync() -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        std::process::Command::new("cmd")
+            .args(["/C", "openclaw --version"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+    
+    #[cfg(not(windows))]
+    {
+        std::process::Command::new("openclaw")
+            .args(["--version"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+}
+
+/// OpenClaw 강제 삭제 (npm prefix 경로에서 직접 삭제)
+#[cfg(windows)]
+fn force_remove_openclaw() -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    // npm prefix 경로 가져오기
+    let prefix_output = std::process::Command::new("cmd")
+        .args(["/C", "npm config get prefix"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("npm prefix 확인 실패: {}", e))?;
+    
+    let prefix = String::from_utf8_lossy(&prefix_output.stdout).trim().to_string();
+    if prefix.is_empty() {
+        return Err("npm prefix가 비어있음".to_string());
+    }
+    
+    eprintln!("npm prefix: {}", prefix);
+    
+    // openclaw 관련 파일들 삭제
+    let files_to_remove = [
+        format!("{}\\openclaw", prefix),
+        format!("{}\\openclaw.cmd", prefix),
+        format!("{}\\openclaw.ps1", prefix),
+        format!("{}\\node_modules\\openclaw", prefix),
+    ];
+    
+    for file_path in &files_to_remove {
+        let path = std::path::Path::new(file_path);
+        if path.exists() {
+            if path.is_dir() {
+                let _ = std::fs::remove_dir_all(path);
+                eprintln!("삭제됨: {}", file_path);
+            } else {
+                let _ = std::fs::remove_file(path);
+                eprintln!("삭제됨: {}", file_path);
+            }
+        }
+    }
+    
+    Ok(())
 }
 
 /// moldClaw 삭제 (MSI Uninstaller 실행)
@@ -1229,6 +1515,8 @@ pub fn run() {
             get_openclaw_version,
             // 설치
             install_openclaw,
+            verify_openclaw_status,
+            cleanup_incomplete_openclaw,
             install_prerequisites,
             // 공식 형식 Config (Device Identity 포함)
             create_official_config,

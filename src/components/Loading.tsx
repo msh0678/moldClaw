@@ -98,20 +98,46 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
       const nodeVersion = await invoke<string>('get_node_version')
       setStatus(`Node.js ${nodeVersion} 확인됨`)
 
-      // 2. OpenClaw 확인
+      // 2. OpenClaw 확인 (불완전 설치 감지 포함)
       await new Promise(resolve => setTimeout(resolve, 500))
       setStatus('OpenClaw 확인 중...')
-      const openclawInstalled = await invoke<boolean>('check_openclaw_installed')
-
-      if (!openclawInstalled) {
+      
+      interface OpenClawStatus {
+        exists: boolean
+        works: boolean
+        version: string | null
+        incomplete: boolean
+      }
+      
+      const openclawStatus = await invoke<OpenClawStatus>('verify_openclaw_status')
+      console.log('OpenClaw 상태:', openclawStatus)
+      
+      if (openclawStatus.incomplete) {
+        // 불완전 설치 감지 - 정리 후 재설치
+        setStep('installing-openclaw')
+        setStatus('이전 설치 정리 중...')
+        
+        try {
+          await invoke<string>('cleanup_incomplete_openclaw')
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        } catch (cleanupErr) {
+          console.error('정리 실패:', cleanupErr)
+          // 정리 실패해도 설치 시도
+        }
+        
+        setStatus('OpenClaw 재설치 중...')
+        const result = await invoke<string>('install_openclaw')
+        setStatus(result)
+      } else if (!openclawStatus.works) {
+        // 설치 안 됨 - 신규 설치
         setStep('installing-openclaw')
         setStatus('OpenClaw 설치 중... (최초 1회)')
         
         const result = await invoke<string>('install_openclaw')
         setStatus(result)
       } else {
-        const version = await invoke<string>('get_openclaw_version')
-        setStatus(`OpenClaw ${version} 확인됨`)
+        // 정상 작동 중
+        setStatus(`OpenClaw ${openclawStatus.version || '확인됨'}`)
       }
 
       // 3. 온보딩 완료 여부 확인
