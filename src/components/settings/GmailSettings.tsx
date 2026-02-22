@@ -6,6 +6,7 @@ import type { FullConfig, SettingsMode } from '../../types/config';
 interface GmailSettingsProps {
   config: FullConfig;
   updateConfig: (updates: Partial<FullConfig>) => void;
+  commitConfig: (newConfig: FullConfig) => void;
   mode: SettingsMode;
   openModal: (title: string, component: React.ReactNode) => void;
   closeModal: () => void;
@@ -14,6 +15,7 @@ interface GmailSettingsProps {
 export default function GmailSettings({
   config: _config,
   updateConfig: _updateConfig,
+  commitConfig: _commitConfig,
   mode: _mode,
   openModal: _openModal,
   closeModal: _closeModal,

@@ -84,7 +84,7 @@ export const ADDITIONAL_MESSENGERS: MessengerInfo[] = [
     id: 'slack' as Messenger,
     name: 'Slack',
     icon: '💼',
-    logo: 'https://cdn.simpleicons.org/slack/4A154B',
+    // Simple Icons에 없음
     desc: '워크스페이스 연동',
     difficulty: 2,
     pros: ['업무용 메신저', 'App Store 연동'],

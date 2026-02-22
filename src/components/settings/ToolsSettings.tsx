@@ -139,7 +139,7 @@ const TOOLS: Tool[] = [
 
 export default function ToolsSettings({
   config,
-  updateConfig,
+  updateConfig: _updateConfig,
   commitConfig,
   mode: _mode,
   openModal,
@@ -151,48 +151,92 @@ export default function ToolsSettings({
 
   const handleConnect = (tool: Tool, e: React.MouseEvent) => {
     e.stopPropagation();
-    const ToolModal = () => (
-      <div className="space-y-4">
-        <p className="text-sm text-forge-muted">{tool.description}</p>
+    
+    // 도구 모달 컴포넌트 (저장 버튼 포함)
+    const ToolModal = () => {
+      const [apiKey, setApiKey] = useState(config.integrations[tool.envVar] || '');
+      const [saving, setSaving] = useState(false);
+      const [error, setError] = useState<string | null>(null);
+      
+      const handleSave = async () => {
+        if (!apiKey.trim()) return;
         
-        <div>
-          <label className="block text-sm font-medium text-forge-muted mb-2">
-            API 키
-          </label>
-          <input
-            type="password"
-            placeholder={tool.placeholder}
-            defaultValue={config.integrations[tool.envVar] || ''}
-            onChange={(e) => {
-              updateConfig({
-                integrations: {
-                  ...config.integrations,
-                  [tool.envVar]: e.target.value,
-                }
-              });
-            }}
-            className="
-              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm font-mono
-            "
-          />
-          <p className="text-xs text-forge-muted mt-2">
-            환경변수: <code className="text-forge-copper">{tool.envVar}</code>
-          </p>
-        </div>
+        setSaving(true);
+        setError(null);
+        
+        try {
+          await invoke('update_integrations_config', {
+            integrations: { [tool.envVar]: apiKey.trim() }
+          });
+          
+          // 변경 트래킹
+          const newConfig = {
+            ...config,
+            integrations: {
+              ...config.integrations,
+              [tool.envVar]: apiKey.trim(),
+            }
+          };
+          commitConfig(newConfig);
+        } catch (err) {
+          console.error('도구 저장 실패:', err);
+          setError(String(err));
+        } finally {
+          setSaving(false);
+        }
+      };
+      
+      return (
+        <div className="space-y-4">
+          <p className="text-sm text-forge-muted">{tool.description}</p>
+          
+          <div>
+            <label className="block text-sm font-medium text-forge-muted mb-2">
+              API 키
+            </label>
+            <input
+              type="password"
+              placeholder={tool.placeholder}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="
+                w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+                focus:outline-none focus:border-forge-copper text-sm font-mono
+              "
+            />
+            <p className="text-xs text-forge-muted mt-2">
+              환경변수: <code className="text-forge-copper">{tool.envVar}</code>
+            </p>
+          </div>
 
-        {tool.guideUrl && (
-          <a
-            href={tool.guideUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block text-center text-sm text-forge-copper hover:text-forge-amber mt-4"
+          {tool.guideUrl && (
+            <a
+              href={tool.guideUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-center text-sm text-forge-copper hover:text-forge-amber"
+            >
+              공식 사이트 열기 →
+            </a>
+          )}
+          
+          {error && (
+            <p className="text-sm text-forge-error">{error}</p>
+          )}
+          
+          <button
+            onClick={handleSave}
+            disabled={saving || !apiKey.trim()}
+            className="
+              w-full py-3 rounded-xl btn-primary mt-2
+              disabled:opacity-50 disabled:cursor-not-allowed
+            "
           >
-            공식 사이트 열기 →
-          </a>
-        )}
-      </div>
-    );
+            {saving ? '저장 중...' : '저장'}
+          </button>
+        </div>
+      );
+    };
 
     openModal(`${tool.name} 설정`, <ToolModal />);
   };

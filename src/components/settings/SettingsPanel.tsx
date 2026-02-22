@@ -189,21 +189,21 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   }
 
   return (
-    <div className="min-h-screen gradient-bg flex">
-      {/* 좌측 사이드바 */}
-      <SettingsSidebar
-        currentSection={section}
-        onSectionChange={handleSectionChange}
-        mode={mode}
-        onModeChange={setMode}
-        onClose={handleClose}
-      />
+    <div className="h-screen gradient-bg flex overflow-hidden">
+      {/* 좌측 사이드바 - 고정, 스크롤 안 됨 */}
+      <div className="h-full flex-shrink-0">
+        <SettingsSidebar
+          currentSection={section}
+          onSectionChange={handleSectionChange}
+          mode={mode}
+          onModeChange={setMode}
+          onClose={handleClose}
+        />
+      </div>
 
-      {/* 우측 컨텐츠 */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-auto p-8">
-          {renderSection()}
-        </div>
+      {/* 우측 컨텐츠 - 스크롤 가능 */}
+      <div className="flex-1 h-full overflow-auto p-8">
+        {renderSection()}
       </div>
 
       {/* 모달 */}

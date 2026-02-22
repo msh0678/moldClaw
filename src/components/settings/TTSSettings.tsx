@@ -1,10 +1,13 @@
 // TTSSettings - TTS(음성 합성) 설정 섹션
 
+import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import type { FullConfig, SettingsMode } from '../../types/config';
 
 interface TTSSettingsProps {
   config: FullConfig;
   updateConfig: (updates: Partial<FullConfig>) => void;
+  commitConfig: (newConfig: FullConfig) => void;  // 저장 성공 시 호출
   mode: SettingsMode;
   openModal: (title: string, component: React.ReactNode) => void;
   closeModal: () => void;
@@ -43,55 +46,99 @@ const TTS_PROVIDERS: TTSProvider[] = [
 
 export default function TTSSettings({
   config,
-  updateConfig,
+  updateConfig: _updateConfig,
+  commitConfig,
   mode: _mode,
   openModal,
   closeModal: _closeModal,
 }: TTSSettingsProps) {
   const handleAddTTS = (provider: TTSProvider) => {
-    const TTSModal = () => (
-      <div className="space-y-4">
-        <p className="text-sm text-forge-muted">{provider.description}</p>
+    // TTS 모달 컴포넌트 (저장 버튼 포함)
+    const TTSModal = () => {
+      const [apiKey, setApiKey] = useState(config.integrations[provider.envVar] || '');
+      const [saving, setSaving] = useState(false);
+      const [error, setError] = useState<string | null>(null);
+      
+      const handleSave = async () => {
+        if (!apiKey.trim()) return;
         
-        <div className="card p-4 bg-forge-amber/10 border-forge-amber/30">
-          <p className="text-sm text-forge-text">
-            TTS를 사용하면 AI가 음성으로 응답할 수 있습니다.
-          </p>
-        </div>
+        setSaving(true);
+        setError(null);
+        
+        try {
+          await invoke('update_integrations_config', {
+            integrations: { [provider.envVar]: apiKey.trim() }
+          });
+          
+          // 변경 트래킹
+          const newConfig = {
+            ...config,
+            integrations: {
+              ...config.integrations,
+              [provider.envVar]: apiKey.trim(),
+            }
+          };
+          commitConfig(newConfig);
+        } catch (err) {
+          console.error('TTS 저장 실패:', err);
+          setError(String(err));
+        } finally {
+          setSaving(false);
+        }
+      };
+      
+      return (
+        <div className="space-y-4">
+          <p className="text-sm text-forge-muted">{provider.description}</p>
+          
+          <div className="card p-4 bg-forge-amber/10 border-forge-amber/30">
+            <p className="text-sm text-forge-text">
+              TTS를 사용하면 AI가 음성으로 응답할 수 있습니다.
+            </p>
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-forge-muted mb-2">
-            API 키
-          </label>
-          <input
-            type="password"
-            placeholder={provider.placeholder}
-            defaultValue={config.integrations[provider.envVar] || ''}
-            onChange={(e) => {
-              updateConfig({
-                integrations: {
-                  ...config.integrations,
-                  [provider.envVar]: e.target.value,
-                }
-              });
-            }}
+          <div>
+            <label className="block text-sm font-medium text-forge-muted mb-2">
+              API 키
+            </label>
+            <input
+              type="password"
+              placeholder={provider.placeholder}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="
+                w-full px-4 py-3 bg-forge-surface border border-white/10 rounded-xl
+                focus:outline-none focus:border-forge-copper text-sm font-mono
+              "
+            />
+          </div>
+
+          <a
+            href={provider.guideUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-center text-sm text-forge-copper hover:text-forge-amber"
+          >
+            {provider.name} 사이트 열기 →
+          </a>
+          
+          {error && (
+            <p className="text-sm text-forge-error">{error}</p>
+          )}
+          
+          <button
+            onClick={handleSave}
+            disabled={saving || !apiKey.trim()}
             className="
-              w-full px-4 py-3 bg-forge-surface border border-white/10 rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm font-mono
+              w-full py-3 rounded-xl btn-primary mt-2
+              disabled:opacity-50 disabled:cursor-not-allowed
             "
-          />
+          >
+            {saving ? '저장 중...' : '저장'}
+          </button>
         </div>
-
-        <a
-          href={provider.guideUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block text-center text-sm text-forge-copper hover:text-forge-amber"
-        >
-          {provider.name} 사이트 열기 →
-        </a>
-      </div>
-    );
+      );
+    };
 
     openModal(`${provider.name} 설정`, <TTSModal />);
   };

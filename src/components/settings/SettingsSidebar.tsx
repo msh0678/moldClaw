@@ -36,7 +36,7 @@ export default function SettingsSidebar({
   onClose,
 }: SettingsSidebarProps) {
   return (
-    <div className="w-56 bg-[#1a1c24] border-r border-[#2a2d3e] flex flex-col">
+    <div className="w-56 h-full bg-[#1a1c24] border-r border-[#2a2d3e] flex flex-col">
       {/* 헤더 */}
       <div className="p-4 border-b border-[#2a2d3e]">
         <button

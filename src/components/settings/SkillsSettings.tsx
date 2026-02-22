@@ -156,7 +156,7 @@ const SKILLS: Skill[] = [
 
 export default function SkillsSettings({
   config,
-  updateConfig,
+  updateConfig: _updateConfig,
   commitConfig,
   mode: _mode,
   openModal,
@@ -171,56 +171,102 @@ export default function SkillsSettings({
 
   const handleConnect = (skill: Skill, e: React.MouseEvent) => {
     e.stopPropagation();
-    const SkillModal = () => (
-      <div className="space-y-4">
-        <p className="text-sm text-forge-muted">{skill.description}</p>
+    
+    // 스킬 모달 컴포넌트 (저장 버튼 포함)
+    const SkillModal = () => {
+      const [apiKey, setApiKey] = useState(config.integrations[skill.envVar!] || '');
+      const [saving, setSaving] = useState(false);
+      const [error, setError] = useState<string | null>(null);
+      
+      const handleSave = async () => {
+        if (!skill.envVar || !apiKey.trim()) return;
         
-        <ol className="space-y-2">
-          {skill.guideSteps.map((step, i) => (
-            <li key={i} className="flex gap-2 text-sm text-forge-muted">
-              <span className="text-forge-copper">{i + 1}.</span>
-              {step}
-            </li>
-          ))}
-        </ol>
+        setSaving(true);
+        setError(null);
+        
+        try {
+          await invoke('update_integrations_config', {
+            integrations: { [skill.envVar]: apiKey.trim() }
+          });
+          
+          // 변경 트래킹
+          const newConfig = {
+            ...config,
+            integrations: {
+              ...config.integrations,
+              [skill.envVar]: apiKey.trim(),
+            }
+          };
+          commitConfig(newConfig);
+        } catch (err) {
+          console.error('스킬 저장 실패:', err);
+          setError(String(err));
+        } finally {
+          setSaving(false);
+        }
+      };
+      
+      return (
+        <div className="space-y-4">
+          <p className="text-sm text-forge-muted">{skill.description}</p>
+          
+          <ol className="space-y-2">
+            {skill.guideSteps.map((step, i) => (
+              <li key={i} className="flex gap-2 text-sm text-forge-muted">
+                <span className="text-forge-copper">{i + 1}.</span>
+                {step}
+              </li>
+            ))}
+          </ol>
 
-        {skill.envVar && (
-          <div>
-            <label className="block text-sm font-medium text-forge-muted mb-2">
-              API 키
-            </label>
-            <input
-              type="password"
-              placeholder="API 키 입력"
-              defaultValue={config.integrations[skill.envVar] || ''}
-              onChange={(e) => {
-                updateConfig({
-                  integrations: {
-                    ...config.integrations,
-                    [skill.envVar!]: e.target.value,
-                  }
-                });
-              }}
+          {skill.envVar && (
+            <div>
+              <label className="block text-sm font-medium text-forge-muted mb-2">
+                API 키
+              </label>
+              <input
+                type="password"
+                placeholder="API 키 입력"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="
+                  w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+                  focus:outline-none focus:border-forge-copper text-sm font-mono
+                "
+              />
+            </div>
+          )}
+
+          {skill.guideUrl && (
+            <a
+              href={skill.guideUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-center text-sm text-forge-copper hover:text-forge-amber"
+            >
+              공식 문서 열기 →
+            </a>
+          )}
+          
+          {error && (
+            <p className="text-sm text-forge-error">{error}</p>
+          )}
+          
+          {skill.envVar && (
+            <button
+              onClick={handleSave}
+              disabled={saving || !apiKey.trim()}
               className="
-                w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-                focus:outline-none focus:border-forge-copper text-sm font-mono
+                w-full py-3 rounded-xl btn-primary mt-2
+                disabled:opacity-50 disabled:cursor-not-allowed
               "
-            />
-          </div>
-        )}
-
-        {skill.guideUrl && (
-          <a
-            href={skill.guideUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block text-center text-sm text-forge-copper hover:text-forge-amber mt-4"
-          >
-            공식 문서 열기 →
-          </a>
-        )}
-      </div>
-    );
+            >
+              {saving ? '저장 중...' : '저장'}
+            </button>
+          )}
+        </div>
+      );
+    };
 
     openModal(`${skill.name} 연동`, <SkillModal />);
   };
