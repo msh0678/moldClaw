@@ -23,7 +23,7 @@ export const BASIC_PROVIDERS: ProviderInfo[] = [
     id: 'openai',
     name: 'OpenAI',
     icon: '🟢',
-    // Simple Icons에 openai 없음 - 이모지 사용
+    logo: '/icons/openai.svg',
     color: '#10A37F',
     models: [
       { id: 'gpt-4o', name: 'GPT-4o', desc: '최신 멀티모달' },
@@ -70,7 +70,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'groq',
     name: 'Groq',
     icon: '⚡',
-    // Simple Icons에 없음
+    logo: '/icons/groq.svg',
     color: '#F97316',
     models: [
       { id: 'llama-3.1-70b-versatile', name: 'Llama 3.1 70B', desc: '빠른 오픈소스' },
@@ -84,7 +84,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'mistral',
     name: 'Mistral',
     icon: '🔷',
-    // Simple Icons에 없음
+    logo: '/icons/mistral.svg',
     color: '#FF7000',
     models: [
       { id: 'mistral-large-latest', name: 'Mistral Large', desc: '최고 성능' },
@@ -98,7 +98,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'together',
     name: 'Together AI',
     icon: '🤝',
-    // Simple Icons에 없음
+    logo: '/icons/together.svg',
     color: '#0EA5E9',
     models: [
       { id: 'meta-llama/Llama-3.1-70B-Instruct-Turbo', name: 'Llama 3.1 70B Turbo', desc: '빠른 Llama' },
@@ -112,7 +112,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'cerebras',
     name: 'Cerebras',
     icon: '🧠',
-    // Simple Icons에 없음
+    logo: '/icons/cerebras.svg',
     color: '#00D4AA',
     models: [
       { id: 'llama3.1-70b', name: 'Llama 3.1 70B', desc: '초고속 추론' },
@@ -163,7 +163,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'voyage',
     name: 'Voyage',
     icon: '🚀',
-    // Simple Icons에 없음
+    logo: '/icons/voyage.svg',
     color: '#7C3AED',
     models: [
       { id: 'voyage-3', name: 'Voyage 3', desc: '임베딩 모델' },
@@ -176,7 +176,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'minimax',
     name: 'MiniMax',
     icon: '🤖',
-    // Simple Icons에 없음
+    logo: '/icons/minimax.svg',
     color: '#8B5CF6',
     models: [
       { id: 'abab6.5s-chat', name: 'abab6.5s', desc: '고성능 모델' },
