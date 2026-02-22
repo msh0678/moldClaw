@@ -61,12 +61,11 @@ export default function OrbitButton({
       }}
       title={label}
     >
-      {/* 배경 - solid & opaque, 명확한 테두리 */}
+      {/* 배경 - solid & opaque, 모든 버튼 동일 스타일 */}
       <div className={`
         absolute inset-0 rounded-full transition-all duration-300
-        ${danger 
-          ? 'bg-[#2a2020] border-2 border-[#5a3030] group-hover:bg-[#3a2525] group-hover:border-forge-error' 
-          : 'bg-[#252836] border-2 border-[#3a3f52] group-hover:bg-[#2d3142] group-hover:border-forge-copper/70'}
+        bg-[#252836] border-2 border-[#3a3f52] 
+        group-hover:bg-[#2d3142] group-hover:border-forge-copper/70
         group-hover:scale-105
         shadow-lg shadow-black/40
       `} />

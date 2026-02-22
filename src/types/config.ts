@@ -72,7 +72,7 @@ export interface OnboardingState {
 export type OnboardingStep = 'model' | 'messenger' | 'messenger-connect' | 'browser' | 'summary';
 
 // Settings page state
-export type SettingsSection = 'model' | 'messenger' | 'skills' | 'tools' | 'tts' | 'gmail' | 'general';
+export type SettingsSection = 'model' | 'messenger' | 'skills' | 'tools' | 'tts' | 'gmail';
 
 export type SettingsMode = 'normal' | 'advanced';
 

@@ -29,51 +29,50 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
         <>
           {/* 바깥쪽 글로우 레이어 (버튼보다 큼) */}
           <div className="absolute -inset-4 rounded-full pointer-events-none">
-            {/* 메인 코로나 빛 - 긴 arc */}
+            {/* 메인 코로나 빛 - Solar Eclipse 스타일 (짧고, 앞뒤 얇음) */}
             <div className="absolute inset-0 animate-corona-spin">
               <svg viewBox="0 0 200 200" className="w-full h-full">
                 <defs>
-                  {/* 메인 코로나 그라데이션 */}
+                  {/* 메인 코로나 그라데이션 - 중앙 밝고 양쪽 얇게 */}
                   <linearGradient id="coronaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="rgba(245, 166, 35, 0)" />
-                    <stop offset="30%" stopColor="rgba(245, 166, 35, 0.3)" />
-                    <stop offset="60%" stopColor="rgba(245, 166, 35, 0.8)" />
-                    <stop offset="85%" stopColor="rgba(255, 200, 100, 1)" />
-                    <stop offset="100%" stopColor="rgba(255, 220, 150, 1)" />
+                    <stop offset="20%" stopColor="rgba(245, 166, 35, 0.2)" />
+                    <stop offset="50%" stopColor="rgba(255, 220, 150, 1)" />
+                    <stop offset="80%" stopColor="rgba(245, 166, 35, 0.2)" />
+                    <stop offset="100%" stopColor="rgba(245, 166, 35, 0)" />
                   </linearGradient>
                   {/* 글로우 필터 */}
                   <filter id="coronaGlow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feGaussianBlur stdDeviation="2" result="blur" />
                     <feMerge>
-                      <feMergeNode in="blur" />
                       <feMergeNode in="blur" />
                       <feMergeNode in="SourceGraphic" />
                     </feMerge>
                   </filter>
                 </defs>
-                {/* 메인 arc - 약 90도 길이 */}
+                {/* 메인 arc - 약 50도 길이 (짧게) */}
                 <circle
                   cx="100"
                   cy="100"
                   r="92"
                   fill="none"
                   stroke="url(#coronaGrad)"
-                  strokeWidth="6"
+                  strokeWidth="4"
                   strokeLinecap="round"
-                  strokeDasharray="145 435"
+                  strokeDasharray="85 495"
                   filter="url(#coronaGlow)"
                 />
               </svg>
             </div>
 
-            {/* 잔광 1 - 더 길고 희미함 */}
+            {/* 잔광 1 - 바로 뒤따라오는 희미한 빛 */}
             <div className="absolute inset-0 animate-corona-trail1">
               <svg viewBox="0 0 200 200" className="w-full h-full">
                 <defs>
                   <linearGradient id="trailGrad1" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="rgba(245, 166, 35, 0)" />
-                    <stop offset="50%" stopColor="rgba(245, 166, 35, 0.15)" />
-                    <stop offset="100%" stopColor="rgba(245, 166, 35, 0.4)" />
+                    <stop offset="50%" stopColor="rgba(245, 166, 35, 0.3)" />
+                    <stop offset="100%" stopColor="rgba(245, 166, 35, 0)" />
                   </linearGradient>
                 </defs>
                 <circle
@@ -82,21 +81,21 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
                   r="92"
                   fill="none"
                   stroke="url(#trailGrad1)"
-                  strokeWidth="4"
+                  strokeWidth="2"
                   strokeLinecap="round"
-                  strokeDasharray="120 460"
+                  strokeDasharray="60 520"
                 />
               </svg>
             </div>
 
-            {/* 잔광 2 - 가장 길고 희미함 */}
+            {/* 잔광 2 - 더 희미한 꼬리 */}
             <div className="absolute inset-0 animate-corona-trail2">
               <svg viewBox="0 0 200 200" className="w-full h-full">
                 <defs>
                   <linearGradient id="trailGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="rgba(245, 166, 35, 0)" />
-                    <stop offset="70%" stopColor="rgba(245, 166, 35, 0.05)" />
-                    <stop offset="100%" stopColor="rgba(245, 166, 35, 0.2)" />
+                    <stop offset="50%" stopColor="rgba(245, 166, 35, 0.15)" />
+                    <stop offset="100%" stopColor="rgba(245, 166, 35, 0)" />
                   </linearGradient>
                 </defs>
                 <circle
@@ -105,9 +104,9 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
                   r="92"
                   fill="none"
                   stroke="url(#trailGrad2)"
-                  strokeWidth="3"
+                  strokeWidth="1.5"
                   strokeLinecap="round"
-                  strokeDasharray="180 400"
+                  strokeDasharray="40 540"
                 />
               </svg>
             </div>

@@ -1,9 +1,8 @@
 // SettingsPanel - 설정 페이지 메인 컴포넌트
 // 좌측 패널 + 우측 콘텐츠 레이아웃
-// 일반 설정 / 고급 설정 모드
-// 저장 버튼 필수 (저장 안하면 변경 파기)
+// 각 섹션에서 개별 저장, 사이드바 이동 시 미저장 변경사항 삭제
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { SettingsSection, SettingsMode, FullConfig } from '../../types/config';
 import { defaultFullConfig } from '../../types/config';
@@ -14,7 +13,6 @@ import SkillsSettings from './SkillsSettings';
 import ToolsSettings from './ToolsSettings';
 import TTSSettings from './TTSSettings';
 import GmailSettings from './GmailSettings';
-import GeneralSettings from './GeneralSettings';
 import SettingsModal from './SettingsModal';
 
 interface SettingsPanelProps {
@@ -22,13 +20,13 @@ interface SettingsPanelProps {
 }
 
 export default function SettingsPanel({ onClose }: SettingsPanelProps) {
-  const [section, setSection] = useState<SettingsSection>('general');
-  const [mode, setMode] = useState<SettingsMode>('normal');
+  const [section, setSection] = useState<SettingsSection>('model');
+  const [mode, setMode] = useState<SettingsMode>('advanced');
   const [config, setConfig] = useState<FullConfig>(defaultFullConfig);
-  const [originalConfig, setOriginalConfig] = useState<FullConfig>(defaultFullConfig);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  
+  // 저장된 상태 (섹션 이동 시 리셋용)
+  const savedConfigRef = useRef<FullConfig>(defaultFullConfig);
   
   // 모달 상태
   const [modalOpen, setModalOpen] = useState(false);
@@ -64,7 +62,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
       };
 
       setConfig(loadedConfig);
-      setOriginalConfig(loadedConfig);
+      savedConfigRef.current = loadedConfig;
     } catch (err) {
       console.error('설정 로드 실패:', err);
     } finally {
@@ -76,63 +74,11 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
     loadConfig();
   }, [loadConfig]);
 
-  // 변경 감지
-  useEffect(() => {
-    const changed = JSON.stringify(config) !== JSON.stringify(originalConfig);
-    setHasChanges(changed);
-  }, [config, originalConfig]);
-
-  // 저장
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      // 모델 설정 저장
-      if (config.model && config.model.apiKey && !config.model.apiKey.includes('•')) {
-        await invoke('update_model_config', {
-          provider: config.model.provider,
-          model: config.model.model,
-          apiKey: config.model.apiKey,
-        });
-      }
-
-      // 메신저 설정 저장
-      if (config.messenger.type) {
-        await invoke('update_messenger_config', {
-          channel: config.messenger.type,
-          token: config.messenger.token || '',
-          dmPolicy: config.messenger.dmPolicy,
-          allowFrom: config.messenger.allowFrom,
-          groupPolicy: config.messenger.groupPolicy,
-          requireMention: config.messenger.requireMention,
-        });
-      }
-
-      // 통합 설정 저장
-      await invoke('update_integrations_config', {
-        integrations: config.integrations,
-      });
-
-      // Gateway 재시작
-      await invoke('restart_gateway');
-
-      setOriginalConfig(config);
-      setHasChanges(false);
-    } catch (err) {
-      console.error('저장 실패:', err);
-      alert(`저장 실패: ${err}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // 취소 (변경 파기)
-  const handleCancel = () => {
-    if (hasChanges) {
-      if (!confirm('저장하지 않은 변경사항이 있습니다. 정말 나가시겠습니까?')) {
-        return;
-      }
-    }
-    onClose();
+  // 섹션 변경 시 미저장 변경사항 삭제 (savedConfig로 리셋)
+  const handleSectionChange = (newSection: SettingsSection) => {
+    // 현재 config를 savedConfig로 리셋 (미저장 변경사항 삭제)
+    setConfig(savedConfigRef.current);
+    setSection(newSection);
   };
 
   // 모달 열기
@@ -147,9 +93,15 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
     setModalContent(null);
   };
 
-  // 설정 업데이트
+  // 설정 업데이트 (임시 - 아직 저장 안 됨)
   const updateConfig = (updates: Partial<FullConfig>) => {
     setConfig(prev => ({ ...prev, ...updates }));
+  };
+
+  // 설정 저장 완료 시 호출 (savedConfig 업데이트)
+  const commitConfig = (newConfig: FullConfig) => {
+    savedConfigRef.current = newConfig;
+    setConfig(newConfig);
   };
 
   // 현재 섹션 렌더링
@@ -157,14 +109,13 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
     const sectionProps = {
       config,
       updateConfig,
+      commitConfig,  // 저장 완료 시 호출
       mode,
       openModal,
       closeModal,
     };
 
     switch (section) {
-      case 'general':
-        return <GeneralSettings {...sectionProps} />;
       case 'model':
         return <ModelSettings {...sectionProps} />;
       case 'messenger':
@@ -178,8 +129,15 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
       case 'gmail':
         return <GmailSettings {...sectionProps} />;
       default:
-        return null;
+        return <ModelSettings {...sectionProps} />;
     }
+  };
+
+  // 대시보드로 나가기 (미저장 변경사항 삭제)
+  const handleClose = () => {
+    // savedConfig로 리셋 후 종료
+    setConfig(savedConfigRef.current);
+    onClose();
   };
 
   if (loading) {
@@ -198,53 +156,20 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
       {/* 좌측 사이드바 */}
       <SettingsSidebar
         currentSection={section}
-        onSectionChange={setSection}
+        onSectionChange={handleSectionChange}
         mode={mode}
         onModeChange={setMode}
-        onClose={handleCancel}
+        onClose={handleClose}
       />
 
       {/* 우측 컨텐츠 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 헤더 */}
-        <div className="p-6 border-b border-white/10 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-forge-text">설정</h1>
-            <p className="text-sm text-forge-muted">OpenClaw 설정을 관리합니다</p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {hasChanges && (
-              <span className="text-xs text-forge-amber px-2 py-1 bg-forge-amber/10 rounded">
-                변경사항 있음
-              </span>
-            )}
-            <button
-              onClick={handleCancel}
-              className="px-4 py-2 rounded-lg bg-forge-surface hover:bg-white/10 text-forge-text transition-colors"
-            >
-              {hasChanges ? '취소' : '닫기'}
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!hasChanges || saving}
-              className="
-                px-4 py-2 rounded-lg btn-primary
-                disabled:opacity-50 disabled:cursor-not-allowed
-              "
-            >
-              {saving ? '저장 중...' : '저장'}
-            </button>
-          </div>
-        </div>
-
-        {/* 컨텐츠 영역 */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-8">
           {renderSection()}
         </div>
       </div>
 
-      {/* 모달 (호버 창 + 블러 효과) */}
+      {/* 모달 */}
       <SettingsModal
         isOpen={modalOpen}
         title={modalContent?.title || ''}

@@ -109,6 +109,7 @@ export default function MessengerSettings({
     
     updateConfig({
       messenger: {
+        ...config.messenger,
         type: '' as Messenger,
         token: '',
         dmPolicy: 'pairing',
