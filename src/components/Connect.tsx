@@ -339,7 +339,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
               </label>
               <select
                 value={dmPolicy}
-                onChange={(e) => setDmPolicy(e.target.value)}
+                onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
                 disabled={loading}
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm disabled:opacity-50"
               >
@@ -399,7 +399,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
                 </label>
                 <select
                   value={groupPolicy}
-                  onChange={(e) => setGroupPolicy(e.target.value)}
+                  onChange={(e) => setGroupPolicy(e.target.value as 'allowlist' | 'open' | 'disabled')}
                   disabled={loading}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm disabled:opacity-50"
                 >
@@ -479,7 +479,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
                 </label>
                 <select
                   value={gatewayBind}
-                  onChange={(e) => setGatewayBind(e.target.value)}
+                  onChange={(e) => setGatewayBind(e.target.value as 'loopback' | 'lan' | 'tailnet' | 'auto')}
                   disabled={loading}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm disabled:opacity-50"
                 >

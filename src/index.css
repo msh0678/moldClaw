@@ -31,15 +31,11 @@ body {
   height: 100vh;
 }
 
-/* Forge Industrial Background */
+/* Clean Background - Discord desktop inspired */
 .gradient-bg {
   background: 
-    radial-gradient(circle at 20% 80%, rgba(232, 107, 42, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(245, 166, 35, 0.05) 0%, transparent 50%),
-    linear-gradient(135deg, 
-      var(--forge-night) 0%, 
-      var(--forge-dark) 50%, 
-      var(--forge-night) 100%);
+    radial-gradient(ellipse at 50% 100%, rgba(232, 107, 42, 0.04) 0%, transparent 60%),
+    linear-gradient(180deg, var(--forge-night) 0%, var(--forge-dark) 100%);
   position: relative;
 }
 
@@ -55,6 +51,7 @@ body {
   position: relative;
 }
 
+/* Glass highlight - subtle top edge only */
 .glass::before {
   content: '';
   position: absolute;
@@ -62,8 +59,7 @@ body {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(232, 107, 42, 0.3), transparent);
-  opacity: 0.5;
+  background: linear-gradient(90deg, transparent 20%, rgba(255, 255, 255, 0.08) 50%, transparent 80%);
 }
 
 /* Sidebar styling */
@@ -125,24 +121,8 @@ body {
   border-radius: 12px;
 }
 
-/* Metal Texture Overlay */
-.gradient-bg::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: 
-    repeating-linear-gradient(
-      45deg,
-      transparent,
-      transparent 1px,
-      rgba(232, 232, 236, 0.01) 1px,
-      rgba(232, 232, 236, 0.01) 2px
-    );
-  pointer-events: none;
-}
+/* Clean background - no distracting patterns (Discord style) */
+/* .gradient-bg::before - removed stripe pattern for cleaner look */
 
 /* Animations */
 @keyframes fadeIn {
@@ -204,4 +184,64 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(232, 107, 42, 0.5);
+}
+
+/* Additional Planetary Dashboard Animations */
+@keyframes orbit-glow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(232, 107, 42, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(232, 107, 42, 0.5);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.animate-orbit-glow {
+  animation: orbit-glow 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Settings Panel Styles */
+.settings-section {
+  transition: all 0.3s ease;
+}
+
+.settings-section:hover {
+  transform: translateY(-2px);
+}
+
+/* Modal backdrop blur */
+.modal-backdrop {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Border utilities */
+.border-l-3 {
+  border-left-width: 3px;
+}
+
+/* Forge glow effect */
+.forge-glow {
+  box-shadow: 
+    0 0 20px rgba(232, 107, 42, 0.3),
+    0 0 40px rgba(232, 107, 42, 0.1);
+}
+
+/* Active state for orbit buttons */
+.orbit-button-active {
+  transform: scale(1.1);
+  box-shadow: 0 0 30px rgba(232, 107, 42, 0.4);
 }

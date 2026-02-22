@@ -14,10 +14,10 @@
     "windows": [
       {
         "title": "moldClaw - AI 메신저 연결",
-        "width": 800,
-        "height": 850,
-        "minWidth": 560,
-        "minHeight": 640,
+        "width": 1100,
+        "height": 750,
+        "minWidth": 900,
+        "minHeight": 600,
         "resizable": true,
         "center": true,
         "decorations": true

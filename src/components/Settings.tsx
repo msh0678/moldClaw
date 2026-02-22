@@ -448,7 +448,7 @@ export default function Settings({ isOnboarding, initialConfig, onComplete, onCa
       messenger: currentConfig.messenger ? {
         ...defaultFullConfig.messenger,
         type: currentConfig.messenger.type as 'telegram' | 'discord' | 'whatsapp',
-        dmPolicy: currentConfig.messenger.dmPolicy,
+        dmPolicy: currentConfig.messenger.dmPolicy as 'pairing' | 'allowlist' | 'open',
       } : defaultFullConfig.messenger,
     }
 

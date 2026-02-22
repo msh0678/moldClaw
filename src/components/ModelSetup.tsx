@@ -117,7 +117,7 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
           model: selectedModel,
           apiKey: keyToSave,
         })
-        onComplete({ provider: selectedProvider, model: selectedModel, apiKey: keyToSave })
+        onComplete({ provider: selectedProvider as any, model: selectedModel, apiKey: keyToSave })
       } catch (err) {
         console.error('모델 설정 저장 실패:', err)
         alert(`저장 실패: ${err}`)
@@ -131,7 +131,7 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
         return
       }
       onComplete({
-        provider: selectedProvider,
+        provider: selectedProvider as any,
         model: selectedModel,
         apiKey: apiKey,
       })

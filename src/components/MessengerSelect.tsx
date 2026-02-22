@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import type { MessengerConfig } from '../App'
-
-type Messenger = 'telegram' | 'discord' | 'whatsapp'
+import type { MessengerConfig, Messenger } from '../App'
 
 interface MessengerSelectProps {
   initialConfig: MessengerConfig | null  // null이면 editMode에서 직접 로드
@@ -21,15 +19,7 @@ interface LoadedMessengerConfig {
   requireMention: boolean
 }
 
-const defaultMessengerConfig: MessengerConfig = {
-  type: null,
-  token: '',
-  dmPolicy: 'pairing',
-  allowFrom: [],
-  groupPolicy: 'allowlist',
-  groupAllowFrom: [],
-  requireMention: true,
-}
+import { defaultMessengerConfig } from '../App'
 
 const messengers = [
   {
@@ -143,7 +133,7 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
       const config = await invoke<LoadedMessengerConfig | null>('get_messenger_config')
       if (config && config.type) {
         setSelectedMessenger(config.type as Messenger)
-        setDmPolicy(config.dmPolicy)
+        setDmPolicy(config.dmPolicy as 'pairing' | 'allowlist' | 'open')
         setHasExistingToken(config.hasToken)
         setShowGuide(true)
         

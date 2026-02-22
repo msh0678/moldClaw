@@ -1,123 +1,68 @@
-import { useState, useEffect, useCallback } from 'react'
-import { invoke } from '@tauri-apps/api/core'
-import Loading from './components/Loading'
-import ExpiredScreen from './components/ExpiredScreen'
-import Sidebar, { type Page } from './components/Sidebar'
-import DashboardNew from './components/DashboardNew'
-import Notifications from './components/Notifications'
-import Files from './components/Files'
-import Logs from './components/Logs'
-import Settings from './components/Settings'
-import { useAppStatus } from './hooks/useAppStatus'
+// moldClaw - Main Application
+// Planetary Dashboard + Onboarding Wizard + Settings Panel
 
-type AppState = 'loading' | 'onboarding' | 'main' | 'settings'
-type UninstallState = 'idle' | 'uninstalling' | 'waitingForClose' | 'error'
-type Messenger = 'telegram' | 'discord' | 'whatsapp' | null
+import { useState, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import type { AppView } from './types/config';
 
-export interface ModelConfig {
-  provider: string
-  model: string
-  apiKey: string
-}
+// Re-export types for backward compatibility with old components
+export type {
+  ModelConfig,
+  MessengerConfig,
+  GatewayConfig,
+  IntegrationConfig,
+  FullConfig,
+  Messenger,
+} from './types/config';
 
-export interface MessengerConfig {
-  type: Messenger
-  token: string
-  dmPolicy: string
-  allowFrom: string[]
-  groupPolicy: string
-  groupAllowFrom: string[]
-  requireMention: boolean
-}
+export { defaultMessengerConfig, defaultGatewayConfig, defaultFullConfig } from './types/config';
+import Loading from './components/Loading';
+import ExpiredScreen from './components/ExpiredScreen';
+import { OnboardingWizard } from './components/onboarding';
+import { DashboardPlanetary } from './components/dashboard';
+import { SettingsPanel } from './components/settings';
+import { NotificationsPage, FilesPage, LogsPage, GuidePage } from './components/pages';
+import { useAppStatus } from './hooks/useAppStatus';
 
-export interface GatewayConfig {
-  port: number
-  bind: string
-  authMode: string
-  token: string
-  password: string
-}
-
-export interface IntegrationConfig {
-  [key: string]: string
-}
-
-export interface FullConfig {
-  model: ModelConfig | null
-  messenger: MessengerConfig
-  gateway: GatewayConfig
-  integrations: IntegrationConfig
-}
-
-const initialConfig: FullConfig = {
-  model: null,
-  messenger: {
-    type: null,
-    token: '',
-    dmPolicy: 'pairing',
-    allowFrom: [],
-    groupPolicy: 'allowlist',
-    groupAllowFrom: [],
-    requireMention: true,
-  },
-  gateway: {
-    port: 18789,
-    bind: 'loopback',
-    authMode: 'token',
-    token: '',
-    password: '',
-  },
-  integrations: {},
-}
+type UninstallState = 'idle' | 'uninstalling' | 'waitingForClose' | 'error';
 
 function App() {
-  const [appState, setAppState] = useState<AppState>('loading')
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard')
-  const [config, setConfig] = useState<FullConfig>(initialConfig)
-  const [expiredAcknowledged, setExpiredAcknowledged] = useState(false)
-  const [uninstallState, setUninstallState] = useState<UninstallState>('idle')
-  const [uninstallError, setUninstallError] = useState<string | null>(null)
-  const { appStatus, loading: statusLoading } = useAppStatus()
+  const [currentView, setCurrentView] = useState<AppView>('loading');
+  const [expiredAcknowledged, setExpiredAcknowledged] = useState(false);
+  const [uninstallState, setUninstallState] = useState<UninstallState>('idle');
+  const [uninstallError, setUninstallError] = useState<string | null>(null);
+  const { appStatus, loading: statusLoading } = useAppStatus();
 
-  // 실제 config 로드
-  const loadConfig = useCallback(async () => {
+  // 온보딩 완료 여부 확인
+  const checkOnboardingStatus = useCallback(async () => {
     try {
-      const result = await invoke<FullConfig>('get_full_config')
-      if (result) {
-        // 기본값과 병합 (누락된 필드 대비)
-        setConfig(prev => ({
-          ...prev,
-          model: result.model || prev.model,
-          messenger: {
-            ...prev.messenger,
-            type: result.messenger?.type || prev.messenger.type,
-            token: result.messenger?.token || prev.messenger.token,
-            dmPolicy: result.messenger?.dmPolicy || prev.messenger.dmPolicy,
-            allowFrom: result.messenger?.allowFrom || prev.messenger.allowFrom,
-            groupPolicy: result.messenger?.groupPolicy || prev.messenger.groupPolicy,
-            groupAllowFrom: result.messenger?.groupAllowFrom || prev.messenger.groupAllowFrom,
-            requireMention: result.messenger?.requireMention ?? prev.messenger.requireMention,
-          },
-          gateway: {
-            ...prev.gateway,
-            port: result.gateway?.port || prev.gateway.port,
-            bind: result.gateway?.bind || prev.gateway.bind,
-            authMode: result.gateway?.authMode || prev.gateway.authMode,
-          },
-          integrations: result.integrations || prev.integrations,
-        }))
+      const isCompleted = await invoke<boolean>('is_onboarding_completed');
+      return isCompleted;
+    } catch {
+      // Config가 있으면 온보딩 완료로 간주
+      try {
+        const hasConfig = await invoke<boolean>('has_config');
+        return hasConfig;
+      } catch {
+        return false;
       }
-    } catch (err) {
-      console.error('Config 로드 실패:', err)
     }
-  }, [])
+  }, []);
 
-  // 앱 상태 변경 시 config 새로고침
-  useEffect(() => {
-    if (appState === 'settings' || appState === 'main') {
-      loadConfig()
-    }
-  }, [appState, loadConfig])
+  // 네비게이션 핸들러
+  const handleNavigate = useCallback((view: AppView) => {
+    setCurrentView(view);
+  }, []);
+
+  // 온보딩 완료
+  const handleOnboardingComplete = useCallback(() => {
+    setCurrentView('dashboard');
+  }, []);
+
+  // 설정 닫기
+  const handleSettingsClose = useCallback(() => {
+    setCurrentView('dashboard');
+  }, []);
 
   // 삭제 시작
   const handleStartUninstall = async () => {
@@ -127,110 +72,68 @@ function App() {
       '• API 키가 포함된 설정도 삭제됩니다\n' +
       '• moldClaw 앱도 함께 삭제됩니다\n\n' +
       '이 작업은 되돌릴 수 없습니다.'
-    )
-    if (!confirmed) return
+    );
+    if (!confirmed) return;
 
-    setUninstallState('uninstalling')
-    setUninstallError(null)
+    setUninstallState('uninstalling');
+    setUninstallError(null);
 
     try {
-      // 1. OpenClaw 삭제
-      await invoke<string>('uninstall_openclaw')
-      
-      // 2. moldClaw 삭제
-      await invoke('uninstall_moldclaw')
-      
-      // uninstaller가 실행되면 앱이 종료됨
+      await invoke<string>('uninstall_openclaw');
+      await invoke('uninstall_moldclaw');
     } catch (err) {
-      const errorMsg = String(err)
+      const errorMsg = String(err);
       
-      // 파일 잠금 에러 감지
       if (errorMsg.includes('EBUSY') || errorMsg.includes('being used') || 
           errorMsg.includes('access') || errorMsg.includes('locked') ||
           errorMsg.includes('삭제') || errorMsg.includes('실패')) {
-        setUninstallState('waitingForClose')
-        setUninstallError(errorMsg)
+        setUninstallState('waitingForClose');
+        setUninstallError(errorMsg);
       } else {
-        setUninstallState('error')
-        setUninstallError(errorMsg)
+        setUninstallState('error');
+        setUninstallError(errorMsg);
       }
     }
-  }
+  };
 
-  // 파일 닫기 완료 후 재시도
   const handleRetryUninstall = async () => {
-    setUninstallState('uninstalling')
-    setUninstallError(null)
+    setUninstallState('uninstalling');
+    setUninstallError(null);
 
     try {
-      await invoke<string>('uninstall_openclaw')
-      await invoke('uninstall_moldclaw')
+      await invoke<string>('uninstall_openclaw');
+      await invoke('uninstall_moldclaw');
     } catch (err) {
-      setUninstallState('error')
-      setUninstallError(String(err))
+      setUninstallState('error');
+      setUninstallError(String(err));
     }
-  }
+  };
 
-  // 삭제 취소
   const handleCancelUninstall = () => {
-    setUninstallState('idle')
-    setUninstallError(null)
-  }
+    setUninstallState('idle');
+    setUninstallError(null);
+  };
 
-  // 앱 상태 체크 (테스트 종료 여부)
+  // 앱 상태 로딩 중
   if (statusLoading) {
     return (
       <div className="gradient-bg min-h-screen flex items-center justify-center">
-        <div className="text-forge-text">상태 확인 중...</div>
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-forge-copper/30 border-t-forge-copper rounded-full mx-auto mb-4" />
+          <p className="text-forge-muted">상태 확인 중...</p>
+        </div>
       </div>
-    )
+    );
   }
 
+  // 테스트 기간 만료
   if (appStatus?.status === 'expired' && !expiredAcknowledged) {
     return (
       <ExpiredScreen 
         message={appStatus.message} 
         onContinue={() => setExpiredAcknowledged(true)}
       />
-    )
-  }
-
-  // 로딩 화면
-  if (appState === 'loading') {
-    return (
-      <Loading
-        onReady={() => setAppState('onboarding')}
-        onDashboard={() => setAppState('main')}
-      />
-    )
-  }
-
-  // 온보딩 (첫 실행 설정)
-  if (appState === 'onboarding') {
-    return (
-      <div className="gradient-bg min-h-screen">
-        <Settings
-          isOnboarding={true}
-          initialConfig={config}
-          onComplete={() => setAppState('main')}
-          // onCancel 없음 - 온보딩 중에는 대시보드로 이동 불가
-        />
-      </div>
-    )
-  }
-
-  // 설정 화면 (메인에서 진입)
-  if (appState === 'settings') {
-    return (
-      <div className="gradient-bg min-h-screen">
-        <Settings
-          isOnboarding={false}
-          initialConfig={config}
-          onComplete={() => setAppState('main')}
-          onCancel={() => setAppState('main')}
-        />
-      </div>
-    )
+    );
   }
 
   // 삭제 진행 중 - 전체 화면 오버레이
@@ -238,7 +141,6 @@ function App() {
     return (
       <div className="gradient-bg min-h-screen flex items-center justify-center p-6">
         <div className="max-w-md w-full text-center">
-          {/* 삭제 진행 중 */}
           {uninstallState === 'uninstalling' && (
             <>
               <div className="text-5xl mb-6 animate-spin">⚙️</div>
@@ -249,7 +151,6 @@ function App() {
             </>
           )}
 
-          {/* 파일 닫기 요청 */}
           {uninstallState === 'waitingForClose' && (
             <>
               <div className="text-5xl mb-6">⚠️</div>
@@ -258,10 +159,7 @@ function App() {
                 <p className="text-forge-text text-sm mb-3">
                   OpenClaw 관련 파일이 다른 프로그램에서 사용 중입니다.
                 </p>
-                <p className="text-forge-muted text-sm">
-                  다음 항목을 모두 닫아 주세요:
-                </p>
-                <ul className="text-forge-muted text-sm mt-2 list-disc list-inside">
+                <ul className="text-forge-muted text-sm list-disc list-inside">
                   <li>브라우저의 OpenClaw 웹 UI (127.0.0.1:18789)</li>
                   <li>터미널에서 실행 중인 OpenClaw</li>
                   <li>OpenClaw 설정 파일을 열어둔 편집기</li>
@@ -285,7 +183,6 @@ function App() {
             </>
           )}
 
-          {/* 에러 */}
           {uninstallState === 'error' && (
             <>
               <div className="text-5xl mb-6">❌</div>
@@ -306,33 +203,59 @@ function App() {
           )}
         </div>
       </div>
-    )
+    );
   }
 
-  // 메인 레이아웃 (사이드바 + 컨텐츠)
-  return (
-    <div className="gradient-bg min-h-screen flex">
-      {/* 사이드바 */}
-      <Sidebar
-        currentPage={currentPage}
-        onNavigate={setCurrentPage}
-        onSettings={() => setAppState('settings')}
+  // 로딩 화면
+  if (currentView === 'loading') {
+    return (
+      <Loading
+        onReady={async () => {
+          const isCompleted = await checkOnboardingStatus();
+          setCurrentView(isCompleted ? 'dashboard' : 'onboarding');
+        }}
+        onDashboard={() => setCurrentView('dashboard')}
       />
+    );
+  }
 
-      {/* 메인 컨텐츠 */}
-      <main className="flex-1 overflow-auto">
-        {currentPage === 'dashboard' && (
-          <DashboardNew 
-            onSettings={() => setAppState('settings')} 
-            onStartUninstall={handleStartUninstall}
-          />
-        )}
-        {currentPage === 'notifications' && <Notifications />}
-        {currentPage === 'files' && <Files />}
-        {currentPage === 'logs' && <Logs />}
-      </main>
-    </div>
-  )
+  // 온보딩
+  if (currentView === 'onboarding') {
+    return <OnboardingWizard onComplete={handleOnboardingComplete} />;
+  }
+
+  // 설정
+  if (currentView === 'settings') {
+    return <SettingsPanel onClose={handleSettingsClose} />;
+  }
+
+  // 알림 관리
+  if (currentView === 'notifications') {
+    return <NotificationsPage onNavigate={handleNavigate} />;
+  }
+
+  // 파일/기록
+  if (currentView === 'files') {
+    return <FilesPage onNavigate={handleNavigate} />;
+  }
+
+  // 로그
+  if (currentView === 'logs') {
+    return <LogsPage onNavigate={handleNavigate} />;
+  }
+
+  // 사용법
+  if (currentView === 'guide') {
+    return <GuidePage onNavigate={handleNavigate} />;
+  }
+
+  // 대시보드 (기본)
+  return (
+    <DashboardPlanetary
+      onNavigate={handleNavigate}
+      onStartUninstall={handleStartUninstall}
+    />
+  );
 }
 
-export default App
+export default App;

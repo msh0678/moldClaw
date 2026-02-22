@@ -992,6 +992,26 @@ async fn get_usage_stats() -> Result<String, String> {
     }).to_string())
 }
 
+// ===== 특수 채널 설정 =====
+
+/// Slack App Token 설정 (Socket Mode용)
+#[tauri::command]
+async fn set_slack_app_token(app_token: String) -> Result<(), String> {
+    openclaw::set_slack_app_token(&app_token).await
+}
+
+/// Google Chat Service Account 파일 경로 설정
+#[tauri::command]
+async fn set_googlechat_service_account(file_path: String) -> Result<(), String> {
+    openclaw::set_googlechat_service_account(&file_path).await
+}
+
+/// Mattermost URL 설정
+#[tauri::command]
+async fn set_mattermost_url(url: String) -> Result<(), String> {
+    openclaw::set_mattermost_url(&url).await
+}
+
 // ===== Windows 전용 명령어 =====
 
 /// Windows 필수 프로그램 상태 확인
@@ -1279,6 +1299,10 @@ pub fn run() {
             clear_gateway_logs,
             get_channel_status,
             get_usage_stats,
+            // 특수 채널 설정
+            set_slack_app_token,
+            set_googlechat_service_account,
+            set_mattermost_url,
         ])
         .setup(|_app| {
             eprintln!("moldClaw 시작됨");

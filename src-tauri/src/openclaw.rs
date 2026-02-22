@@ -738,6 +738,125 @@ pub async fn add_channel_to_config(
                 json!(require_mention),
             );
         }
+        "whatsapp" => {
+            // WhatsApp은 accounts 구조 사용 (OpenClaw 공식 형식)
+            // 토큰 없음 - QR 인증 사용
+            set_nested_value(
+                &mut config,
+                &["channels", "whatsapp", "accounts", "default", "enabled"],
+                json!(true),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "whatsapp", "accounts", "default", "dmPolicy"],
+                json!(dm_policy),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "whatsapp", "accounts", "default", "allowFrom"],
+                json!(allow_from),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "whatsapp", "accounts", "default", "groupPolicy"],
+                json!(group_policy),
+            );
+        }
+        "slack" => {
+            // Slack은 botToken + appToken 필요
+            set_nested_value(
+                &mut config,
+                &["channels", "slack", "enabled"],
+                json!(true),
+            );
+            // botToken (bot_token 파라미터 사용)
+            if !bot_token.is_empty() {
+                set_nested_value(
+                    &mut config,
+                    &["channels", "slack", "botToken"],
+                    json!(bot_token),
+                );
+            }
+            set_nested_value(
+                &mut config,
+                &["channels", "slack", "groupPolicy"],
+                json!(group_policy),
+            );
+            // DM 설정
+            set_nested_value(
+                &mut config,
+                &["channels", "slack", "dm", "policy"],
+                json!(dm_policy),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "slack", "dm", "allowFrom"],
+                json!(allow_from),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "slack", "requireMention"],
+                json!(require_mention),
+            );
+        }
+        "googlechat" => {
+            // Google Chat은 Service Account 필요 (별도 처리)
+            set_nested_value(
+                &mut config,
+                &["channels", "googlechat", "enabled"],
+                json!(true),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "googlechat", "dmPolicy"],
+                json!(dm_policy),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "googlechat", "allowFrom"],
+                json!(allow_from),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "googlechat", "groupPolicy"],
+                json!(group_policy),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "googlechat", "requireMention"],
+                json!(require_mention),
+            );
+        }
+        "mattermost" => {
+            // Mattermost는 url + botToken 필요
+            set_nested_value(
+                &mut config,
+                &["channels", "mattermost", "enabled"],
+                json!(true),
+            );
+            if !bot_token.is_empty() {
+                set_nested_value(
+                    &mut config,
+                    &["channels", "mattermost", "botToken"],
+                    json!(bot_token),
+                );
+            }
+            set_nested_value(
+                &mut config,
+                &["channels", "mattermost", "dmPolicy"],
+                json!(dm_policy),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "mattermost", "allowFrom"],
+                json!(allow_from),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "mattermost", "groupPolicy"],
+                json!(group_policy),
+            );
+        }
         _ => {}
     }
     
@@ -2392,4 +2511,90 @@ pub async fn install_browser_control() -> Result<String, String> {
             Ok("브라우저 설정 완료! Chrome 확장 프로그램은 'openclaw browser extension install' 명령으로 설치할 수 있습니다.".to_string())
         }
     }
+}
+
+/// Slack App Token 설정 (Socket Mode용)
+pub async fn set_slack_app_token(app_token: &str) -> Result<(), String> {
+    if app_token.is_empty() {
+        return Err("App Token이 비어있습니다.".to_string());
+    }
+    
+    let mut config = read_existing_config();
+    
+    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        return Err("Config가 없습니다.".to_string());
+    }
+    
+    // meta.lastTouchedAt 업데이트
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
+    
+    // Slack appToken 설정
+    set_nested_value(
+        &mut config,
+        &["channels", "slack", "appToken"],
+        json!(app_token),
+    );
+    
+    write_config(&config)?;
+    Ok(())
+}
+
+/// Google Chat Service Account 파일 경로 설정
+pub async fn set_googlechat_service_account(file_path: &str) -> Result<(), String> {
+    if file_path.is_empty() {
+        return Err("파일 경로가 비어있습니다.".to_string());
+    }
+    
+    // 파일 존재 확인
+    if !std::path::Path::new(file_path).exists() {
+        return Err(format!("파일을 찾을 수 없습니다: {}", file_path));
+    }
+    
+    let mut config = read_existing_config();
+    
+    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        return Err("Config가 없습니다.".to_string());
+    }
+    
+    // meta.lastTouchedAt 업데이트
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
+    
+    // Google Chat serviceAccountFile 설정
+    set_nested_value(
+        &mut config,
+        &["channels", "googlechat", "serviceAccountFile"],
+        json!(file_path),
+    );
+    
+    write_config(&config)?;
+    Ok(())
+}
+
+/// Mattermost URL 설정
+pub async fn set_mattermost_url(url: &str) -> Result<(), String> {
+    if url.is_empty() {
+        return Err("URL이 비어있습니다.".to_string());
+    }
+    
+    let mut config = read_existing_config();
+    
+    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        return Err("Config가 없습니다.".to_string());
+    }
+    
+    // meta.lastTouchedAt 업데이트
+    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
+    
+    // Mattermost URL 설정
+    set_nested_value(
+        &mut config,
+        &["channels", "mattermost", "url"],
+        json!(url),
+    );
+    
+    write_config(&config)?;
+    Ok(())
 }
