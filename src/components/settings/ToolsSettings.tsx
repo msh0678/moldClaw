@@ -15,6 +15,7 @@ interface Tool {
   id: string;
   name: string;
   icon: string;
+  logo?: string;
   description: string;
   envVar: string;
   placeholder: string;
@@ -26,6 +27,7 @@ const TOOLS: Tool[] = [
     id: 'brave-search',
     name: 'Brave Search',
     icon: '🔍',
+    logo: 'https://cdn.simpleicons.org/brave/FB542B',
     description: '웹 검색 (무료 2,000회/월)',
     envVar: 'BRAVE_SEARCH_API_KEY',
     placeholder: 'BSA...',
@@ -75,6 +77,61 @@ const TOOLS: Tool[] = [
     envVar: 'EXA_API_KEY',
     placeholder: 'exa-...',
     guideUrl: 'https://exa.ai/',
+  },
+  {
+    id: 'browserless',
+    name: 'Browserless',
+    icon: '🌐',
+    description: '헤드리스 브라우저',
+    envVar: 'BROWSERLESS_API_KEY',
+    placeholder: '...',
+    guideUrl: 'https://www.browserless.io/',
+  },
+  {
+    id: 'scraperapi',
+    name: 'ScraperAPI',
+    icon: '🕷️',
+    description: '웹 스크래핑 프록시',
+    envVar: 'SCRAPERAPI_KEY',
+    placeholder: '...',
+    guideUrl: 'https://www.scraperapi.com/',
+  },
+  {
+    id: 'apify',
+    name: 'Apify',
+    icon: '🤖',
+    description: '웹 자동화 플랫폼',
+    envVar: 'APIFY_TOKEN',
+    placeholder: 'apify_api_...',
+    guideUrl: 'https://console.apify.com/',
+  },
+  {
+    id: 'wolfram',
+    name: 'Wolfram Alpha',
+    icon: '🔢',
+    logo: 'https://cdn.simpleicons.org/wolframlanguage/DD1100',
+    description: '계산/지식 엔진',
+    envVar: 'WOLFRAM_APP_ID',
+    placeholder: '...',
+    guideUrl: 'https://products.wolframalpha.com/api/',
+  },
+  {
+    id: 'newsapi',
+    name: 'News API',
+    icon: '📰',
+    description: '뉴스 검색',
+    envVar: 'NEWS_API_KEY',
+    placeholder: '...',
+    guideUrl: 'https://newsapi.org/',
+  },
+  {
+    id: 'weatherapi',
+    name: 'Weather API',
+    icon: '🌤️',
+    description: '날씨 정보',
+    envVar: 'WEATHER_API_KEY',
+    placeholder: '...',
+    guideUrl: 'https://www.weatherapi.com/',
   },
 ];
 
@@ -174,7 +231,11 @@ export default function ToolsSettings({
               `}
             >
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-2xl">{tool.icon}</span>
+                {tool.logo ? (
+                  <img src={tool.logo} alt={tool.name} className="w-6 h-6 object-contain" />
+                ) : (
+                  <span className="text-2xl">{tool.icon}</span>
+                )}
                 <span className="font-medium text-forge-text text-sm">{tool.name}</span>
               </div>
               <p className="text-xs text-forge-muted mb-3 line-clamp-1">{tool.description}</p>
@@ -195,8 +256,8 @@ export default function ToolsSettings({
                   onClick={(e) => handleConnect(tool, e)}
                   className="
                     w-full text-xs px-3 py-2 rounded-lg
-                    bg-forge-copper/10 text-forge-copper border border-forge-copper/30
-                    hover:bg-forge-copper/20 transition-colors
+                    bg-white text-[#1a1c24] font-medium
+                    hover:bg-gray-100 transition-colors
                   "
                 >
                   연결
@@ -211,7 +272,7 @@ export default function ToolsSettings({
       {disconnectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="absolute inset-0 bg-[#0a0b0f]/90 backdrop-blur-lg"
+            className="absolute inset-0 bg-[#0a0b0f]/70 backdrop-blur-md"
             onClick={() => setDisconnectTarget(null)}
           />
           <div className="relative z-10 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-2xl p-6 max-w-sm shadow-2xl">

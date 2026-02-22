@@ -1,5 +1,5 @@
 // SettingsModal - 호버 창 + 블러 효과
-// 빠른 페이드 인/아웃
+// x 버튼만 있음 (닫기 버튼 제거)
 
 import { useEffect, useRef } from 'react';
 
@@ -47,15 +47,15 @@ export default function SettingsModal({
       "
       onClick={handleBackdropClick}
     >
-      {/* 블러 배경 - 더 불투명하게 */}
+      {/* 블러 배경 - 더 연하게 */}
       <div 
         className="
-          absolute inset-0 bg-[#0a0b0f]/90 backdrop-blur-lg
+          absolute inset-0 bg-[#0a0b0f]/70 backdrop-blur-md
           animate-fadeIn
         " 
       />
 
-      {/* 모달 컨텐츠 - 완전 불투명 */}
+      {/* 모달 컨텐츠 */}
       <div
         ref={modalRef}
         className="
@@ -68,13 +68,13 @@ export default function SettingsModal({
           animation: 'slideUp 0.2s ease-out',
         }}
       >
-        {/* 헤더 */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10">
+        {/* 헤더 - x 버튼만 */}
+        <div className="flex items-center justify-between p-4 border-b border-[#2a2d3e]">
           <h3 className="text-lg font-semibold text-forge-text">{title}</h3>
           <button
             onClick={onClose}
             className="
-              w-8 h-8 rounded-lg bg-forge-surface hover:bg-forge-error/20
+              w-8 h-8 rounded-lg bg-[#252836] hover:bg-forge-error/20
               flex items-center justify-center
               text-forge-muted hover:text-forge-error
               transition-colors
@@ -87,18 +87,8 @@ export default function SettingsModal({
         </div>
 
         {/* 컨텐츠 */}
-        <div className="p-4 overflow-auto max-h-[calc(80vh-120px)]">
+        <div className="p-5 overflow-auto max-h-[calc(80vh-80px)]">
           {children}
-        </div>
-
-        {/* 하단 버튼 영역 (children에서 제공하지 않을 경우) */}
-        <div className="p-4 border-t border-white/10 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-forge-surface hover:bg-white/10 text-forge-text transition-colors"
-          >
-            닫기
-          </button>
         </div>
       </div>
 

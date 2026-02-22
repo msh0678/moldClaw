@@ -9,7 +9,8 @@ export const BASIC_PROVIDERS: ProviderInfo[] = [
     id: 'anthropic',
     name: 'Anthropic',
     icon: '🟣',
-    color: '#9B59B6',
+    logo: 'https://cdn.simpleicons.org/anthropic/D4A27D',
+    color: '#D4A27D',
     models: [
       { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', desc: '추천 - 균형잡힌 성능' },
       { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', desc: '빠르고 저렴' },
@@ -22,6 +23,7 @@ export const BASIC_PROVIDERS: ProviderInfo[] = [
     id: 'openai',
     name: 'OpenAI',
     icon: '🟢',
+    logo: 'https://cdn.simpleicons.org/openai/FFFFFF',
     color: '#10A37F',
     models: [
       { id: 'gpt-4o', name: 'GPT-4o', desc: '최신 멀티모달' },
@@ -36,6 +38,7 @@ export const BASIC_PROVIDERS: ProviderInfo[] = [
     id: 'google',
     name: 'Google',
     icon: '🔵',
+    logo: 'https://cdn.simpleicons.org/google/4285F4',
     color: '#4285F4',
     models: [
       { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: '빠른 응답' },
@@ -53,6 +56,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'openrouter',
     name: 'OpenRouter',
     icon: '🌐',
+    logo: 'https://cdn.simpleicons.org/openrouter/6366F1',
     color: '#6366F1',
     models: [
       { id: 'openai/gpt-4o', name: 'GPT-4o (via OpenRouter)', desc: 'OpenAI 모델 경유' },
@@ -66,6 +70,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'groq',
     name: 'Groq',
     icon: '⚡',
+    logo: 'https://cdn.simpleicons.org/groq/F97316',
     color: '#F97316',
     models: [
       { id: 'llama-3.1-70b-versatile', name: 'Llama 3.1 70B', desc: '빠른 오픈소스' },
@@ -79,6 +84,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'mistral',
     name: 'Mistral',
     icon: '🔷',
+    logo: 'https://cdn.simpleicons.org/mistral/FF7000',
     color: '#FF7000',
     models: [
       { id: 'mistral-large-latest', name: 'Mistral Large', desc: '최고 성능' },
@@ -117,6 +123,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'xai',
     name: 'xAI (Grok)',
     icon: '✖️',
+    logo: 'https://cdn.simpleicons.org/x/FFFFFF',
     color: '#000000',
     models: [
       { id: 'grok-2', name: 'Grok 2', desc: '최신 Grok' },
@@ -129,6 +136,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'perplexity',
     name: 'Perplexity',
     icon: '🔍',
+    logo: 'https://cdn.simpleicons.org/perplexity/20B2AA',
     color: '#20B2AA',
     models: [
       { id: 'llama-3.1-sonar-large-128k-online', name: 'Sonar Large', desc: '검색 특화' },
@@ -141,6 +149,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'deepgram',
     name: 'Deepgram',
     icon: '🎤',
+    logo: 'https://cdn.simpleicons.org/deepgram/13EF93',
     color: '#13EF93',
     models: [
       { id: 'nova-2', name: 'Nova 2', desc: '음성 인식' },
@@ -188,6 +197,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'qwen',
     name: 'Qwen (Alibaba)',
     icon: '☁️',
+    logo: 'https://cdn.simpleicons.org/alibabacloud/FF6A00',
     color: '#FF6A00',
     models: [
       { id: 'qwen-max', name: 'Qwen Max', desc: '최고 성능' },

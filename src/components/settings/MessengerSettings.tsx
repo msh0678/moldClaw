@@ -146,7 +146,11 @@ export default function MessengerSettings({
               )}
               
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-2xl">{messenger.icon}</span>
+                {messenger.logo ? (
+                  <img src={messenger.logo} alt={messenger.name} className="w-6 h-6 object-contain" />
+                ) : (
+                  <span className="text-2xl">{messenger.icon}</span>
+                )}
                 <span className="font-medium text-forge-text text-sm">{messenger.name}</span>
               </div>
               <p className="text-xs text-forge-muted mb-3 line-clamp-2">{messenger.desc}</p>
@@ -167,8 +171,8 @@ export default function MessengerSettings({
                   onClick={(e) => handleConnect(messenger, e)}
                   className="
                     w-full text-xs px-3 py-2 rounded-lg
-                    bg-forge-copper/10 text-forge-copper border border-forge-copper/30
-                    hover:bg-forge-copper/20 transition-colors
+                    bg-white text-[#1a1c24] font-medium
+                    hover:bg-gray-100 transition-colors
                   "
                 >
                   연결
@@ -183,7 +187,7 @@ export default function MessengerSettings({
       {disconnectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="absolute inset-0 bg-[#0a0b0f]/90 backdrop-blur-lg"
+            className="absolute inset-0 bg-[#0a0b0f]/70 backdrop-blur-md"
             onClick={() => setDisconnectTarget(null)}
           />
           <div className="relative z-10 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-2xl p-6 max-w-sm shadow-2xl">

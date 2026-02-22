@@ -15,6 +15,7 @@ interface Skill {
   id: string;
   name: string;
   icon: string;
+  logo?: string;
   description: string;
   envVar?: string;
   guideSteps: string[];
@@ -26,6 +27,7 @@ const SKILLS: Skill[] = [
     id: 'google-workspace',
     name: 'Google Workspace',
     icon: '🔷',
+    logo: 'https://cdn.simpleicons.org/google/4285F4',
     description: '캘린더, 이메일 관리',
     guideSteps: ['Google Cloud Console 설정', 'OAuth 자격 증명 생성'],
     guideUrl: 'https://console.cloud.google.com/',
@@ -34,6 +36,7 @@ const SKILLS: Skill[] = [
     id: 'notion',
     name: 'Notion',
     icon: '📝',
+    logo: 'https://cdn.simpleicons.org/notion/FFFFFF',
     description: '노트, 문서 관리',
     envVar: 'NOTION_API_KEY',
     guideSteps: ['Notion Integration 생성', 'API 키 복사'],
@@ -43,6 +46,7 @@ const SKILLS: Skill[] = [
     id: 'figma',
     name: 'Figma',
     icon: '🎨',
+    logo: 'https://cdn.simpleicons.org/figma/F24E1E',
     description: '디자인 파일 접근',
     envVar: 'FIGMA_ACCESS_TOKEN',
     guideSteps: ['Figma 설정에서 Personal Access Token 생성'],
@@ -52,6 +56,7 @@ const SKILLS: Skill[] = [
     id: 'trello',
     name: 'Trello',
     icon: '📋',
+    logo: 'https://cdn.simpleicons.org/trello/0052CC',
     description: '프로젝트 보드 관리',
     envVar: 'TRELLO_API_KEY',
     guideSteps: ['Trello Developer API Key 발급'],
@@ -61,6 +66,7 @@ const SKILLS: Skill[] = [
     id: 'linear',
     name: 'Linear',
     icon: '📊',
+    logo: 'https://cdn.simpleicons.org/linear/5E6AD2',
     description: '이슈 트래킹',
     envVar: 'LINEAR_API_KEY',
     guideSteps: ['Linear Settings > API > Personal API keys'],
@@ -70,6 +76,7 @@ const SKILLS: Skill[] = [
     id: 'obsidian',
     name: 'Obsidian',
     icon: '💎',
+    logo: 'https://cdn.simpleicons.org/obsidian/7C3AED',
     description: '로컬 노트 관리',
     guideSteps: ['Obsidian Vault 경로 설정'],
   },
@@ -77,10 +84,71 @@ const SKILLS: Skill[] = [
     id: 'github',
     name: 'GitHub',
     icon: '🐱',
+    logo: 'https://cdn.simpleicons.org/github/FFFFFF',
     description: '코드 저장소 관리',
     envVar: 'GITHUB_TOKEN',
     guideSteps: ['GitHub Settings > Developer settings > Personal access tokens'],
     guideUrl: 'https://github.com/settings/tokens',
+  },
+  {
+    id: 'gitlab',
+    name: 'GitLab',
+    icon: '🦊',
+    logo: 'https://cdn.simpleicons.org/gitlab/FC6D26',
+    description: '코드 저장소 관리',
+    envVar: 'GITLAB_TOKEN',
+    guideSteps: ['GitLab > User Settings > Access Tokens'],
+    guideUrl: 'https://gitlab.com/-/profile/personal_access_tokens',
+  },
+  {
+    id: 'jira',
+    name: 'Jira',
+    icon: '📊',
+    logo: 'https://cdn.simpleicons.org/jira/0052CC',
+    description: '프로젝트 관리',
+    envVar: 'JIRA_API_TOKEN',
+    guideSteps: ['Atlassian API 토큰 생성'],
+    guideUrl: 'https://id.atlassian.com/manage-profile/security/api-tokens',
+  },
+  {
+    id: 'asana',
+    name: 'Asana',
+    icon: '✅',
+    logo: 'https://cdn.simpleicons.org/asana/F06A6A',
+    description: '작업 관리',
+    envVar: 'ASANA_TOKEN',
+    guideSteps: ['Asana Developer Console에서 토큰 생성'],
+    guideUrl: 'https://app.asana.com/0/developer-console',
+  },
+  {
+    id: 'airtable',
+    name: 'Airtable',
+    icon: '📊',
+    logo: 'https://cdn.simpleicons.org/airtable/18BFFF',
+    description: '데이터베이스/스프레드시트',
+    envVar: 'AIRTABLE_API_KEY',
+    guideSteps: ['Account settings에서 API key 생성'],
+    guideUrl: 'https://airtable.com/account',
+  },
+  {
+    id: 'dropbox',
+    name: 'Dropbox',
+    icon: '📦',
+    logo: 'https://cdn.simpleicons.org/dropbox/0061FF',
+    description: '파일 저장/공유',
+    envVar: 'DROPBOX_TOKEN',
+    guideSteps: ['Dropbox App Console에서 앱 생성'],
+    guideUrl: 'https://www.dropbox.com/developers/apps',
+  },
+  {
+    id: 'todoist',
+    name: 'Todoist',
+    icon: '✅',
+    logo: 'https://cdn.simpleicons.org/todoist/E44332',
+    description: '할 일 관리',
+    envVar: 'TODOIST_API_TOKEN',
+    guideSteps: ['Settings > Integrations > Developer에서 토큰 복사'],
+    guideUrl: 'https://todoist.com/app/settings/integrations',
   },
 ];
 
@@ -191,7 +259,11 @@ export default function SkillsSettings({
               `}
             >
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-2xl">{skill.icon}</span>
+                {skill.logo ? (
+                  <img src={skill.logo} alt={skill.name} className="w-6 h-6 object-contain" />
+                ) : (
+                  <span className="text-2xl">{skill.icon}</span>
+                )}
                 <span className="font-medium text-forge-text text-sm">{skill.name}</span>
               </div>
               <p className="text-xs text-forge-muted mb-3 line-clamp-1">{skill.description}</p>
@@ -212,8 +284,8 @@ export default function SkillsSettings({
                   onClick={(e) => handleConnect(skill, e)}
                   className="
                     w-full text-xs px-3 py-2 rounded-lg
-                    bg-forge-copper/10 text-forge-copper border border-forge-copper/30
-                    hover:bg-forge-copper/20 transition-colors
+                    bg-white text-[#1a1c24] font-medium
+                    hover:bg-gray-100 transition-colors
                   "
                 >
                   연결
@@ -228,7 +300,7 @@ export default function SkillsSettings({
       {disconnectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="absolute inset-0 bg-[#0a0b0f]/90 backdrop-blur-lg"
+            className="absolute inset-0 bg-[#0a0b0f]/70 backdrop-blur-md"
             onClick={() => setDisconnectTarget(null)}
           />
           <div className="relative z-10 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-2xl p-6 max-w-sm shadow-2xl">

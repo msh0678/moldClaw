@@ -95,6 +95,7 @@ export interface ProviderInfo {
   id: AIProvider;
   name: string;
   icon: string;
+  logo?: string;  // 실제 서비스 로고 URL
   color: string;
   models: {
     id: string;
@@ -109,6 +110,7 @@ export interface MessengerInfo {
   id: Messenger;
   name: string;
   icon: string;
+  logo?: string;  // 실제 서비스 로고 URL
   desc: string;
   difficulty: 1 | 2 | 3;
   pros: string[];
