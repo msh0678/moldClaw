@@ -32,7 +32,7 @@ const TOOLS: Tool[] = [
     icon: '🔍',
     logo: 'https://cdn.simpleicons.org/brave/FB542B',
     description: '웹 검색 (무료 2,000회/월)',
-    envVar: 'BRAVE_SEARCH_API_KEY',
+    envVar: 'BRAVE_API_KEY',
     placeholder: 'BSA...',
     guideUrl: 'https://brave.com/search/api/',
   },

@@ -76,7 +76,7 @@ const INTEGRATIONS: Integration[] = [
     name: 'Brave Search',
     category: '외부 도구',
     icon: '🔍',
-    envVar: 'BRAVE_SEARCH_API_KEY',
+    envVar: 'BRAVE_API_KEY',
     description: '웹 검색 기능 (구글 대안)',
     guideUrl: 'https://brave.com/search/api/',
     guideSteps: [

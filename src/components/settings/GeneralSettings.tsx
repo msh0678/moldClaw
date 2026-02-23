@@ -190,18 +190,18 @@ export default function GeneralSettings({
               <div>
                 <h3 className="font-medium text-forge-text">웹 검색</h3>
                 <p className="text-sm text-forge-muted">
-                  {config.integrations.BRAVE_SEARCH_API_KEY 
+                  {config.integrations.BRAVE_API_KEY 
                     ? 'Brave Search 연결됨'
                     : 'Brave Search API 필요'}
                 </p>
               </div>
             </div>
             <span className={`text-xs px-2 py-1 rounded ${
-              config.integrations.BRAVE_SEARCH_API_KEY 
+              config.integrations.BRAVE_API_KEY 
                 ? 'bg-forge-success/20 text-forge-success' 
                 : 'bg-forge-surface text-forge-muted'
             }`}>
-              {config.integrations.BRAVE_SEARCH_API_KEY ? '연결됨' : '미설정'}
+              {config.integrations.BRAVE_API_KEY ? '연결됨' : '미설정'}
             </span>
           </div>
         </div>
