@@ -30,6 +30,21 @@ export default function MessengerSettings({
   // 전역 작업 중 플래그 (연결/해제 중 다른 작업 방지)
   const isWorkingRef = useRef(false);
 
+  // DM 정책 도움말 툴팁
+  const DmPolicyHelp = () => (
+    <div className="group relative inline-block ml-1">
+      <span className="cursor-help text-forge-muted hover:text-forge-copper transition-colors">ⓘ</span>
+      <div className="absolute z-50 left-0 bottom-full mb-2 w-72 p-3 bg-[#252836] border border-[#3a3f52] rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+        <p className="text-xs text-forge-text font-medium mb-2">DM 정책이란?</p>
+        <ul className="text-xs text-forge-muted space-y-1.5">
+          <li><strong className="text-forge-copper">페어링:</strong> 처음 메시지 보내면 인증 코드 발급 → 승인 후 대화 가능</li>
+          <li><strong className="text-forge-copper">허용 목록:</strong> 미리 등록한 사용자만 대화 가능</li>
+          <li><strong className="text-forge-amber">모두 허용:</strong> 아무나 대화 가능 (⚠️ 비용 주의)</li>
+        </ul>
+      </div>
+    </div>
+  );
+
   const isConfigured = (messengerId: Messenger) => config.messenger.type === messengerId;
 
   // WhatsApp 전용 모달
@@ -286,8 +301,8 @@ export default function MessengerSettings({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-forge-muted mb-2">
-            DM 접근 정책
+          <label className="text-sm font-medium text-forge-muted mb-2 flex items-center">
+            DM 접근 정책 <DmPolicyHelp />
           </label>
           <select
             value={dmPolicy}
@@ -319,9 +334,14 @@ export default function MessengerSettings({
         )}
 
         {dmPolicy === 'open' && (
-          <p className="text-xs text-forge-amber bg-forge-amber/10 p-3 rounded-lg">
-            ⚠️ 누구나 봇에게 DM을 보낼 수 있습니다. API 비용에 주의하세요.
-          </p>
+          <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
+            <p className="text-forge-amber font-medium mb-1">⚠️ 보안 경고</p>
+            <p className="text-forge-muted">
+              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 메시지를 보낼 수 있습니다.
+              악의적 사용자가 대량 메시지를 보내면 <strong className="text-forge-amber">AI API 비용이 급증</strong>할 수 있습니다.
+              가족/친구용이 아니라면 '페어링' 또는 '허용 목록만' 사용을 권장합니다.
+            </p>
+          </div>
         )}
 
         {error && (
@@ -466,8 +486,8 @@ export default function MessengerSettings({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-forge-muted mb-2">
-            DM 접근 정책
+          <label className="text-sm font-medium text-forge-muted mb-2 flex items-center">
+            DM 접근 정책 <DmPolicyHelp />
           </label>
           <select
             value={dmPolicy}
@@ -499,9 +519,14 @@ export default function MessengerSettings({
         )}
 
         {dmPolicy === 'open' && (
-          <p className="text-xs text-forge-amber bg-forge-amber/10 p-3 rounded-lg">
-            ⚠️ 누구나 봇에게 DM을 보낼 수 있습니다. API 비용에 주의하세요.
-          </p>
+          <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
+            <p className="text-forge-amber font-medium mb-1">⚠️ 보안 경고</p>
+            <p className="text-forge-muted">
+              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 메시지를 보낼 수 있습니다.
+              악의적 사용자가 대량 메시지를 보내면 <strong className="text-forge-amber">AI API 비용이 급증</strong>할 수 있습니다.
+              가족/친구용이 아니라면 '페어링' 또는 '허용 목록만' 사용을 권장합니다.
+            </p>
+          </div>
         )}
 
         {error && (
@@ -635,8 +660,8 @@ export default function MessengerSettings({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-forge-muted mb-2">
-            DM 접근 정책
+          <label className="text-sm font-medium text-forge-muted mb-2 flex items-center">
+            DM 접근 정책 <DmPolicyHelp />
           </label>
           <select
             value={dmPolicy}
@@ -668,9 +693,14 @@ export default function MessengerSettings({
         )}
 
         {dmPolicy === 'open' && (
-          <p className="text-xs text-forge-amber bg-forge-amber/10 p-3 rounded-lg">
-            ⚠️ 누구나 봇에게 DM을 보낼 수 있습니다. API 비용에 주의하세요.
-          </p>
+          <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
+            <p className="text-forge-amber font-medium mb-1">⚠️ 보안 경고</p>
+            <p className="text-forge-muted">
+              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 메시지를 보낼 수 있습니다.
+              악의적 사용자가 대량 메시지를 보내면 <strong className="text-forge-amber">AI API 비용이 급증</strong>할 수 있습니다.
+              가족/친구용이 아니라면 '페어링' 또는 '허용 목록만' 사용을 권장합니다.
+            </p>
+          </div>
         )}
 
         {error && (
@@ -808,8 +838,8 @@ export default function MessengerSettings({
         )}
 
         <div>
-          <label className="block text-sm font-medium text-forge-muted mb-2">
-            DM 접근 정책
+          <label className="text-sm font-medium text-forge-muted mb-2 flex items-center">
+            DM 접근 정책 <DmPolicyHelp />
           </label>
           <select
             value={dmPolicy}
@@ -841,9 +871,14 @@ export default function MessengerSettings({
         )}
 
         {dmPolicy === 'open' && (
-          <p className="text-xs text-forge-amber bg-forge-amber/10 p-3 rounded-lg">
-            ⚠️ 누구나 봇에게 DM을 보낼 수 있습니다. API 비용에 주의하세요.
-          </p>
+          <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
+            <p className="text-forge-amber font-medium mb-1">⚠️ 보안 경고</p>
+            <p className="text-forge-muted">
+              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 메시지를 보낼 수 있습니다.
+              악의적 사용자가 대량 메시지를 보내면 <strong className="text-forge-amber">AI API 비용이 급증</strong>할 수 있습니다.
+              가족/친구용이 아니라면 '페어링' 또는 '허용 목록만' 사용을 권장합니다.
+            </p>
+          </div>
         )}
 
         {messenger.guideUrl && (

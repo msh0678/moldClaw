@@ -19,10 +19,14 @@ interface Tool {
   name: string;
   icon: string;
   logo?: string;
-  description: string;
+  description: string;       // 카드에 표시되는 짧은 설명
+  detailedDesc: string;      // 모달에 표시되는 상세 설명
   envVar: string;
   placeholder: string;
   guideUrl?: string;
+  guideSteps: string[];      // API 키 발급 방법
+  free?: boolean;            // 무료 플랜 여부
+  freeLimit?: string;        // 무료 한도
 }
 
 const TOOLS: Tool[] = [
@@ -31,110 +35,218 @@ const TOOLS: Tool[] = [
     name: 'Brave Search',
     icon: '🔍',
     logo: 'https://cdn.simpleicons.org/brave/FB542B',
-    description: '웹 검색 (무료 2,000회/월)',
+    description: '인터넷 검색',
+    detailedDesc: 'AI가 인터넷에서 정보를 검색할 수 있게 해줍니다. "최신 뉴스 알려줘", "○○ 맛집 추천해줘" 같은 질문에 답할 수 있습니다.',
     envVar: 'BRAVE_API_KEY',
     placeholder: 'BSA...',
     guideUrl: 'https://brave.com/search/api/',
+    guideSteps: [
+      'brave.com/search/api 접속',
+      '무료 계정 생성 (이메일만 필요)',
+      'API Keys 메뉴에서 키 생성',
+      '생성된 키를 아래에 입력',
+    ],
+    free: true,
+    freeLimit: '월 2,000회 무료',
   },
   {
     id: 'firecrawl',
     name: 'Firecrawl',
     icon: '🔥',
-    description: '웹페이지 스크래핑/파싱',
+    description: '웹페이지 내용 추출',
+    detailedDesc: '웹페이지의 텍스트 내용을 깔끔하게 추출합니다. "이 링크 요약해줘"라고 하면 AI가 해당 페이지를 읽고 요약해줍니다.',
     envVar: 'FIRECRAWL_API_KEY',
     placeholder: 'fc-...',
     guideUrl: 'https://firecrawl.dev/',
+    guideSteps: [
+      'firecrawl.dev 접속',
+      'Get Started 클릭 → 회원가입',
+      'Dashboard에서 API Key 복사',
+      '아래에 입력',
+    ],
+    free: true,
+    freeLimit: '월 500회 무료',
   },
   {
     id: 'jina',
     name: 'Jina Reader',
     icon: '📖',
     description: '웹페이지 읽기',
+    detailedDesc: '웹페이지를 AI가 이해하기 쉬운 형태로 변환합니다. 광고, 메뉴 등을 제외한 본문만 추출합니다.',
     envVar: 'JINA_API_KEY',
     placeholder: 'jina_...',
     guideUrl: 'https://jina.ai/',
+    guideSteps: [
+      'jina.ai 접속',
+      '무료 계정 생성',
+      'API Keys 메뉴에서 키 발급',
+      '아래에 입력',
+    ],
+    free: true,
+    freeLimit: '무료 플랜 제공',
   },
   {
     id: 'serper',
     name: 'Serper',
     icon: '🌐',
-    description: 'Google 검색 API',
+    description: 'Google 검색',
+    detailedDesc: 'Google 검색 결과를 가져옵니다. Brave Search와 비슷하지만 Google 검색 결과를 사용합니다.',
     envVar: 'SERPER_API_KEY',
     placeholder: '...',
     guideUrl: 'https://serper.dev/',
+    guideSteps: [
+      'serper.dev 접속',
+      'Get API Key 클릭 → 회원가입',
+      'Dashboard에서 API Key 복사',
+      '아래에 입력',
+    ],
+    free: true,
+    freeLimit: '2,500회 무료 크레딧',
   },
   {
     id: 'tavily',
     name: 'Tavily',
     icon: '🔎',
-    description: 'AI 검색 최적화',
+    description: 'AI 전용 검색',
+    detailedDesc: 'AI 에이전트를 위해 최적화된 검색 엔진입니다. 일반 검색보다 AI가 이해하기 좋은 형태로 결과를 제공합니다.',
     envVar: 'TAVILY_API_KEY',
     placeholder: 'tvly-...',
     guideUrl: 'https://tavily.com/',
+    guideSteps: [
+      'tavily.com 접속',
+      'Get Started 클릭 → 회원가입',
+      'API Key 복사',
+      '아래에 입력',
+    ],
+    free: true,
+    freeLimit: '월 1,000회 무료',
   },
   {
     id: 'exa',
     name: 'Exa',
     icon: '⚡',
-    description: 'AI 검색 엔진',
+    description: '의미 기반 검색',
+    detailedDesc: '키워드가 아닌 의미로 검색합니다. "나와 비슷한 글 찾아줘" 같은 복잡한 검색에 강합니다.',
     envVar: 'EXA_API_KEY',
     placeholder: 'exa-...',
     guideUrl: 'https://exa.ai/',
+    guideSteps: [
+      'exa.ai 접속',
+      'Get API Key 클릭',
+      '회원가입 후 키 발급',
+      '아래에 입력',
+    ],
+    free: true,
+    freeLimit: '월 1,000회 무료',
   },
   {
     id: 'browserless',
     name: 'Browserless',
     icon: '🌐',
-    description: '헤드리스 브라우저',
+    description: '자동 브라우저',
+    detailedDesc: '로그인이 필요하거나 JavaScript로 동작하는 복잡한 웹사이트도 읽을 수 있습니다. 일반 스크래핑으로 안 되는 페이지에 사용합니다.',
     envVar: 'BROWSERLESS_API_KEY',
     placeholder: '...',
     guideUrl: 'https://www.browserless.io/',
+    guideSteps: [
+      'browserless.io 접속',
+      'Start Free Trial 클릭',
+      '회원가입 후 Dashboard에서 API Key 확인',
+      '아래에 입력',
+    ],
+    free: true,
+    freeLimit: '무료 체험 제공',
   },
   {
     id: 'scraperapi',
     name: 'ScraperAPI',
     icon: '🕷️',
-    description: '웹 스크래핑 프록시',
+    description: '차단 우회 스크래핑',
+    detailedDesc: '봇 차단을 우회하여 웹페이지를 읽습니다. 자주 차단되는 사이트의 정보를 가져올 때 유용합니다.',
     envVar: 'SCRAPERAPI_KEY',
     placeholder: '...',
     guideUrl: 'https://www.scraperapi.com/',
+    guideSteps: [
+      'scraperapi.com 접속',
+      '무료 계정 생성',
+      'Dashboard에서 API Key 복사',
+      '아래에 입력',
+    ],
+    free: true,
+    freeLimit: '월 1,000회 무료',
   },
   {
     id: 'apify',
     name: 'Apify',
     icon: '🤖',
-    description: '웹 자동화 플랫폼',
+    description: '웹 자동화',
+    detailedDesc: '복잡한 웹 작업을 자동화합니다. 미리 만들어진 스크래퍼(Actor)를 사용해 다양한 사이트 데이터를 수집할 수 있습니다.',
     envVar: 'APIFY_TOKEN',
     placeholder: 'apify_api_...',
     guideUrl: 'https://console.apify.com/',
+    guideSteps: [
+      'console.apify.com 접속',
+      '회원가입 (GitHub/Google 로그인 가능)',
+      'Settings → API & Integrations',
+      'Personal API Token 복사 → 아래에 입력',
+    ],
+    free: true,
+    freeLimit: '월 $5 무료 크레딧',
   },
   {
     id: 'wolfram',
     name: 'Wolfram Alpha',
     icon: '🔢',
     logo: 'https://cdn.simpleicons.org/wolframlanguage/DD1100',
-    description: '계산/지식 엔진',
+    description: '수학/과학 계산',
+    detailedDesc: '복잡한 수학 문제, 과학 계산, 단위 변환 등을 처리합니다. "3x² + 2x - 1 = 0 풀어줘" 같은 질문에 정확한 답을 줍니다.',
     envVar: 'WOLFRAM_APP_ID',
     placeholder: '...',
     guideUrl: 'https://products.wolframalpha.com/api/',
+    guideSteps: [
+      'products.wolframalpha.com/api 접속',
+      'Get API Access 클릭 → 회원가입',
+      'Get an AppID 버튼 클릭',
+      'App Name 입력 후 AppID 복사 → 아래에 입력',
+    ],
+    free: true,
+    freeLimit: '월 2,000회 무료',
   },
   {
     id: 'newsapi',
     name: 'News API',
     icon: '📰',
     description: '뉴스 검색',
+    detailedDesc: '전 세계 뉴스를 검색합니다. "오늘 주요 뉴스 알려줘", "○○ 관련 기사 찾아줘" 같은 요청에 최신 뉴스를 제공합니다.',
     envVar: 'NEWS_API_KEY',
     placeholder: '...',
     guideUrl: 'https://newsapi.org/',
+    guideSteps: [
+      'newsapi.org 접속',
+      'Get API Key 클릭 → 회원가입',
+      '이메일 인증 후 API Key 확인',
+      '아래에 입력',
+    ],
+    free: true,
+    freeLimit: '개발용 무료 (프로덕션은 유료)',
   },
   {
     id: 'weatherapi',
     name: 'Weather API',
     icon: '🌤️',
     description: '날씨 정보',
+    detailedDesc: '전 세계 날씨 정보를 제공합니다. "서울 날씨 어때?", "내일 비 와?" 같은 질문에 정확한 날씨를 알려줍니다.',
     envVar: 'WEATHER_API_KEY',
     placeholder: '...',
     guideUrl: 'https://www.weatherapi.com/',
+    guideSteps: [
+      'weatherapi.com 접속',
+      'Sign Up 클릭 → 무료 계정 생성',
+      'Dashboard에서 API Key 확인',
+      '아래에 입력',
+    ],
+    free: true,
+    freeLimit: '월 100만회 무료',
   },
 ];
 
@@ -194,11 +306,31 @@ export default function ToolsSettings({
       
       return (
         <div className="space-y-4">
-          <p className="text-sm text-forge-muted">{tool.description}</p>
+          {/* 상세 설명 */}
+          <div className="bg-[#252836] p-3 rounded-lg">
+            <p className="text-sm text-forge-text leading-relaxed">{tool.detailedDesc}</p>
+            {tool.free && tool.freeLimit && (
+              <p className="text-xs text-forge-success mt-2">✓ {tool.freeLimit}</p>
+            )}
+          </div>
           
+          {/* API 키 발급 방법 */}
+          <div>
+            <p className="text-sm font-medium text-forge-muted mb-2">API 키 발급 방법</p>
+            <ol className="space-y-1.5 text-sm text-forge-muted">
+              {tool.guideSteps.map((step, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="text-forge-copper font-medium">{i + 1}.</span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+          
+          {/* API 키 입력 */}
           <div>
             <label className="block text-sm font-medium text-forge-muted mb-2">
-              API 키
+              API 키 입력
             </label>
             <input
               type="password"
@@ -212,9 +344,6 @@ export default function ToolsSettings({
                 disabled:opacity-50 disabled:cursor-not-allowed
               "
             />
-            <p className="text-xs text-forge-muted mt-2">
-              환경변수: <code className="text-forge-copper">{tool.envVar}</code>
-            </p>
           </div>
 
           {tool.guideUrl && (
@@ -224,7 +353,7 @@ export default function ToolsSettings({
               rel="noopener noreferrer"
               className="block text-center text-sm text-forge-copper hover:text-forge-amber"
             >
-              공식 사이트 열기 →
+              🔗 공식 사이트에서 발급받기 →
             </a>
           )}
           

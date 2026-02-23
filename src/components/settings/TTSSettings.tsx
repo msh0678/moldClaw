@@ -1,4 +1,4 @@
-// TTSSettings - TTS(음성 합성) 설정 섹션
+// TTSSettings - AI 음성 출력 설정
 // QA 강화: 연타 방지, 모달 자동 닫기, 해제 기능
 
 import { useState, useRef } from 'react';
@@ -19,9 +19,13 @@ interface TTSProvider {
   name: string;
   icon: string;
   description: string;
+  detailedDesc: string;
   envVar: string;
   placeholder: string;
   guideUrl: string;
+  guideSteps: string[];
+  free?: boolean;
+  freeLimit?: string;
 }
 
 const TTS_PROVIDERS: TTSProvider[] = [
@@ -29,19 +33,37 @@ const TTS_PROVIDERS: TTSProvider[] = [
     id: 'elevenlabs',
     name: 'ElevenLabs',
     icon: '🔊',
-    description: '고품질 AI 음성 합성',
+    description: '가장 자연스러운 AI 목소리',
+    detailedDesc: 'AI의 응답을 사람처럼 자연스러운 음성으로 들을 수 있습니다. 한국어, 영어 등 다양한 언어와 목소리 스타일을 지원합니다. 유튜브 나레이션 품질의 음성을 제공합니다.',
     envVar: 'ELEVENLABS_API_KEY',
     placeholder: 'sk_...',
     guideUrl: 'https://elevenlabs.io/',
+    guideSteps: [
+      'elevenlabs.io 접속 → 회원가입',
+      '로그인 후 우측 상단 프로필 클릭',
+      'Profile Settings 클릭',
+      'API Key 섹션에서 키 복사',
+    ],
+    free: true,
+    freeLimit: '월 10,000자 무료',
   },
   {
     id: 'openai-tts',
-    name: 'OpenAI TTS',
+    name: 'OpenAI 음성',
     icon: '🗣️',
-    description: 'OpenAI 음성 합성',
+    description: 'ChatGPT 제작사의 음성',
+    detailedDesc: 'OpenAI에서 제공하는 음성 출력 기능입니다. 이미 OpenAI API 키가 있다면 별도 설정 없이 바로 사용할 수 있습니다.',
     envVar: 'OPENAI_API_KEY',
     placeholder: 'sk-proj-...',
-    guideUrl: 'https://platform.openai.com/docs/guides/text-to-speech',
+    guideUrl: 'https://platform.openai.com/api-keys',
+    guideSteps: [
+      'platform.openai.com 접속 → 로그인',
+      'API Keys 메뉴 클릭',
+      '+ Create new secret key',
+      '생성된 키 복사 (한 번만 표시됨!)',
+    ],
+    free: false,
+    freeLimit: '사용량 기반 과금 ($0.015/1000자)',
   },
 ];
 
@@ -100,17 +122,33 @@ export default function TTSSettings({
       
       return (
         <div className="space-y-4">
-          <p className="text-sm text-forge-muted">{provider.description}</p>
+          {/* 상세 설명 */}
+          <div className="bg-[#252836] p-3 rounded-lg">
+            <p className="text-sm text-forge-text leading-relaxed">{provider.detailedDesc}</p>
+            {provider.freeLimit && (
+              <p className={`text-xs mt-2 ${provider.free ? 'text-forge-success' : 'text-forge-muted'}`}>
+                {provider.free ? '✓ ' : '💰 '}{provider.freeLimit}
+              </p>
+            )}
+          </div>
           
-          <div className="card p-4 bg-forge-amber/10 border-forge-amber/30">
-            <p className="text-sm text-forge-text">
-              TTS를 사용하면 AI가 음성으로 응답할 수 있습니다.
-            </p>
+          {/* API 키 발급 방법 */}
+          <div>
+            <p className="text-sm font-medium text-forge-muted mb-2">API 키 발급 방법</p>
+            <ol className="space-y-1.5 text-sm text-forge-muted">
+              {provider.guideSteps.map((step, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="text-forge-copper font-medium">{i + 1}.</span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
           </div>
 
+          {/* API 키 입력 */}
           <div>
             <label className="block text-sm font-medium text-forge-muted mb-2">
-              API 키
+              API 키 입력
             </label>
             <input
               type="password"
@@ -119,7 +157,7 @@ export default function TTSSettings({
               onChange={(e) => setApiKey(e.target.value)}
               disabled={saving}
               className="
-                w-full px-4 py-3 bg-forge-surface border border-white/10 rounded-xl
+                w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
                 focus:outline-none focus:border-forge-copper text-sm font-mono
                 disabled:opacity-50 disabled:cursor-not-allowed
               "
@@ -132,7 +170,7 @@ export default function TTSSettings({
             rel="noopener noreferrer"
             className="block text-center text-sm text-forge-copper hover:text-forge-amber"
           >
-            {provider.name} 사이트 열기 →
+            🔗 {provider.name} 사이트에서 발급받기 →
           </a>
           
           {error && (
@@ -205,8 +243,8 @@ export default function TTSSettings({
   return (
     <div className="max-w-2xl">
       <div className="mb-8">
-        <h2 className="text-xl font-bold text-forge-text mb-2">음성 합성 (TTS)</h2>
-        <p className="text-forge-muted">AI가 음성으로 응답할 수 있게 설정합니다</p>
+        <h2 className="text-xl font-bold text-forge-text mb-2">AI 음성 출력</h2>
+        <p className="text-forge-muted">AI의 응답을 글 대신 음성으로 들을 수 있습니다</p>
       </div>
 
       {/* TTS 프로바이더 목록 */}
@@ -261,13 +299,16 @@ export default function TTSSettings({
       </div>
 
       {/* 안내 */}
-      <div className="mt-8 p-4 bg-forge-surface rounded-xl">
+      <div className="mt-8 p-4 bg-[#252836] rounded-xl">
         <div className="flex items-start gap-3">
           <span className="text-lg">💡</span>
-          <p className="text-sm text-forge-muted">
-            TTS를 설정하면 메신저에서 AI의 음성 응답을 받을 수 있습니다.
-            ElevenLabs는 가장 자연스러운 음성을 제공합니다.
-          </p>
+          <div className="text-sm text-forge-muted space-y-1">
+            <p><strong className="text-forge-text">어떤 상황에 유용한가요?</strong></p>
+            <p>• 운전 중 AI 응답을 음성으로 듣고 싶을 때</p>
+            <p>• 긴 글을 눈으로 읽기 귀찮을 때</p>
+            <p>• 외국어 발음을 확인하고 싶을 때</p>
+            <p className="text-forge-copper pt-2">추천: ElevenLabs (무료 + 가장 자연스러움)</p>
+          </div>
         </div>
       </div>
 

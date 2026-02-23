@@ -19,51 +19,63 @@ interface Skill {
   name: string;
   icon: string;
   logo?: string;
-  description: string;
+  description: string;         // 카드 짧은 설명
+  detailedDesc: string;        // 모달 상세 설명
   envVar?: string;
   guideSteps: string[];
   guideUrl?: string;
+  comingSoon?: boolean;        // 아직 미구현
 }
 
 const SKILLS: Skill[] = [
-  {
-    id: 'google-workspace',
-    name: 'Google Workspace',
-    icon: '🔷',
-    logo: 'https://cdn.simpleicons.org/google/4285F4',
-    description: '캘린더, 이메일 관리',
-    guideSteps: ['Google Cloud Console 설정', 'OAuth 자격 증명 생성'],
-    guideUrl: 'https://console.cloud.google.com/',
-  },
   {
     id: 'notion',
     name: 'Notion',
     icon: '📝',
     logo: 'https://cdn.simpleicons.org/notion/FFFFFF',
-    description: '노트, 문서 관리',
+    description: '노트/문서 관리',
+    detailedDesc: 'Notion 워크스페이스에 접근하여 페이지 읽기, 생성, 수정을 할 수 있습니다. "Notion에 회의록 만들어줘", "오늘 할 일 Notion에 추가해줘" 같은 요청을 처리합니다.',
     envVar: 'NOTION_API_KEY',
-    guideSteps: ['Notion Integration 생성', 'API 키 복사'],
+    guideSteps: [
+      'notion.so/my-integrations 접속',
+      '+ New integration 클릭',
+      '이름 입력 후 Submit',
+      'Internal Integration Token 복사',
+      '⚠️ 연결할 페이지에서 "Connections" 설정 필요!',
+    ],
     guideUrl: 'https://www.notion.so/my-integrations',
   },
   {
-    id: 'figma',
-    name: 'Figma',
-    icon: '🎨',
-    logo: 'https://cdn.simpleicons.org/figma/F24E1E',
-    description: '디자인 파일 접근',
-    envVar: 'FIGMA_ACCESS_TOKEN',
-    guideSteps: ['Figma 설정에서 Personal Access Token 생성'],
-    guideUrl: 'https://www.figma.com/developers/api#access-tokens',
+    id: 'github',
+    name: 'GitHub',
+    icon: '🐱',
+    logo: 'https://cdn.simpleicons.org/github/FFFFFF',
+    description: '코드 저장소',
+    detailedDesc: 'GitHub 저장소의 코드를 읽고, 이슈를 확인하고, PR을 생성할 수 있습니다. 개발 프로젝트 관리에 유용합니다.',
+    envVar: 'GITHUB_TOKEN',
+    guideSteps: [
+      'GitHub 로그인 → Settings',
+      'Developer settings → Personal access tokens',
+      'Tokens (classic) → Generate new token',
+      '필요한 권한 선택 (repo, read:user 등)',
+      '토큰 복사 (한 번만 표시됨!)',
+    ],
+    guideUrl: 'https://github.com/settings/tokens',
   },
   {
-    id: 'trello',
-    name: 'Trello',
-    icon: '📋',
-    logo: 'https://cdn.simpleicons.org/trello/0052CC',
-    description: '프로젝트 보드 관리',
-    envVar: 'TRELLO_API_KEY',
-    guideSteps: ['Trello Developer API Key 발급'],
-    guideUrl: 'https://trello.com/power-ups/admin',
+    id: 'todoist',
+    name: 'Todoist',
+    icon: '✅',
+    logo: 'https://cdn.simpleicons.org/todoist/E44332',
+    description: '할 일 관리',
+    detailedDesc: 'Todoist에 할 일을 추가하거나 완료 처리할 수 있습니다. "장보기 할 일 추가해줘", "오늘 할 일 뭐 있어?" 같은 요청을 처리합니다.',
+    envVar: 'TODOIST_API_TOKEN',
+    guideSteps: [
+      'todoist.com 로그인',
+      '설정 → 연동 → 개발자',
+      'API 토큰 복사',
+    ],
+    guideUrl: 'https://todoist.com/app/settings/integrations/developer',
   },
   {
     id: 'linear',
@@ -71,37 +83,46 @@ const SKILLS: Skill[] = [
     icon: '📊',
     logo: 'https://cdn.simpleicons.org/linear/5E6AD2',
     description: '이슈 트래킹',
+    detailedDesc: 'Linear에서 이슈를 생성하고 관리합니다. 개발 팀의 작업 현황을 파악하고 새 이슈를 만들 수 있습니다.',
     envVar: 'LINEAR_API_KEY',
-    guideSteps: ['Linear Settings > API > Personal API keys'],
+    guideSteps: [
+      'linear.app 로그인',
+      'Settings → Account → API',
+      'Personal API keys → Create key',
+      '키 복사',
+    ],
     guideUrl: 'https://linear.app/settings/api',
   },
   {
-    id: 'obsidian',
-    name: 'Obsidian',
-    icon: '💎',
-    logo: 'https://cdn.simpleicons.org/obsidian/7C3AED',
-    description: '로컬 노트 관리',
-    guideSteps: ['Obsidian Vault 경로 설정'],
+    id: 'trello',
+    name: 'Trello',
+    icon: '📋',
+    logo: 'https://cdn.simpleicons.org/trello/0052CC',
+    description: '칸반 보드',
+    detailedDesc: 'Trello 보드에서 카드를 생성하고 이동시킵니다. 프로젝트 진행 상황을 관리하거나 새 작업을 추가할 수 있습니다.',
+    envVar: 'TRELLO_API_KEY',
+    guideSteps: [
+      'trello.com/power-ups/admin 접속',
+      'API Key 확인',
+      '추가로 Token도 필요 (링크 클릭)',
+      'API Key와 Token 모두 입력',
+    ],
+    guideUrl: 'https://trello.com/power-ups/admin',
   },
   {
-    id: 'github',
-    name: 'GitHub',
-    icon: '🐱',
-    logo: 'https://cdn.simpleicons.org/github/FFFFFF',
-    description: '코드 저장소 관리',
-    envVar: 'GITHUB_TOKEN',
-    guideSteps: ['GitHub Settings > Developer settings > Personal access tokens'],
-    guideUrl: 'https://github.com/settings/tokens',
-  },
-  {
-    id: 'gitlab',
-    name: 'GitLab',
-    icon: '🦊',
-    logo: 'https://cdn.simpleicons.org/gitlab/FC6D26',
-    description: '코드 저장소 관리',
-    envVar: 'GITLAB_TOKEN',
-    guideSteps: ['GitLab > User Settings > Access Tokens'],
-    guideUrl: 'https://gitlab.com/-/profile/personal_access_tokens',
+    id: 'figma',
+    name: 'Figma',
+    icon: '🎨',
+    logo: 'https://cdn.simpleicons.org/figma/F24E1E',
+    description: '디자인 파일',
+    detailedDesc: 'Figma 파일의 정보를 읽어옵니다. 디자인 컴포넌트 정보, 색상 값 등을 확인할 수 있습니다.',
+    envVar: 'FIGMA_ACCESS_TOKEN',
+    guideSteps: [
+      'figma.com 로그인',
+      '계정 설정 → Personal access tokens',
+      '토큰 생성 → 복사',
+    ],
+    guideUrl: 'https://www.figma.com/developers/api#access-tokens',
   },
   {
     id: 'jira',
@@ -109,8 +130,14 @@ const SKILLS: Skill[] = [
     icon: '📊',
     logo: 'https://cdn.simpleicons.org/jira/0052CC',
     description: '프로젝트 관리',
+    detailedDesc: 'Jira에서 이슈를 확인하고 생성합니다. 회사 프로젝트 관리에 Jira를 사용한다면 연동하세요.',
     envVar: 'JIRA_API_TOKEN',
-    guideSteps: ['Atlassian API 토큰 생성'],
+    guideSteps: [
+      'id.atlassian.com/manage-profile/security/api-tokens 접속',
+      'Create API token 클릭',
+      '토큰 이름 입력 → Create',
+      '토큰 복사',
+    ],
     guideUrl: 'https://id.atlassian.com/manage-profile/security/api-tokens',
   },
   {
@@ -119,8 +146,14 @@ const SKILLS: Skill[] = [
     icon: '✅',
     logo: 'https://cdn.simpleicons.org/asana/F06A6A',
     description: '작업 관리',
+    detailedDesc: 'Asana에서 작업을 추가하고 상태를 관리합니다. 팀 프로젝트 관리에 Asana를 사용한다면 연동하세요.',
     envVar: 'ASANA_TOKEN',
-    guideSteps: ['Asana Developer Console에서 토큰 생성'],
+    guideSteps: [
+      'app.asana.com/0/developer-console 접속',
+      'Personal access tokens 탭',
+      '+ New access token',
+      '토큰 복사',
+    ],
     guideUrl: 'https://app.asana.com/0/developer-console',
   },
   {
@@ -128,9 +161,14 @@ const SKILLS: Skill[] = [
     name: 'Airtable',
     icon: '📊',
     logo: 'https://cdn.simpleicons.org/airtable/18BFFF',
-    description: '데이터베이스/스프레드시트',
+    description: '스프레드시트 DB',
+    detailedDesc: 'Airtable 베이스의 데이터를 읽고 수정합니다. 엑셀처럼 생긴 데이터베이스를 AI로 관리할 수 있습니다.',
     envVar: 'AIRTABLE_API_KEY',
-    guideSteps: ['Account settings에서 API key 생성'],
+    guideSteps: [
+      'airtable.com/account 접속',
+      'API 섹션에서 Generate API key',
+      '키 복사',
+    ],
     guideUrl: 'https://airtable.com/account',
   },
   {
@@ -138,20 +176,59 @@ const SKILLS: Skill[] = [
     name: 'Dropbox',
     icon: '📦',
     logo: 'https://cdn.simpleicons.org/dropbox/0061FF',
-    description: '파일 저장/공유',
+    description: '클라우드 파일',
+    detailedDesc: 'Dropbox에 파일을 업로드하거나 다운로드합니다. 클라우드 파일 관리를 AI로 할 수 있습니다.',
     envVar: 'DROPBOX_TOKEN',
-    guideSteps: ['Dropbox App Console에서 앱 생성'],
+    guideSteps: [
+      'dropbox.com/developers/apps 접속',
+      'Create app 클릭',
+      'App 설정에서 Generate access token',
+      '토큰 복사',
+    ],
     guideUrl: 'https://www.dropbox.com/developers/apps',
   },
   {
-    id: 'todoist',
-    name: 'Todoist',
-    icon: '✅',
-    logo: 'https://cdn.simpleicons.org/todoist/E44332',
-    description: '할 일 관리',
-    envVar: 'TODOIST_API_TOKEN',
-    guideSteps: ['Settings > Integrations > Developer에서 토큰 복사'],
-    guideUrl: 'https://todoist.com/app/settings/integrations',
+    id: 'gitlab',
+    name: 'GitLab',
+    icon: '🦊',
+    logo: 'https://cdn.simpleicons.org/gitlab/FC6D26',
+    description: '코드 저장소',
+    detailedDesc: 'GitLab 저장소의 코드를 읽고 이슈를 관리합니다. GitHub 대신 GitLab을 사용한다면 연동하세요.',
+    envVar: 'GITLAB_TOKEN',
+    guideSteps: [
+      'GitLab 로그인',
+      'User Settings → Access Tokens',
+      '토큰 이름, 만료일, 권한 설정',
+      'Create personal access token → 복사',
+    ],
+    guideUrl: 'https://gitlab.com/-/profile/personal_access_tokens',
+  },
+  {
+    id: 'google-workspace',
+    name: 'Google 연동',
+    icon: '🔷',
+    logo: 'https://cdn.simpleicons.org/google/4285F4',
+    description: 'Gmail, Calendar',
+    detailedDesc: 'Gmail 확인, Google Calendar 일정 관리를 할 수 있습니다. 설정이 복잡하므로 "Google 연결" 메뉴를 이용하세요.',
+    guideSteps: [
+      '⚠️ 이 스킬은 별도 설정이 필요합니다',
+      '설정 → "Google 연결" 메뉴 사용',
+      'Gmail 연동 마법사를 따라주세요',
+    ],
+    comingSoon: true,
+  },
+  {
+    id: 'obsidian',
+    name: 'Obsidian',
+    icon: '💎',
+    logo: 'https://cdn.simpleicons.org/obsidian/7C3AED',
+    description: '로컬 노트',
+    detailedDesc: '컴퓨터에 저장된 Obsidian Vault의 노트를 읽고 수정합니다. 현재 기능 개발 중입니다.',
+    guideSteps: [
+      '⚠️ 이 기능은 현재 개발 중입니다',
+      '추후 업데이트에서 지원 예정',
+    ],
+    comingSoon: true,
   },
 ];
 
@@ -175,6 +252,33 @@ export default function SkillsSettings({
   const handleConnect = (skill: Skill, e: React.MouseEvent) => {
     e.stopPropagation();
     if (isWorkingRef.current || isDisconnecting) return;
+    
+    // 준비 중인 스킬은 안내 모달만 표시
+    if (skill.comingSoon) {
+      const ComingSoonModal = () => (
+        <div className="space-y-4">
+          <div className="bg-[#252836] p-3 rounded-lg">
+            <p className="text-sm text-forge-text leading-relaxed">{skill.detailedDesc}</p>
+          </div>
+          
+          <div className="bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
+            <p className="text-sm text-forge-amber">⚠️ 이 기능은 현재 준비 중입니다</p>
+          </div>
+          
+          <ol className="space-y-1.5 text-sm text-forge-muted">
+            {skill.guideSteps.map((step, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-forge-copper font-medium">{i + 1}.</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      );
+      
+      openModal(`${skill.name}`, <ComingSoonModal />);
+      return;
+    }
     
     const SkillModal = () => {
       const [apiKey, setApiKey] = useState(config.integrations[skill.envVar!] || '');
@@ -214,21 +318,28 @@ export default function SkillsSettings({
       
       return (
         <div className="space-y-4">
-          <p className="text-sm text-forge-muted">{skill.description}</p>
+          {/* 상세 설명 */}
+          <div className="bg-[#252836] p-3 rounded-lg">
+            <p className="text-sm text-forge-text leading-relaxed">{skill.detailedDesc}</p>
+          </div>
           
-          <ol className="space-y-2">
-            {skill.guideSteps.map((step, i) => (
-              <li key={i} className="flex gap-2 text-sm text-forge-muted">
-                <span className="text-forge-copper">{i + 1}.</span>
-                {step}
-              </li>
-            ))}
-          </ol>
+          {/* API 키 발급 방법 */}
+          <div>
+            <p className="text-sm font-medium text-forge-muted mb-2">API 키 발급 방법</p>
+            <ol className="space-y-1.5 text-sm text-forge-muted">
+              {skill.guideSteps.map((step, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="text-forge-copper font-medium">{i + 1}.</span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
 
           {skill.envVar && (
             <div>
               <label className="block text-sm font-medium text-forge-muted mb-2">
-                API 키
+                API 키 입력
               </label>
               <input
                 type="password"
@@ -252,7 +363,7 @@ export default function SkillsSettings({
               rel="noopener noreferrer"
               className="block text-center text-sm text-forge-copper hover:text-forge-amber"
             >
-              공식 문서 열기 →
+              🔗 공식 사이트에서 발급받기 →
             </a>
           )}
           
@@ -357,7 +468,20 @@ export default function SkillsSettings({
               </div>
               <p className="text-xs text-forge-muted mb-3 line-clamp-1">{skill.description}</p>
               
-              {configured ? (
+              {skill.comingSoon ? (
+                <button
+                  onClick={(e) => handleConnect(skill, e)}
+                  disabled={isWorking}
+                  className="
+                    w-full text-xs px-3 py-2 rounded-lg
+                    bg-forge-amber/10 text-forge-amber border border-forge-amber/30
+                    hover:bg-forge-amber/20 transition-colors
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                  "
+                >
+                  준비 중
+                </button>
+              ) : configured ? (
                 <button
                   onClick={(e) => handleDisconnect(skill, e)}
                   disabled={isWorking}
