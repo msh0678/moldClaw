@@ -144,7 +144,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
     }
   };
 
-  // 대시보드로 나가기 (변경사항 있으면 Gateway 재시작)
+  // 대시보드로 나가기 (변경사항 있으면 Gateway 정지만 - 대시보드에서 자동 재시작)
   const handleClose = async () => {
     if (isClosing) return;
     setIsClosing(true);
@@ -162,13 +162,13 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
       });
       
       if (hasRealChanges) {
-        console.log('[Settings] 설정 변경 감지 - Gateway 재시작');
-        try {
-          await invoke('restart_gateway');
-        } catch (err) {
-          console.error('[Settings] Gateway 재시작 실패:', err);
-          // 재시작 실패해도 설정 패널은 닫음
-        }
+        // 변경사항 있으면 Gateway 정지만 하고 대시보드에서 처리
+        // stop_gateway는 비동기로 실행하고 기다리지 않음 (Fire-and-forget)
+        console.log('[Settings] 설정 변경 감지 - Gateway 정지 (비동기)');
+        invoke('stop_gateway').catch(err => {
+          console.error('[Settings] Gateway 정지 실패:', err);
+        });
+        // 정지 완료를 기다리지 않고 즉시 진행
       }
     } finally {
       setConfig(savedConfigRef.current);

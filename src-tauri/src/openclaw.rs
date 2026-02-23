@@ -1898,6 +1898,73 @@ pub fn get_model_config() -> Value {
     }
 }
 
+/// 활성화된 모든 채널 ID 목록 반환
+pub fn get_enabled_channels() -> Vec<String> {
+    let config = read_existing_config();
+    let channels = config.get("channels");
+    let mut enabled = Vec::new();
+    
+    if let Some(ch) = channels {
+        // Telegram
+        if ch.get("telegram")
+            .and_then(|t| t.get("enabled"))
+            .and_then(|e| e.as_bool())
+            .unwrap_or(false) // 명시적 enabled 필요
+        {
+            enabled.push("telegram".to_string());
+        }
+        
+        // Discord
+        if ch.get("discord")
+            .and_then(|d| d.get("enabled"))
+            .and_then(|e| e.as_bool())
+            .unwrap_or(false)
+        {
+            enabled.push("discord".to_string());
+        }
+        
+        // WhatsApp (multi-account 구조)
+        if ch.get("whatsapp")
+            .and_then(|w| w.get("accounts"))
+            .and_then(|a| a.get("default"))
+            .and_then(|d| d.get("enabled"))
+            .and_then(|e| e.as_bool())
+            .unwrap_or(false)
+        {
+            enabled.push("whatsapp".to_string());
+        }
+        
+        // Slack
+        if ch.get("slack")
+            .and_then(|s| s.get("enabled"))
+            .and_then(|e| e.as_bool())
+            .unwrap_or(false)
+        {
+            enabled.push("slack".to_string());
+        }
+        
+        // Google Chat
+        if ch.get("googlechat")
+            .and_then(|g| g.get("enabled"))
+            .and_then(|e| e.as_bool())
+            .unwrap_or(false)
+        {
+            enabled.push("googlechat".to_string());
+        }
+        
+        // Mattermost
+        if ch.get("mattermost")
+            .and_then(|m| m.get("enabled"))
+            .and_then(|e| e.as_bool())
+            .unwrap_or(false)
+        {
+            enabled.push("mattermost".to_string());
+        }
+    }
+    
+    enabled
+}
+
 /// 현재 메신저 설정만 읽기
 pub fn get_messenger_config() -> Value {
     let config = read_existing_config();

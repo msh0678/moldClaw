@@ -1,7 +1,8 @@
 // MessengerSettings - 메신저 설정 섹션
 // QA 강화: 연타 방지, 로딩 상태, 에러 핸들링, 모달 자동 닫기
+// 여러 메신저 동시 연결 지원 (하나만 연결 정책 폐기)
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { FullConfig, SettingsMode, Messenger } from '../../types/config';
@@ -26,9 +27,29 @@ export default function MessengerSettings({
 }: MessengerSettingsProps) {
   const [disconnectTarget, setDisconnectTarget] = useState<typeof ALL_MESSENGERS[0] | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [confirmChecked, setConfirmChecked] = useState(false);
+  
+  // 활성화된 채널 목록 (여러 개 가능)
+  const [enabledChannels, setEnabledChannels] = useState<string[]>([]);
   
   // 전역 작업 중 플래그 (연결/해제 중 다른 작업 방지)
   const isWorkingRef = useRef(false);
+  
+  // 활성화된 채널 목록 로드
+  const loadEnabledChannels = useCallback(async () => {
+    try {
+      const channels = await invoke<string[]>('get_enabled_channels');
+      setEnabledChannels(channels);
+    } catch (err) {
+      console.error('채널 목록 로드 실패:', err);
+      setEnabledChannels([]);
+    }
+  }, []);
+  
+  // 초기 로드 및 config 변경 시 새로고침
+  useEffect(() => {
+    loadEnabledChannels();
+  }, [loadEnabledChannels, config]);
 
   // DM 정책 도움말 툴팁
   const DmPolicyHelp = () => (
@@ -61,7 +82,8 @@ export default function MessengerSettings({
     </div>
   );
 
-  const isConfigured = (messengerId: Messenger) => config.messenger.type === messengerId;
+  // 활성화된 채널인지 확인 (여러 채널 동시 지원)
+  const isConfigured = (messengerId: Messenger) => enabledChannels.includes(messengerId);
 
   // WhatsApp 전용 모달
   const WhatsAppModal = () => {
@@ -1242,7 +1264,7 @@ export default function MessengerSettings({
   };
 
   const confirmDisconnect = async () => {
-    if (!disconnectTarget || isDisconnecting) return;
+    if (!disconnectTarget || isDisconnecting || !confirmChecked) return;
     
     setIsDisconnecting(true);
     isWorkingRef.current = true;
@@ -1254,20 +1276,25 @@ export default function MessengerSettings({
         dmPolicy: 'pairing',
         allowFrom: [],
         groupPolicy: 'disabled',
+        groupAllowFrom: [],
         requireMention: true,
       });
       
+      // 채널 목록 새로고침
+      await loadEnabledChannels();
+      
+      // 로컬 config 업데이트 (호환성 유지)
       const newConfig = {
         ...config,
         messenger: {
           ...config.messenger,
-          type: '' as Messenger,
-          token: '',
+          // 여러 채널 지원이므로 type을 비우지 않음
           dmPolicy: 'pairing' as const,
         }
       };
       commitConfig(newConfig);
       setDisconnectTarget(null);
+      setConfirmChecked(false);
       
     } catch (err) {
       console.error('연결 해제 실패:', err);
@@ -1281,6 +1308,7 @@ export default function MessengerSettings({
   const cancelDisconnect = () => {
     if (isDisconnecting) return; // 해제 중에는 취소 불가
     setDisconnectTarget(null);
+    setConfirmChecked(false);
   };
 
   return (
@@ -1359,6 +1387,21 @@ export default function MessengerSettings({
               <br />
               저장된 토큰과 설정이 삭제됩니다.
             </p>
+            
+            {/* 확인 체크박스 */}
+            <div className="bg-forge-error/10 border border-forge-error/30 rounded-lg p-3 mb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={confirmChecked}
+                  onChange={(e) => setConfirmChecked(e.target.checked)}
+                  disabled={isDisconnecting}
+                  className="w-4 h-4 rounded border-forge-error/50 bg-forge-night text-forge-error focus:ring-forge-error/50"
+                />
+                <span className="text-sm text-forge-error font-medium">연결을 해제하겠습니다</span>
+              </label>
+            </div>
+            
             <div className="flex gap-3">
               <button
                 onClick={cancelDisconnect}
@@ -1369,7 +1412,7 @@ export default function MessengerSettings({
               </button>
               <button
                 onClick={confirmDisconnect}
-                disabled={isDisconnecting}
+                disabled={!confirmChecked || isDisconnecting}
                 className="flex-1 px-4 py-2 rounded-lg bg-forge-error text-white hover:bg-forge-error/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isDisconnecting ? (

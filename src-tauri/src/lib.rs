@@ -750,6 +750,11 @@ fn get_messenger_config() -> serde_json::Value {
 }
 
 #[tauri::command]
+fn get_enabled_channels() -> Vec<String> {
+    openclaw::get_enabled_channels()
+}
+
+#[tauri::command]
 fn get_integrations_config() -> serde_json::Value {
     openclaw::get_integrations_config()
 }
@@ -1614,6 +1619,7 @@ pub fn run() {
             get_full_config,
             get_model_config,
             get_messenger_config,
+            get_enabled_channels,
             get_integrations_config,
             update_model_config,
             update_messenger_config,
