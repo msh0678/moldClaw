@@ -67,10 +67,11 @@ export default function MessengerSettings({
   const WhatsAppModal = () => {
     const [status, setStatus] = useState<'init' | 'waiting' | 'connected' | 'error'>('init');
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [riskAccepted, setRiskAccepted] = useState(false);
     const abortRef = useRef(false);
 
     const startConnection = async () => {
-      if (status === 'waiting') return; // 이미 진행 중
+      if (status === 'waiting' || !riskAccepted) return; // 이미 진행 중 또는 동의 안함
       
       setStatus('waiting');
       setErrorMsg(null);
@@ -122,6 +123,37 @@ export default function MessengerSettings({
 
     return (
       <div className="space-y-4">
+        {/* ⚠️ WhatsApp ToS 경고 */}
+        <div className="bg-forge-error/10 border border-forge-error/30 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <h4 className="text-forge-error font-bold text-sm">중요 경고: 이용약관 위반</h4>
+              <p className="text-xs text-forge-muted mt-2 leading-relaxed">
+                WhatsApp 연동은 <strong className="text-forge-text">비공식 API</strong>를 사용합니다.
+                이는 Meta(WhatsApp)의 이용약관을 위반하며, 
+                <strong className="text-forge-error"> 계정이 영구 차단</strong>될 수 있습니다.
+              </p>
+              <p className="text-xs text-forge-muted mt-2">
+                moldClaw/OpenClaw 개발자는 WhatsApp 사용으로 인한 계정 제재에 대해 
+                <strong className="text-forge-text"> 어떠한 책임도 지지 않습니다</strong>.
+              </p>
+            </div>
+          </div>
+          
+          <label className="flex items-center gap-3 mt-4 pt-3 border-t border-forge-error/20 cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={riskAccepted}
+              onChange={(e) => setRiskAccepted(e.target.checked)}
+              className="w-4 h-4 rounded border-forge-error/50 bg-forge-night text-forge-error focus:ring-forge-error/50"
+            />
+            <span className="text-sm text-forge-error font-medium">
+              위험을 이해했으며, 본인 책임하에 사용합니다.
+            </span>
+          </label>
+        </div>
+
         <p className="text-sm text-forge-muted">
           WhatsApp Web을 통해 연결합니다. 휴대폰의 WhatsApp 앱이 필요합니다.
         </p>
@@ -144,9 +176,14 @@ export default function MessengerSettings({
         {status === 'init' && (
           <button
             onClick={startConnection}
-            className="w-full py-3 rounded-xl btn-primary mt-4"
+            disabled={!riskAccepted}
+            className={`w-full py-3 rounded-xl mt-4 transition-all ${
+              riskAccepted 
+                ? 'btn-primary' 
+                : 'bg-forge-surface/50 text-forge-muted cursor-not-allowed'
+            }`}
           >
-            📷 QR 코드 생성
+            {riskAccepted ? '📷 QR 코드 생성' : '🔒 위 경고에 동의해주세요'}
           </button>
         )}
 
