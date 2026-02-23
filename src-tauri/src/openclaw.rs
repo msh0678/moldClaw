@@ -1876,19 +1876,27 @@ pub fn get_messenger_config() -> Value {
         }
     }
     
-    // WhatsApp 확인
+    // WhatsApp 확인 (multi-account 구조: accounts.default.enabled)
     if let Some(wa) = channels.and_then(|c| c.get("whatsapp")) {
-        if wa.get("enabled").and_then(|e| e.as_bool()).unwrap_or(true) {
+        // WhatsApp은 accounts.default.enabled를 체크해야 함
+        let wa_enabled = wa.get("accounts")
+            .and_then(|a| a.get("default"))
+            .and_then(|d| d.get("enabled"))
+            .and_then(|e| e.as_bool())
+            .unwrap_or(false);  // 명시적으로 enabled가 없으면 false
+        
+        if wa_enabled {
+            let default_account = wa.get("accounts").and_then(|a| a.get("default"));
             return json!({
                 "type": "whatsapp",
                 "hasToken": false,  // WhatsApp은 토큰 없음
                 "isLinked": check_whatsapp_linked(),
-                "dmPolicy": wa.get("dmPolicy").and_then(|d| d.as_str()).unwrap_or("pairing"),
-                "allowFrom": wa.get("allowFrom").and_then(|a| a.as_array()).map(|arr| 
+                "dmPolicy": default_account.and_then(|d| d.get("dmPolicy")).and_then(|p| p.as_str()).unwrap_or("pairing"),
+                "allowFrom": default_account.and_then(|d| d.get("allowFrom")).and_then(|a| a.as_array()).map(|arr| 
                     arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>()
                 ).unwrap_or_default(),
-                "groupPolicy": wa.get("groupPolicy").and_then(|g| g.as_str()).unwrap_or("allowlist"),
-                "requireMention": wa.get("groups").and_then(|g| g.get("*")).and_then(|s| s.get("requireMention")).and_then(|r| r.as_bool()).unwrap_or(true)
+                "groupPolicy": default_account.and_then(|d| d.get("groupPolicy")).and_then(|g| g.as_str()).unwrap_or("allowlist"),
+                "requireMention": default_account.and_then(|d| d.get("groups")).and_then(|g| g.get("*")).and_then(|s| s.get("requireMention")).and_then(|r| r.as_bool()).unwrap_or(true)
             });
         }
     }
