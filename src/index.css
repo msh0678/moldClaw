@@ -167,6 +167,41 @@ body {
   animation: pulse-border 1.5s ease-in-out infinite;
 }
 
+/* Select element dark theme override */
+select {
+  background-color: var(--forge-night) !important;
+  color: var(--forge-text) !important;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238B8D98' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
+}
+
+select option {
+  background-color: var(--forge-night) !important;
+  color: var(--forge-text) !important;
+  padding: 8px 12px;
+}
+
+select:focus {
+  outline: none;
+  border-color: var(--forge-copper) !important;
+}
+
+/* Input/textarea dark theme consistency */
+input, textarea {
+  background-color: var(--forge-night);
+  color: var(--forge-text);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--forge-muted);
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;
