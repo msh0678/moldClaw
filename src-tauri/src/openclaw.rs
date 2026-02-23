@@ -2089,8 +2089,10 @@ pub async fn update_messenger_config(
                 set_nested_value(&mut config, &["channels", "discord", "enabled"], json!(false));
             }
             "whatsapp" => {
-                // WhatsApp은 enabled 키가 없음 - 섹션 자체를 null로 설정하여 비활성화
-                set_nested_value(&mut config, &["channels", "whatsapp"], json!(null));
+                // WhatsApp은 enabled 키가 없음 - 섹션 자체를 삭제하여 비활성화
+                if let Some(channels) = config.get_mut("channels").and_then(|c| c.as_object_mut()) {
+                    channels.remove("whatsapp");
+                }
             }
             "slack" => {
                 set_nested_value(&mut config, &["channels", "slack", "enabled"], json!(false));
