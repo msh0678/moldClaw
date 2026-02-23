@@ -185,7 +185,7 @@ export default function MessengerConnectStep({
                 onChange={(e) => setToken(e.target.value)}
                 placeholder={messengerInfo.tokenPlaceholder}
                 className="
-                  w-full px-4 py-3 bg-forge-surface border border-white/10 rounded-xl
+                  w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl text-forge-text
                   focus:outline-none focus:border-forge-copper transition-colors
                   text-sm font-mono pr-12
                 "
@@ -273,7 +273,7 @@ export default function MessengerConnectStep({
                 onChange={(e) => setSlackAppToken(e.target.value)}
                 placeholder="xapp-..."
                 className="
-                  w-full px-4 py-3 bg-forge-surface border border-white/10 rounded-xl
+                  w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl text-forge-text
                   focus:outline-none focus:border-forge-copper transition-colors
                   text-sm font-mono pr-12
                 "
@@ -303,7 +303,7 @@ export default function MessengerConnectStep({
               onChange={(e) => setServiceAccountPath(e.target.value)}
               placeholder="C:\Users\...\service-account.json"
               className="
-                w-full px-4 py-3 bg-forge-surface border border-white/10 rounded-xl
+                w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl text-forge-text
                 focus:outline-none focus:border-forge-copper transition-colors
                 text-sm font-mono
               "
@@ -328,7 +328,7 @@ export default function MessengerConnectStep({
               onChange={(e) => setMattermostUrl(e.target.value)}
               placeholder="https://mattermost.example.com"
               className="
-                w-full px-4 py-3 bg-forge-surface border border-white/10 rounded-xl
+                w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl text-forge-text
                 focus:outline-none focus:border-forge-copper transition-colors
                 text-sm font-mono
               "
@@ -378,7 +378,7 @@ export default function MessengerConnectStep({
               placeholder={messengerInfo.allowFromPlaceholder}
               rows={3}
               className="
-                w-full px-4 py-3 bg-forge-surface border border-white/10 rounded-xl
+                w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl text-forge-text
                 focus:outline-none focus:border-forge-copper transition-colors
                 text-sm font-mono resize-none
               "

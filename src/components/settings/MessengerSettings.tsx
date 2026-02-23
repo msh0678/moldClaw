@@ -299,7 +299,7 @@ export default function MessengerSettings({
             onChange={(e) => setBotToken(e.target.value)}
             placeholder="xoxb-..."
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50"
           />
         </div>
 
@@ -313,7 +313,7 @@ export default function MessengerSettings({
             onChange={(e) => setAppToken(e.target.value)}
             placeholder="xapp-..."
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50"
           />
         </div>
 
@@ -344,7 +344,7 @@ export default function MessengerSettings({
               placeholder="U1234567890&#10;U0987654321"
               disabled={saving}
               rows={3}
-              className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50 resize-none"
+              className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50 resize-none"
             />
             <p className="text-xs text-forge-muted mt-1">Slack 사용자 ID (U로 시작)</p>
           </div>
@@ -516,7 +516,7 @@ export default function MessengerSettings({
               value={serviceAccountPath}
               readOnly
               placeholder="파일을 선택하세요..."
-              className="flex-1 px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none text-sm font-mono text-forge-muted cursor-default"
+              className="flex-1 px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none text-sm font-mono text-forge-muted cursor-default"
             />
             <button
               onClick={handleSelectFile}
@@ -555,7 +555,7 @@ export default function MessengerSettings({
               placeholder="user@company.com&#10;users/123456789"
               disabled={saving}
               rows={3}
-              className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50 resize-none"
+              className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50 resize-none"
             />
             <p className="text-xs text-forge-muted mt-1">이메일 또는 Google Chat 사용자 ID</p>
           </div>
@@ -710,7 +710,7 @@ export default function MessengerSettings({
             onChange={(e) => setServerUrl(e.target.value)}
             placeholder="https://mattermost.example.com"
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50"
           />
         </div>
 
@@ -724,7 +724,7 @@ export default function MessengerSettings({
             onChange={(e) => setBotToken(e.target.value)}
             placeholder="..."
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50"
           />
         </div>
 
@@ -755,7 +755,7 @@ export default function MessengerSettings({
               placeholder="username1&#10;username2"
               disabled={saving}
               rows={3}
-              className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50 resize-none"
+              className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50 resize-none"
             />
             <p className="text-xs text-forge-muted mt-1">Mattermost 사용자명</p>
           </div>
@@ -927,7 +927,7 @@ export default function MessengerSettings({
               onChange={(e) => setToken(e.target.value)}
               placeholder={messenger.tokenPlaceholder}
               disabled={saving}
-              className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50"
+              className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50"
             />
           </div>
         )}
@@ -959,7 +959,7 @@ export default function MessengerSettings({
               placeholder={getAllowListPlaceholder(messenger.id)}
               disabled={saving}
               rows={3}
-              className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50 resize-none"
+              className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50 resize-none"
             />
             <p className="text-xs text-forge-muted mt-1">{getAllowListHint(messenger.id)}</p>
           </div>
@@ -1173,7 +1173,7 @@ export default function MessengerSettings({
             className={`absolute inset-0 bg-[#0a0b0f]/70 backdrop-blur-md ${isDisconnecting ? '' : 'cursor-pointer'}`}
             onClick={cancelDisconnect}
           />
-          <div className="relative z-10 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-2xl p-6 max-w-sm shadow-2xl">
+          <div className="relative z-10 bg-forge-night border-2 border-forge-surface rounded-2xl p-6 max-w-sm shadow-2xl">
             <h3 className="text-lg font-bold text-forge-text mb-2">연결 해제 확인</h3>
             <p className="text-sm text-forge-muted mb-4">
               <span className="text-forge-copper">{disconnectTarget.name}</span> 연동을 해제하시겠습니까?

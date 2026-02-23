@@ -327,7 +327,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
                   onChange={(e) => setToken(e.target.value)}
                   placeholder={guide.tokenPlaceholder}
                   disabled={loading}
-                  className="w-full px-4 py-3 bg-forge-night border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm font-mono disabled:opacity-50"
+                  className="w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper transition-colors text-sm font-mono text-forge-text disabled:opacity-50"
                 />
               </div>
             )}
@@ -341,7 +341,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
                 value={dmPolicy}
                 onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
                 disabled={loading}
-                className="w-full px-4 py-3 bg-forge-night border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm disabled:opacity-50"
+                className="w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper transition-colors text-sm text-forge-text disabled:opacity-50"
               >
                 {DM_POLICIES.map((option) => (
                   <option key={option.value} value={option.value} className="bg-forge-night text-forge-text">
@@ -369,7 +369,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
                   placeholder={guide.allowFromPlaceholder}
                   disabled={loading}
                   rows={3}
-                  className="w-full px-4 py-3 bg-forge-night border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm font-mono disabled:opacity-50 resize-none"
+                  className="w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper transition-colors text-sm font-mono disabled:opacity-50 resize-none"
                 />
                 <p className="mt-1 text-xs text-gray-500">
                   {guide.allowFromHelp}
@@ -401,7 +401,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
                   value={groupPolicy}
                   onChange={(e) => setGroupPolicy(e.target.value as 'allowlist' | 'open' | 'disabled')}
                   disabled={loading}
-                  className="w-full px-4 py-3 bg-forge-night border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm disabled:opacity-50"
+                  className="w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper transition-colors text-sm text-forge-text disabled:opacity-50"
                 >
                   {GROUP_POLICIES.map((option) => (
                     <option key={option.value} value={option.value} className="bg-forge-night text-forge-text">
@@ -426,7 +426,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
                     placeholder={guide.allowFromPlaceholder}
                     disabled={loading}
                     rows={3}
-                    className="w-full px-4 py-3 bg-forge-night border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm font-mono disabled:opacity-50 resize-none"
+                    className="w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper transition-colors text-sm font-mono disabled:opacity-50 resize-none"
                   />
                 </div>
               )}
@@ -468,7 +468,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
                   value={gatewayPort}
                   onChange={(e) => setGatewayPort(Number(e.target.value))}
                   disabled={loading}
-                  className="w-full px-4 py-3 bg-forge-night border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm disabled:opacity-50"
+                  className="w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper transition-colors text-sm text-forge-text disabled:opacity-50"
                 />
               </div>
 
@@ -481,7 +481,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
                   value={gatewayBind}
                   onChange={(e) => setGatewayBind(e.target.value as 'loopback' | 'lan' | 'tailnet' | 'auto')}
                   disabled={loading}
-                  className="w-full px-4 py-3 bg-forge-night border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm disabled:opacity-50"
+                  className="w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper transition-colors text-sm text-forge-text disabled:opacity-50"
                 >
                   {GATEWAY_BINDS.map((option) => (
                     <option key={option.value} value={option.value} className="bg-forge-night text-forge-text">
@@ -537,7 +537,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
                     onChange={(e) => setGatewayPassword(e.target.value)}
                     placeholder="비밀번호 입력"
                     disabled={loading}
-                    className="w-full px-4 py-3 bg-forge-night border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors text-sm disabled:opacity-50"
+                    className="w-full px-4 py-3 bg-forge-night border border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper transition-colors text-sm text-forge-text disabled:opacity-50"
                   />
                 </div>
               )}
