@@ -348,12 +348,12 @@ export default function MessengerConnectStep({
             value={dmPolicy}
             onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
             className="
-              w-full px-4 py-3 bg-forge-surface border border-white/10 rounded-xl
-              focus:outline-none focus:border-forge-copper transition-colors text-sm
+              w-full px-4 py-3 bg-forge-night border border-white/10 rounded-xl
+              focus:outline-none focus:border-forge-copper transition-colors text-sm text-forge-text
             "
           >
             {DM_POLICIES.map((p) => (
-              <option key={p.value} value={p.value} className="bg-forge-night">
+              <option key={p.value} value={p.value} className="bg-forge-night text-forge-text">
                 {p.label}
               </option>
             ))}

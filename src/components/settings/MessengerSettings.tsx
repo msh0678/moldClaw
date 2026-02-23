@@ -325,11 +325,11 @@ export default function MessengerSettings({
             value={dmPolicy}
             onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm text-forge-text disabled:opacity-50"
           >
-            <option value="pairing">페어링 (코드 승인 필요)</option>
-            <option value="allowlist">허용 목록만</option>
-            <option value="open">모두 허용 ⚠️</option>
+            <option value="pairing" className="bg-forge-night text-forge-text">페어링 (코드 승인 필요)</option>
+            <option value="allowlist" className="bg-forge-night text-forge-text">허용 목록만</option>
+            <option value="open" className="bg-forge-night text-forge-text">모두 허용 ⚠️</option>
           </select>
         </div>
 
@@ -368,11 +368,11 @@ export default function MessengerSettings({
             value={groupPolicy}
             onChange={(e) => setGroupPolicy(e.target.value as 'open' | 'allowlist' | 'disabled')}
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm text-forge-text disabled:opacity-50"
           >
-            <option value="allowlist">허용 목록만 (안전)</option>
-            <option value="open">모두 허용 ⚠️</option>
-            <option value="disabled">비활성화</option>
+            <option value="allowlist" className="bg-forge-night text-forge-text">허용 목록만 (안전)</option>
+            <option value="open" className="bg-forge-night text-forge-text">모두 허용 ⚠️</option>
+            <option value="disabled" className="bg-forge-night text-forge-text">비활성화</option>
           </select>
         </div>
 
@@ -536,11 +536,11 @@ export default function MessengerSettings({
             value={dmPolicy}
             onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm text-forge-text disabled:opacity-50"
           >
-            <option value="pairing">페어링 (코드 승인 필요)</option>
-            <option value="allowlist">허용 목록만</option>
-            <option value="open">모두 허용 ⚠️</option>
+            <option value="pairing" className="bg-forge-night text-forge-text">페어링 (코드 승인 필요)</option>
+            <option value="allowlist" className="bg-forge-night text-forge-text">허용 목록만</option>
+            <option value="open" className="bg-forge-night text-forge-text">모두 허용 ⚠️</option>
           </select>
         </div>
 
@@ -579,11 +579,11 @@ export default function MessengerSettings({
             value={groupPolicy}
             onChange={(e) => setGroupPolicy(e.target.value as 'open' | 'allowlist' | 'disabled')}
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm text-forge-text disabled:opacity-50"
           >
-            <option value="allowlist">허용 목록만 (안전)</option>
-            <option value="open">모두 허용 ⚠️</option>
-            <option value="disabled">비활성화</option>
+            <option value="allowlist" className="bg-forge-night text-forge-text">허용 목록만 (안전)</option>
+            <option value="open" className="bg-forge-night text-forge-text">모두 허용 ⚠️</option>
+            <option value="disabled" className="bg-forge-night text-forge-text">비활성화</option>
           </select>
         </div>
 
@@ -736,11 +736,11 @@ export default function MessengerSettings({
             value={dmPolicy}
             onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm text-forge-text disabled:opacity-50"
           >
-            <option value="pairing">페어링 (코드 승인 필요)</option>
-            <option value="allowlist">허용 목록만</option>
-            <option value="open">모두 허용 ⚠️</option>
+            <option value="pairing" className="bg-forge-night text-forge-text">페어링 (코드 승인 필요)</option>
+            <option value="allowlist" className="bg-forge-night text-forge-text">허용 목록만</option>
+            <option value="open" className="bg-forge-night text-forge-text">모두 허용 ⚠️</option>
           </select>
         </div>
 
@@ -779,11 +779,11 @@ export default function MessengerSettings({
             value={groupPolicy}
             onChange={(e) => setGroupPolicy(e.target.value as 'open' | 'allowlist' | 'disabled')}
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm text-forge-text disabled:opacity-50"
           >
-            <option value="allowlist">허용 목록만 (안전)</option>
-            <option value="open">모두 허용 ⚠️</option>
-            <option value="disabled">비활성화</option>
+            <option value="allowlist" className="bg-forge-night text-forge-text">허용 목록만 (안전)</option>
+            <option value="open" className="bg-forge-night text-forge-text">모두 허용 ⚠️</option>
+            <option value="disabled" className="bg-forge-night text-forge-text">비활성화</option>
           </select>
         </div>
 
@@ -940,11 +940,11 @@ export default function MessengerSettings({
             value={dmPolicy}
             onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm text-forge-text disabled:opacity-50"
           >
-            <option value="pairing">페어링 (코드 승인 필요)</option>
-            <option value="allowlist">허용 목록만</option>
-            <option value="open">모두 허용 ⚠️</option>
+            <option value="pairing" className="bg-forge-night text-forge-text">페어링 (코드 승인 필요)</option>
+            <option value="allowlist" className="bg-forge-night text-forge-text">허용 목록만</option>
+            <option value="open" className="bg-forge-night text-forge-text">모두 허용 ⚠️</option>
           </select>
         </div>
 
@@ -983,11 +983,11 @@ export default function MessengerSettings({
             value={groupPolicy}
             onChange={(e) => setGroupPolicy(e.target.value as 'open' | 'allowlist' | 'disabled')}
             disabled={saving}
-            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+            className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm text-forge-text disabled:opacity-50"
           >
-            <option value="allowlist">허용 목록만 (안전)</option>
-            <option value="open">모두 허용 ⚠️</option>
-            <option value="disabled">비활성화</option>
+            <option value="allowlist" className="bg-forge-night text-forge-text">허용 목록만 (안전)</option>
+            <option value="open" className="bg-forge-night text-forge-text">모두 허용 ⚠️</option>
+            <option value="disabled" className="bg-forge-night text-forge-text">비활성화</option>
           </select>
         </div>
 
