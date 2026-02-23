@@ -165,11 +165,21 @@ export default function MessengerSettings({
     );
   };
 
+  // allowFrom 계산 함수 (dmPolicy에 따라)
+  const computeAllowFrom = (policy: 'pairing' | 'allowlist' | 'open', allowListInput: string): string[] => {
+    if (policy === 'open') return ['*'];
+    if (policy === 'allowlist') {
+      return allowListInput.split('\n').map(s => s.trim()).filter(Boolean);
+    }
+    return []; // pairing은 빈 배열
+  };
+
   // Slack 전용 모달 (2개 토큰)
   const SlackModal = () => {
     const [botToken, setBotToken] = useState('');
     const [appToken, setAppToken] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [allowListInput, setAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -179,18 +189,24 @@ export default function MessengerSettings({
         setError('Bot Token과 App Token 모두 필요합니다.');
         return;
       }
+      if (dmPolicy === 'allowlist' && !allowListInput.trim()) {
+        setError('허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        return;
+      }
 
       setSaving(true);
       setError(null);
       isWorkingRef.current = true;
 
       try {
+        const allowFrom = computeAllowFrom(dmPolicy, allowListInput);
+        
         // 두 invoke를 동시에 실행하지 않고 순차적으로, 하나라도 실패하면 중단
         await invoke('update_messenger_config', {
           channel: 'slack',
           token: botToken,
           dmPolicy: dmPolicy,
-          allowFrom: [],
+          allowFrom: allowFrom,
           groupPolicy: 'open',
           requireMention: true,
         });
@@ -285,13 +301,36 @@ export default function MessengerSettings({
           </select>
         </div>
 
+        {dmPolicy === 'allowlist' && (
+          <div>
+            <label className="block text-sm font-medium text-forge-muted mb-2">
+              허용 사용자 (한 줄에 하나씩)
+            </label>
+            <textarea
+              value={allowListInput}
+              onChange={(e) => setAllowListInput(e.target.value)}
+              placeholder="U1234567890&#10;U0987654321"
+              disabled={saving}
+              rows={3}
+              className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50 resize-none"
+            />
+            <p className="text-xs text-forge-muted mt-1">Slack 사용자 ID (U로 시작)</p>
+          </div>
+        )}
+
+        {dmPolicy === 'open' && (
+          <p className="text-xs text-forge-amber bg-forge-amber/10 p-3 rounded-lg">
+            ⚠️ 누구나 봇에게 DM을 보낼 수 있습니다. API 비용에 주의하세요.
+          </p>
+        )}
+
         {error && (
           <p className="text-sm text-forge-error bg-forge-error/10 p-3 rounded-lg">{error}</p>
         )}
 
         <button
           onClick={handleSlackConnect}
-          disabled={!botToken || !appToken || saving}
+          disabled={!botToken || !appToken || saving || (dmPolicy === 'allowlist' && !allowListInput.trim())}
           className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {saving ? (
@@ -311,6 +350,7 @@ export default function MessengerSettings({
   const GoogleChatModal = () => {
     const [serviceAccountPath, setServiceAccountPath] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [allowListInput, setAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -337,19 +377,25 @@ export default function MessengerSettings({
         setError('Service Account JSON 파일을 선택해주세요.');
         return;
       }
+      if (dmPolicy === 'allowlist' && !allowListInput.trim()) {
+        setError('허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        return;
+      }
 
       setSaving(true);
       setError(null);
       isWorkingRef.current = true;
 
       try {
+        const allowFrom = computeAllowFrom(dmPolicy, allowListInput);
+        
         await invoke('set_googlechat_service_account', { filePath: serviceAccountPath });
         
         await invoke('update_messenger_config', {
           channel: 'googlechat',
           token: '',
           dmPolicy: dmPolicy,
-          allowFrom: [],
+          allowFrom: allowFrom,
           groupPolicy: 'open',
           requireMention: true,
         });
@@ -435,13 +481,36 @@ export default function MessengerSettings({
           </select>
         </div>
 
+        {dmPolicy === 'allowlist' && (
+          <div>
+            <label className="block text-sm font-medium text-forge-muted mb-2">
+              허용 사용자 (한 줄에 하나씩)
+            </label>
+            <textarea
+              value={allowListInput}
+              onChange={(e) => setAllowListInput(e.target.value)}
+              placeholder="user@company.com&#10;users/123456789"
+              disabled={saving}
+              rows={3}
+              className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50 resize-none"
+            />
+            <p className="text-xs text-forge-muted mt-1">이메일 또는 Google Chat 사용자 ID</p>
+          </div>
+        )}
+
+        {dmPolicy === 'open' && (
+          <p className="text-xs text-forge-amber bg-forge-amber/10 p-3 rounded-lg">
+            ⚠️ 누구나 봇에게 DM을 보낼 수 있습니다. API 비용에 주의하세요.
+          </p>
+        )}
+
         {error && (
           <p className="text-sm text-forge-error bg-forge-error/10 p-3 rounded-lg">{error}</p>
         )}
 
         <button
           onClick={handleGoogleChatConnect}
-          disabled={!serviceAccountPath || saving}
+          disabled={!serviceAccountPath || saving || (dmPolicy === 'allowlist' && !allowListInput.trim())}
           className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {saving ? (
@@ -462,6 +531,7 @@ export default function MessengerSettings({
     const [botToken, setBotToken] = useState('');
     const [serverUrl, setServerUrl] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [allowListInput, setAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -471,19 +541,25 @@ export default function MessengerSettings({
         setError('Bot Token과 서버 URL 모두 필요합니다.');
         return;
       }
+      if (dmPolicy === 'allowlist' && !allowListInput.trim()) {
+        setError('허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        return;
+      }
 
       setSaving(true);
       setError(null);
       isWorkingRef.current = true;
 
       try {
+        const allowFrom = computeAllowFrom(dmPolicy, allowListInput);
+        
         await invoke('set_mattermost_url', { url: serverUrl });
         
         await invoke('update_messenger_config', {
           channel: 'mattermost',
           token: botToken,
           dmPolicy: dmPolicy,
-          allowFrom: [],
+          allowFrom: allowFrom,
           groupPolicy: 'open',
           requireMention: true,
         });
@@ -574,13 +650,36 @@ export default function MessengerSettings({
           </select>
         </div>
 
+        {dmPolicy === 'allowlist' && (
+          <div>
+            <label className="block text-sm font-medium text-forge-muted mb-2">
+              허용 사용자 (한 줄에 하나씩)
+            </label>
+            <textarea
+              value={allowListInput}
+              onChange={(e) => setAllowListInput(e.target.value)}
+              placeholder="username1&#10;username2"
+              disabled={saving}
+              rows={3}
+              className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50 resize-none"
+            />
+            <p className="text-xs text-forge-muted mt-1">Mattermost 사용자명</p>
+          </div>
+        )}
+
+        {dmPolicy === 'open' && (
+          <p className="text-xs text-forge-amber bg-forge-amber/10 p-3 rounded-lg">
+            ⚠️ 누구나 봇에게 DM을 보낼 수 있습니다. API 비용에 주의하세요.
+          </p>
+        )}
+
         {error && (
           <p className="text-sm text-forge-error bg-forge-error/10 p-3 rounded-lg">{error}</p>
         )}
 
         <button
           onClick={handleMattermostConnect}
-          disabled={!botToken || !serverUrl || saving}
+          disabled={!botToken || !serverUrl || saving || (dmPolicy === 'allowlist' && !allowListInput.trim())}
           className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {saving ? (
@@ -596,10 +695,36 @@ export default function MessengerSettings({
     );
   };
 
+  // 메신저별 허용 목록 플레이스홀더
+  const getAllowListPlaceholder = (messengerId: Messenger) => {
+    switch (messengerId) {
+      case 'telegram': return '123456789\nusername';
+      case 'discord': return 'user:123456789\nuser:987654321';
+      case 'whatsapp': return '+821012345678\n+821087654321';
+      case 'slack': return 'U1234567890\nU0987654321';
+      case 'mattermost': return 'username1\nusername2';
+      case 'googlechat': return 'user@company.com\nusers/123456789';
+      default: return 'user_id_1\nuser_id_2';
+    }
+  };
+
+  const getAllowListHint = (messengerId: Messenger) => {
+    switch (messengerId) {
+      case 'telegram': return '숫자 ID 또는 유저네임 (@없이)';
+      case 'discord': return 'user:숫자ID 형식';
+      case 'whatsapp': return '전화번호 (+국가코드 포함)';
+      case 'slack': return 'Slack 사용자 ID (U로 시작)';
+      case 'mattermost': return 'Mattermost 사용자명';
+      case 'googlechat': return '이메일 또는 Google Chat 사용자 ID';
+      default: return '사용자 ID';
+    }
+  };
+
   // 기본 메신저 모달
   const DefaultMessengerModal = ({ messenger }: { messenger: typeof ALL_MESSENGERS[0] }) => {
     const [token, setToken] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [allowListInput, setAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -609,17 +734,23 @@ export default function MessengerSettings({
         setError('토큰을 입력해주세요.');
         return;
       }
+      if (dmPolicy === 'allowlist' && !allowListInput.trim()) {
+        setError('허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        return;
+      }
 
       setSaving(true);
       setError(null);
       isWorkingRef.current = true;
 
       try {
+        const allowFrom = computeAllowFrom(dmPolicy, allowListInput);
+        
         await invoke('update_messenger_config', {
           channel: messenger.id,
           token: token || '',
           dmPolicy: dmPolicy,
-          allowFrom: [],
+          allowFrom: allowFrom,
           groupPolicy: 'open',
           requireMention: true,
         });
@@ -692,6 +823,29 @@ export default function MessengerSettings({
           </select>
         </div>
 
+        {dmPolicy === 'allowlist' && (
+          <div>
+            <label className="block text-sm font-medium text-forge-muted mb-2">
+              허용 사용자 (한 줄에 하나씩)
+            </label>
+            <textarea
+              value={allowListInput}
+              onChange={(e) => setAllowListInput(e.target.value)}
+              placeholder={getAllowListPlaceholder(messenger.id)}
+              disabled={saving}
+              rows={3}
+              className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50 resize-none"
+            />
+            <p className="text-xs text-forge-muted mt-1">{getAllowListHint(messenger.id)}</p>
+          </div>
+        )}
+
+        {dmPolicy === 'open' && (
+          <p className="text-xs text-forge-amber bg-forge-amber/10 p-3 rounded-lg">
+            ⚠️ 누구나 봇에게 DM을 보낼 수 있습니다. API 비용에 주의하세요.
+          </p>
+        )}
+
         {messenger.guideUrl && (
           <a
             href={messenger.guideUrl}
@@ -709,7 +863,7 @@ export default function MessengerSettings({
 
         <button
           onClick={handleConnect}
-          disabled={(messenger.needsToken && !token) || saving}
+          disabled={(messenger.needsToken && !token) || saving || (dmPolicy === 'allowlist' && !allowListInput.trim())}
           className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {saving ? (
