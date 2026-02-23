@@ -1,7 +1,7 @@
 // moldClaw - Main Application
 // Planetary Dashboard + Onboarding Wizard + Settings Panel
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { AppView } from './types/config';
 
@@ -21,8 +21,11 @@ import ExpiredScreen from './components/ExpiredScreen';
 import { OnboardingWizard } from './components/onboarding';
 import { DashboardPlanetary } from './components/dashboard';
 import { SettingsPanel } from './components/settings';
-import { NotificationsPage, FilesPage, LogsPage, GuidePage } from './components/pages';
+import { NotificationsPage, FilesPage, LogsPage, GuidePage, DisclaimerPage } from './components/pages';
 import { useAppStatus } from './hooks/useAppStatus';
+
+// 동의 여부 저장 키
+const DISCLAIMER_AGREED_KEY = 'moldclaw_disclaimer_agreed_v1';
 
 type UninstallState = 'idle' | 'uninstalling' | 'waitingForClose' | 'error';
 
@@ -31,7 +34,20 @@ function App() {
   const [expiredAcknowledged, setExpiredAcknowledged] = useState(false);
   const [uninstallState, setUninstallState] = useState<UninstallState>('idle');
   const [uninstallError, setUninstallError] = useState<string | null>(null);
+  const [disclaimerAgreed, setDisclaimerAgreed] = useState<boolean | null>(null);
   const { appStatus, loading: statusLoading } = useAppStatus();
+
+  // 첫 실행 시 동의 여부 확인
+  useEffect(() => {
+    const agreed = localStorage.getItem(DISCLAIMER_AGREED_KEY);
+    setDisclaimerAgreed(agreed === 'true');
+  }, []);
+
+  // 동의 처리
+  const handleDisclaimerAgree = useCallback(() => {
+    localStorage.setItem(DISCLAIMER_AGREED_KEY, 'true');
+    setDisclaimerAgreed(true);
+  }, []);
 
   // 온보딩 완료 여부 확인
   const checkOnboardingStatus = useCallback(async () => {
@@ -114,8 +130,8 @@ function App() {
     setUninstallError(null);
   };
 
-  // 앱 상태 로딩 중
-  if (statusLoading) {
+  // 앱 상태 로딩 중 또는 동의 여부 확인 중
+  if (statusLoading || disclaimerAgreed === null) {
     return (
       <div className="gradient-bg min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -124,6 +140,11 @@ function App() {
         </div>
       </div>
     );
+  }
+
+  // 첫 실행 - 동의 페이지 표시
+  if (!disclaimerAgreed) {
+    return <DisclaimerPage onAgree={handleDisclaimerAgree} />;
   }
 
   // 테스트 기간 만료
