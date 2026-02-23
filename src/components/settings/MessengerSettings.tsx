@@ -158,7 +158,7 @@ export default function MessengerSettings({
         });
         
         // App Token도 별도 저장
-        await invoke('set_slack_app_token', { appToken });
+        await invoke('set_slack_app_token', { app_token: appToken });
         
         // 변경 트래킹용 commitConfig
         const newConfig = {
@@ -299,7 +299,7 @@ export default function MessengerSettings({
 
       try {
         // Service Account 파일 경로 저장
-        await invoke('set_googlechat_service_account', { filePath: serviceAccountPath });
+        await invoke('set_googlechat_service_account', { file_path: serviceAccountPath });
         
         // 메신저 설정 저장
         await invoke('update_messenger_config', {
