@@ -107,6 +107,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
           dmPolicy,
           allowFrom: allowFromArray,
           groupPolicy,
+          groupAllowFrom: [],  // Connect 화면에서는 기본값 사용
           requireMention,
         })
       } else if (messenger === 'whatsapp') {
@@ -116,6 +117,7 @@ export default function Connect({ config, originalConfig: _originalConfig, hasCh
           dmPolicy,
           allowFrom: allowFromArray,
           groupPolicy,
+          groupAllowFrom: [],  // Connect 화면에서는 기본값 사용
           requireMention,
         })
       }
