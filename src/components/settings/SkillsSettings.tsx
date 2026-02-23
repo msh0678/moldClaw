@@ -203,19 +203,6 @@ const SKILLS: Skill[] = [
     ],
     guideUrl: 'https://gitlab.com/-/profile/personal_access_tokens',
   },
-  {
-    id: 'obsidian',
-    name: 'Obsidian',
-    icon: '💎',
-    logo: 'https://cdn.simpleicons.org/obsidian/7C3AED',
-    description: '로컬 노트',
-    detailedDesc: '컴퓨터에 저장된 Obsidian Vault의 노트를 읽고 수정합니다. 현재 기능 개발 중입니다.',
-    guideSteps: [
-      '⚠️ 이 기능은 현재 개발 중입니다',
-      '추후 업데이트에서 지원 예정',
-    ],
-    comingSoon: true,
-  },
 ];
 
 export default function SkillsSettings({
