@@ -2010,13 +2010,15 @@ pub async fn update_messenger_config(
         }
         "whatsapp" => {
             // WhatsApp은 QR 인증 - 토큰 대신 enabled만 설정
+            // multi-account 구조: 모든 설정을 accounts.default 레벨에
             set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "enabled"], json!(true));
             set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "dmPolicy"], json!(dm_policy));
             if !allow_from.is_empty() {
                 set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "allowFrom"], json!(allow_from));
             }
             set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "groups", "*", "requireMention"], json!(require_mention));
-            set_nested_value(&mut config, &["channels", "whatsapp", "groupPolicy"], json!(group_policy));
+            // groupPolicy도 계정 레벨에 설정 (OpenClaw 스키마 준수)
+            set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "groupPolicy"], json!(group_policy));
             if !group_allow_from.is_empty() {
                 set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "groupAllowFrom"], json!(group_allow_from));
             }
