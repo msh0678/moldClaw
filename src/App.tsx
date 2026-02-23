@@ -35,6 +35,8 @@ function App() {
   const [uninstallState, setUninstallState] = useState<UninstallState>('idle');
   const [uninstallError, setUninstallError] = useState<string | null>(null);
   const [disclaimerAgreed, setDisclaimerAgreed] = useState<boolean | null>(null);
+  // 설정에서 변경 후 대시보드로 돌아왔는지 (gateway 재시작 필요)
+  const [settingsJustClosed, setSettingsJustClosed] = useState(false);
   const { appStatus, loading: statusLoading } = useAppStatus();
 
   // 첫 실행 시 동의 여부 확인
@@ -75,8 +77,9 @@ function App() {
     setCurrentView('dashboard');
   }, []);
 
-  // 설정 닫기
+  // 설정 닫기 (설정에서 변경 후 대시보드로 돌아갈 때 플래그 설정)
   const handleSettingsClose = useCallback(() => {
+    setSettingsJustClosed(true);
     setCurrentView('dashboard');
   }, []);
 
@@ -271,10 +274,17 @@ function App() {
   }
 
   // 대시보드 (기본)
+  // settingsJustClosed 플래그 처리: 대시보드에서 초기 상태를 'checking'으로 시작
+  const handleDashboardReady = useCallback(() => {
+    setSettingsJustClosed(false);
+  }, []);
+
   return (
     <DashboardPlanetary
       onNavigate={handleNavigate}
       onStartUninstall={handleStartUninstall}
+      forceCheckOnMount={settingsJustClosed}
+      onReady={handleDashboardReady}
     />
   );
 }
