@@ -1986,6 +1986,38 @@ pub async fn update_messenger_config(
             // 최상위 레벨에도 기본값 설정 (호환성)
             set_nested_value(&mut config, &["channels", "whatsapp", "groupPolicy"], json!(group_policy));
         }
+        "slack" => {
+            set_nested_value(&mut config, &["channels", "slack", "enabled"], json!(true));
+            if !token.is_empty() {
+                set_nested_value(&mut config, &["channels", "slack", "botToken"], json!(token));
+            }
+            set_nested_value(&mut config, &["channels", "slack", "groupPolicy"], json!(group_policy));
+            set_nested_value(&mut config, &["channels", "slack", "dm", "policy"], json!(dm_policy));
+            if !allow_from.is_empty() {
+                set_nested_value(&mut config, &["channels", "slack", "dm", "allowFrom"], json!(allow_from));
+            }
+            set_nested_value(&mut config, &["channels", "slack", "requireMention"], json!(require_mention));
+        }
+        "googlechat" => {
+            set_nested_value(&mut config, &["channels", "googlechat", "enabled"], json!(true));
+            set_nested_value(&mut config, &["channels", "googlechat", "dmPolicy"], json!(dm_policy));
+            if !allow_from.is_empty() {
+                set_nested_value(&mut config, &["channels", "googlechat", "allowFrom"], json!(allow_from));
+            }
+            set_nested_value(&mut config, &["channels", "googlechat", "groupPolicy"], json!(group_policy));
+            set_nested_value(&mut config, &["channels", "googlechat", "requireMention"], json!(require_mention));
+        }
+        "mattermost" => {
+            set_nested_value(&mut config, &["channels", "mattermost", "enabled"], json!(true));
+            if !token.is_empty() {
+                set_nested_value(&mut config, &["channels", "mattermost", "botToken"], json!(token));
+            }
+            set_nested_value(&mut config, &["channels", "mattermost", "dmPolicy"], json!(dm_policy));
+            if !allow_from.is_empty() {
+                set_nested_value(&mut config, &["channels", "mattermost", "allowFrom"], json!(allow_from));
+            }
+            set_nested_value(&mut config, &["channels", "mattermost", "groupPolicy"], json!(group_policy));
+        }
         _ => return Err(format!("지원하지 않는 채널: {}", channel)),
     }
     
