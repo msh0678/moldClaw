@@ -13,7 +13,7 @@ interface GmailWizardProps {
   onCancel: () => void;
 }
 
-type WizardStep = 'checking' | 'install' | 'auth' | 'complete' | 'error';
+type WizardStep = 'checking' | 'install' | 'auth' | 'waiting' | 'complete' | 'error';
 
 export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) {
   const [step, setStep] = useState<WizardStep>('checking');
@@ -110,39 +110,108 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
     }
   };
 
-  const handleGoogleAuth = async () => {
+  // 브라우저 열고 폴링 시작
+  const handleOpenBrowser = async () => {
+    console.log('[GmailWizard] handleOpenBrowser 시작');
     try {
-      setStatus('브라우저에서 로그인 중...');
+      setError(null);
+      setStatus('브라우저에서 로그인해주세요...');
       setProgress(75);
+      console.log('[GmailWizard] setStep("waiting") 호출 전');
+      setStep('waiting');
+      console.log('[GmailWizard] setStep("waiting") 호출 후');
 
+      console.log('[GmailWizard] start_gog_auth 호출');
       await invoke<string>('start_gog_auth');
-      
-      // 인증 완료 확인
-      setStatus('인증 확인 중...');
-      setProgress(90);
+      console.log('[GmailWizard] start_gog_auth 완료');
+    } catch (err) {
+      console.error('[GmailWizard] handleOpenBrowser 에러:', err);
+      setError(String(err));
+      setStep('error');
+    }
+  };
 
+  // waiting 단계에서 자동 폴링
+  useEffect(() => {
+    console.log('[GmailWizard] useEffect 실행, step:', step);
+    if (step !== 'waiting') return;
+
+    let cancelled = false;
+    let pollCount = 0;
+
+    const poll = async () => {
+      console.log('[GmailWizard] 폴링 시작');
+      
+      while (!cancelled && pollCount < 90) {
+        pollCount++;
+        setProgress(75 + Math.min(pollCount * 0.2, 20));
+
+        console.log('[GmailWizard] 폴링 #' + pollCount);
+
+        try {
+          const authAccount = await invoke<string>('check_gog_auth');
+          console.log('[GmailWizard] check_gog_auth 결과:', authAccount);
+          
+          if (authAccount && !cancelled) {
+            const email = authAccount.split('\t')[0].trim();
+            console.log('[GmailWizard] 이메일 추출:', email);
+            setAccount(email);
+            setProgress(98);
+            setStatus('설정 완료 중...');
+
+            await invoke('setup_gmail_polling', {
+              account: email,
+              intervalMinutes: 5,
+            });
+
+            setStep('complete');
+            setStatus('연결 완료!');
+            setProgress(100);
+            return;
+          }
+        } catch (err) {
+          console.log('[GmailWizard] check_gog_auth 에러:', err);
+        }
+
+        await new Promise(r => setTimeout(r, 2000));
+      }
+
+      if (!cancelled) {
+        setError('인증 시간이 초과되었습니다.');
+      }
+    };
+
+    poll();
+
+    return () => {
+      console.log('[GmailWizard] cleanup, cancelled = true');
+      cancelled = true;
+    };
+  }, [step]);
+
+  // 수동 확인 버튼 (백업용)
+  const handleCheckAuth = async () => {
+    try {
+      setStatus('인증 확인 중...');
       const authAccount = await invoke<string>('check_gog_auth');
       
       if (authAccount) {
-        setAccount(authAccount);
+        const email = authAccount.split('\t')[0].trim();
+        setAccount(email);
         
-        // OpenClaw config에 저장
         await invoke('setup_gmail_polling', {
-          account: authAccount,
-          interval_minutes: 5,
+          account: email,
+          intervalMinutes: 5,
         });
         
         setStep('complete');
         setStatus('연결 완료!');
         setProgress(100);
       } else {
-        setError('인증을 완료해주세요. 브라우저에서 "고급" → "계속" 버튼을 클릭하셨나요?');
-        setStep('auth');
+        setError('아직 인증이 완료되지 않았습니다.');
       }
-    } catch (err) {
-      console.error('Google 인증 실패:', err);
-      setError(String(err));
-      setStep('error');
+    } catch {
+      setError('아직 인증이 완료되지 않았습니다.');
     }
   };
 
@@ -234,7 +303,7 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
           </div>
 
           <button
-            onClick={handleGoogleAuth}
+            onClick={handleOpenBrowser}
             className="w-full py-3 rounded-xl btn-primary flex items-center justify-center gap-2"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -251,6 +320,46 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
               <p className="text-sm text-forge-error">{error}</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Step: 브라우저 로그인 대기 (자동 폴링 중) */}
+      {step === 'waiting' && (
+        <div className="space-y-4">
+          <div className="card p-5 bg-forge-surface text-center">
+            <div className="w-16 h-16 rounded-full bg-forge-copper/20 mx-auto mb-4 flex items-center justify-center animate-pulse">
+              <span className="text-3xl">🌐</span>
+            </div>
+            <h3 className="text-lg font-medium text-forge-text mb-2">
+              브라우저에서 로그인해주세요
+            </h3>
+            <p className="text-sm text-forge-muted">
+              로그인이 완료되면 자동으로 감지됩니다
+            </p>
+            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-forge-muted">
+              <div className="animate-spin w-3 h-3 border border-forge-copper/30 border-t-forge-copper rounded-full" />
+              확인 중...
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-forge-error/10 border border-forge-error/30 rounded-lg">
+              <p className="text-sm text-forge-error">{error}</p>
+              <button
+                onClick={handleCheckAuth}
+                className="mt-2 text-sm text-forge-copper hover:underline"
+              >
+                수동으로 확인
+              </button>
+            </div>
+          )}
+
+          <button
+            onClick={handleOpenBrowser}
+            className="w-full py-2 text-sm text-forge-muted hover:text-forge-text"
+          >
+            브라우저 다시 열기
+          </button>
         </div>
       )}
 
@@ -318,7 +427,7 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
       )}
 
       {/* 하단 버튼 (완료/에러 외) */}
-      {(step === 'checking' || step === 'install' || step === 'auth') && (
+      {(step === 'checking' || step === 'install' || step === 'auth' || step === 'waiting') && (
         <div className="mt-6 pt-4 border-t border-[#2a2d3e]">
           <button
             onClick={onCancel}

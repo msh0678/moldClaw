@@ -14,24 +14,42 @@ interface PowerButtonProps {
 
 export default function PowerButton({ status, onClick, loading }: PowerButtonProps) {
   const isRunning = status === 'running';
-  const isStarting = status === 'starting' || (loading && status !== 'running');
+  
+  // 클릭 시점의 액션 타입 기억 (시작/종료)
+  const [actionType, setActionType] = useState<'start' | 'stop' | null>(null);
+  
+  // loading이 끝나면 actionType 리셋
+  useEffect(() => {
+    if (!loading) {
+      setActionType(null);
+    }
+  }, [loading]);
+  
+  const isStopping = loading && actionType === 'stop';
+  const isStarting = status === 'starting' || (loading && actionType === 'start');
+  
+  // 클릭 핸들러
+  const handleClick = () => {
+    setActionType(isRunning ? 'stop' : 'start');
+    onClick();
+  };
   
   // 성공 애니메이션 상태
   const [showSuccessRipple, setShowSuccessRipple] = useState(false);
-  const [prevStatus, setPrevStatus] = useState<GatewayStatus>(status);
+  const [wasLoading, setWasLoading] = useState(false);
 
-  // 상태가 starting → running으로 바뀌면 성공 애니메이션
+  // loading 중이다가 running이 되면 성공 애니메이션
   useEffect(() => {
-    if (prevStatus === 'starting' && status === 'running') {
+    if (wasLoading && !loading && status === 'running') {
       setShowSuccessRipple(true);
       setTimeout(() => setShowSuccessRipple(false), 1000);
     }
-    setPrevStatus(status);
-  }, [status, prevStatus]);
+    setWasLoading(loading);
+  }, [loading, status, wasLoading]);
 
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       disabled={loading}
       className={`
         relative w-44 h-44 rounded-full transition-all duration-500
@@ -57,8 +75,8 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
         </>
       )}
 
-      {/* ===== 시작 중: 금환일식 스타일 회전 빛 (더 밝게) ===== */}
-      {isStarting && (
+      {/* ===== 시작/종료 중: 금환일식 스타일 회전 빛 (더 밝게) ===== */}
+      {(isStarting || isStopping) && (
         <div className="absolute inset-0 rounded-full">
           {/* 고정된 테두리 */}
           <div className="absolute inset-0 rounded-full border-2 border-forge-amber/50" />
@@ -195,7 +213,7 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
         absolute inset-0 rounded-full border-2 transition-all duration-500
         ${isRunning 
           ? 'border-forge-copper/80' 
-          : isStarting 
+          : (isStarting || isStopping)
             ? 'border-transparent' 
             : 'border-white/20'}
       `} />
@@ -219,13 +237,15 @@ export default function PowerButton({ status, onClick, loading }: PowerButtonPro
         {/* 상태 텍스트 */}
         <span className={`
           mt-2 text-xs font-medium transition-colors duration-500
-          ${isRunning 
-            ? 'text-forge-copper' 
-            : isStarting 
-              ? 'text-forge-amber' 
-              : 'text-forge-muted'}
+          ${isStopping
+            ? 'text-forge-error'
+            : isRunning 
+              ? 'text-forge-copper' 
+              : isStarting 
+                ? 'text-forge-amber' 
+                : 'text-forge-muted'}
         `}>
-          {isStarting ? '시작 중...' : isRunning ? 'ON' : 'OFF'}
+          {isStopping ? '종료 중...' : isStarting ? '시작 중...' : isRunning ? 'ON' : 'OFF'}
         </span>
       </div>
 

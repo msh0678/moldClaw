@@ -2654,6 +2654,9 @@ pub async fn set_mattermost_url(url: &str) -> Result<(), String> {
 // Gmail 연동 (gog/gogcli)
 // ============================================
 
+/// Embedded OAuth credentials (GCP project: openclawgmailtest)
+const GOG_CREDENTIALS_JSON: &str = r#"{"installed":{"client_id":"667788984287-pes4eot8vjrcp1ffa40nvrcfrte9m9b3.apps.googleusercontent.com","project_id":"openclawgmailtest","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"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","redirect_uris":["http://localhost"]}}"#;
+
 /// gog 바이너리 경로 반환 (Windows: %LOCALAPPDATA%\moldClaw\gog.exe)
 fn gog_binary_path() -> PathBuf {
     #[cfg(windows)]
@@ -2671,6 +2674,81 @@ fn gog_binary_path() -> PathBuf {
         let home = std::env::var("HOME").unwrap_or_default();
         PathBuf::from(home).join(".local").join("bin").join("gog")
     }
+}
+
+/// gog credentials 디렉토리 경로
+fn gog_config_dir() -> PathBuf {
+    #[cfg(windows)]
+    {
+        let local_app_data = std::env::var("LOCALAPPDATA")
+            .unwrap_or_else(|_| {
+                let home = std::env::var("USERPROFILE").unwrap_or_default();
+                format!("{}\\AppData\\Local", home)
+            });
+        PathBuf::from(local_app_data).join("gog")
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let home = std::env::var("HOME").unwrap_or_default();
+        PathBuf::from(home).join(".config").join("gog")
+    }
+}
+
+/// OAuth credentials 자동 설정 (embedded JSON 사용)
+fn setup_gog_credentials() -> Result<(), String> {
+    let gog_path = gog_binary_path();
+    if !gog_path.exists() {
+        return Err("gog가 설치되어 있지 않습니다.".to_string());
+    }
+    
+    // 임시 파일에 credentials JSON 저장
+    let temp_dir = std::env::temp_dir();
+    let creds_path = temp_dir.join("moldclaw_gog_credentials.json");
+    
+    fs::write(&creds_path, GOG_CREDENTIALS_JSON)
+        .map_err(|e| format!("credentials 파일 생성 실패: {}", e))?;
+    
+    // gog auth credentials <file> 실행
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let output = Command::new(&gog_path)
+            .args(["auth", "credentials", creds_path.to_str().unwrap()])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("gog auth credentials 실행 실패: {}", e))?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // 이미 설정된 경우도 OK
+            if !stderr.contains("already") {
+                return Err(format!("credentials 설정 실패: {}", stderr));
+            }
+        }
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let output = Command::new(&gog_path)
+            .args(["auth", "credentials", creds_path.to_str().unwrap()])
+            .output()
+            .map_err(|e| format!("gog auth credentials 실행 실패: {}", e))?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if !stderr.contains("already") {
+                return Err(format!("credentials 설정 실패: {}", stderr));
+            }
+        }
+    }
+    
+    // 임시 파일 삭제
+    let _ = fs::remove_file(&creds_path);
+    
+    Ok(())
 }
 
 /// gog 설치 여부 확인
@@ -2857,46 +2935,40 @@ pub async fn install_gog() -> Result<String, String> {
     }
 }
 
-/// gog OAuth 인증 시작 (브라우저 열림)
+/// gog OAuth 인증 시작 (브라우저 열림, 백그라운드 실행)
 pub async fn start_gog_auth() -> Result<String, String> {
     let gog_path = gog_binary_path();
     if !gog_path.exists() {
         return Err("gog가 설치되어 있지 않습니다. 먼저 설치해주세요.".to_string());
     }
     
+    // 먼저 OAuth credentials 설정 (embedded JSON 사용)
+    setup_gog_credentials()?;
+    
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
-        // gog auth login 실행 (브라우저 열림)
-        let output = Command::new(&gog_path)
+        // gog auth login 실행 (백그라운드, 바로 반환)
+        Command::new(&gog_path)
             .args(["auth", "login"])
             .creation_flags(CREATE_NO_WINDOW)
-            .output()
+            .spawn()
             .map_err(|e| format!("gog auth 실행 실패: {}", e))?;
         
-        if output.status.success() {
-            Ok("인증 완료".to_string())
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("인증 실패: {}", stderr))
-        }
+        Ok("브라우저 열림".to_string())
     }
     
     #[cfg(not(windows))]
     {
-        let output = Command::new(&gog_path)
+        // gog auth login 실행 (백그라운드, 바로 반환)
+        Command::new(&gog_path)
             .args(["auth", "login"])
-            .output()
+            .spawn()
             .map_err(|e| format!("gog auth 실행 실패: {}", e))?;
         
-        if output.status.success() {
-            Ok("인증 완료".to_string())
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("인증 실패: {}", stderr))
-        }
+        Ok("브라우저 열림".to_string())
     }
 }
 
@@ -2949,72 +3021,126 @@ pub async fn check_gog_auth() -> Result<String, String> {
     }
 }
 
-/// Gmail 폴링 설정 (OpenClaw config에 저장)
-pub async fn setup_gmail_polling(account: &str, interval_minutes: u32) -> Result<(), String> {
-    let mut config = read_existing_config();
+/// Gmail 폴링 설정 (gog 인증 완료 기록만 - hooks 불필요)
+/// 폴링 방식은 hooks 웹훅이 필요 없음 (on-demand gog 호출)
+pub async fn setup_gmail_polling(account: &str, _interval_minutes: u32) -> Result<(), String> {
+    // 폴링 방식에서는 hooks 설정이 필요 없음
+    // gog auth만 완료되어 있으면 OpenClaw가 on-demand로 gog 호출 가능
+    // 
+    // 나중에 필요하면 별도 설정 파일이나 다른 config 섹션에 저장 가능
+    // 현재는 gog auth 상태만으로 Gmail 연동 여부 판단
     
-    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
-        return Err("Config가 없습니다.".to_string());
-    }
+    // account 정보 로깅 (디버깅용)
+    println!("[Gmail] 폴링 설정 완료: {}", account);
     
-    // meta.lastTouchedAt 업데이트
-    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
-    
-    // hooks.enabled 활성화
-    set_nested_value(&mut config, &["hooks", "enabled"], json!(true));
-    
-    // hooks.gmail 설정
-    set_nested_value(&mut config, &["hooks", "gmail", "account"], json!(account));
-    set_nested_value(&mut config, &["hooks", "gmail", "includeBody"], json!(true));
-    set_nested_value(&mut config, &["hooks", "gmail", "maxBytes"], json!(20000));
-    
-    write_config(&config)?;
     Ok(())
 }
 
 /// Gmail 연동 해제
 pub async fn disconnect_gmail() -> Result<(), String> {
-    let mut config = read_existing_config();
-    
-    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
-        return Err("Config가 없습니다.".to_string());
+    let gog_path = gog_binary_path();
+    if !gog_path.exists() {
+        return Ok(()); // gog 없으면 이미 연결 안 된 상태
     }
     
-    // hooks.gmail 섹션 제거
-    if let Some(hooks) = config.get_mut("hooks") {
-        if let Some(hooks_obj) = hooks.as_object_mut() {
-            hooks_obj.remove("gmail");
+    // 먼저 현재 연결된 계정 확인
+    #[cfg(windows)]
+    let list_output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new(&gog_path)
+            .args(["auth", "list"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    
+    #[cfg(not(windows))]
+    let list_output = Command::new(&gog_path)
+        .args(["auth", "list"])
+        .output();
+    
+    let account = if let Ok(output) = list_output {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        stdout.lines()
+            .find(|line| line.contains("@"))
+            .and_then(|line| line.split_whitespace().next())
+            .map(|s| s.to_string())
+    } else {
+        None
+    };
+    
+    // 계정이 있으면 제거
+    if let Some(email) = account {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            
+            let _ = Command::new(&gog_path)
+                .args(["auth", "remove", &email, "--force"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
         }
+        
+        #[cfg(not(windows))]
+        {
+            let _ = Command::new(&gog_path)
+                .args(["auth", "remove", &email, "--force"])
+                .output();
+        }
+        
+        println!("[Gmail] 연결 해제 완료: {}", email);
     }
     
-    // meta.lastTouchedAt 업데이트
-    let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
-    
-    write_config(&config)?;
     Ok(())
 }
 
-/// Gmail 연동 상태 확인
+/// Gmail 연동 상태 확인 (gog auth 상태만 체크)
 pub async fn get_gmail_status() -> Result<Value, String> {
-    let config = read_existing_config();
-    
-    let gmail_config = config
-        .get("hooks")
-        .and_then(|h| h.get("gmail"));
-    
-    if let Some(gmail) = gmail_config {
-        Ok(json!({
-            "connected": true,
-            "account": gmail.get("account").and_then(|a| a.as_str()).unwrap_or(""),
-        }))
-    } else {
-        Ok(json!({
+    let gog_path = gog_binary_path();
+    if !gog_path.exists() {
+        return Ok(json!({
             "connected": false,
             "account": "",
-        }))
+        }));
     }
+    
+    // gog auth list 실행
+    #[cfg(windows)]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new(&gog_path)
+            .args(["auth", "list"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    
+    #[cfg(not(windows))]
+    let output = Command::new(&gog_path)
+        .args(["auth", "list"])
+        .output();
+    
+    if let Ok(output) = output {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // 이메일 주소 찾기
+        for line in stdout.lines() {
+            if line.contains("@") {
+                let account = line.split_whitespace().next().unwrap_or("").trim().to_string();
+                if !account.is_empty() {
+                    return Ok(json!({
+                        "connected": true,
+                        "account": account,
+                    }));
+                }
+            }
+        }
+    }
+    
+    Ok(json!({
+        "connected": false,
+        "account": "",
+    }))
 }
 
 /// 번들된 OAuth credentials를 gog에 등록

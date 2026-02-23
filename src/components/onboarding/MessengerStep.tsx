@@ -81,7 +81,13 @@ export default function MessengerStep({ initialConfig, onComplete, onBack }: Mes
               )}
 
               <div className="flex items-start gap-4">
-                <div className="text-3xl">{m.icon}</div>
+                <div className="w-10 h-10 flex items-center justify-center">
+                  {m.logo ? (
+                    <img src={m.logo} alt={m.name} className="w-8 h-8 object-contain" />
+                  ) : (
+                    <span className="text-3xl">{m.icon}</span>
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-semibold text-forge-text">{m.name}</span>

@@ -61,19 +61,51 @@ export default function GmailSettings({
     ));
   };
 
-  const handleDisconnect = async () => {
-    if (!confirm('Gmail 연동을 해제하시겠습니까?')) return;
-    
-    setDisconnecting(true);
-    try {
-      await invoke('disconnect_gmail');
-      setStatus({ connected: false, account: '' });
-    } catch (err) {
-      console.error('Gmail 연결 해제 실패:', err);
-      alert(`연결 해제 실패: ${err}`);
-    } finally {
-      setDisconnecting(false);
-    }
+  const handleDisconnect = () => {
+    // 커스텀 확인 모달 표시
+    openModal('Gmail 연결 해제', (
+      <div className="p-6 max-w-sm mx-auto">
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 rounded-full bg-forge-error/20 mx-auto mb-4 flex items-center justify-center">
+            <span className="text-3xl">⚠️</span>
+          </div>
+          <h3 className="text-lg font-medium text-forge-text mb-2">
+            Gmail 연결을 해제할까요?
+          </h3>
+          <p className="text-sm text-forge-muted">
+            {status?.account}
+          </p>
+        </div>
+        
+        <div className="flex gap-3">
+          <button
+            onClick={closeModal}
+            className="flex-1 py-2.5 rounded-lg bg-[#252836] text-forge-text hover:bg-[#2d3142] transition-colors"
+          >
+            취소
+          </button>
+          <button
+            onClick={async () => {
+              setDisconnecting(true);
+              closeModal();
+              try {
+                await invoke('disconnect_gmail');
+                setStatus({ connected: false, account: '' });
+              } catch (err) {
+                console.error('Gmail 연결 해제 실패:', err);
+                // 에러 시 다시 상태 로드
+                loadStatus();
+              } finally {
+                setDisconnecting(false);
+              }
+            }}
+            className="flex-1 py-2.5 rounded-lg bg-forge-error text-white hover:bg-forge-error/80 transition-colors"
+          >
+            연결 해제
+          </button>
+        </div>
+      </div>
+    ));
   };
 
   if (loading) {

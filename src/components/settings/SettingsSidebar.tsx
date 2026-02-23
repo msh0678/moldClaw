@@ -77,12 +77,6 @@ export default function SettingsSidebar({
         ))}
       </nav>
 
-      {/* 하단 정보 */}
-      <div className="p-4 border-t border-[#2a2d3e]">
-        <p className="text-[10px] text-forge-muted text-center">
-          각 항목에서 변경 후 저장
-        </p>
-      </div>
     </div>
   );
 }
