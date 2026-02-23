@@ -210,12 +210,11 @@ pub fn is_node_version_compatible(version: &str) -> bool {
     let major: u32 = parts[0].parse().unwrap_or(0);
     let minor: u32 = parts[1].parse().unwrap_or(0);
     
-    // 22.12.0 이상, 24 미만 필요 (24+는 네이티브 모듈 호환성 문제)
-    // Node.js 23도 Current라 LTS인 22를 권장
-    (major == 22 && minor >= 12) || major == 23
+    // 22.12.0 이상 필요 (24+도 일단 허용, 설치 실패 시 안내)
+    major > 22 || (major == 22 && minor >= 12)
 }
 
-/// Node.js 버전이 너무 최신인지 확인 (24+)
+/// Node.js 버전이 최신인지 확인 (24+) - 설치 실패 시 안내용
 pub fn is_node_version_too_new(version: &str) -> bool {
     let version = version.trim_start_matches('v');
     let parts: Vec<&str> = version.split('.').collect();
@@ -496,6 +495,8 @@ pub enum InstallErrorType {
     PermissionDenied,
     /// node-llama-cpp 빌드 실패 (optional, 무시 가능)
     LlamaCppBuildFailed,
+    /// 네이티브 모듈 빌드 실패 (Node.js 버전 호환성 문제)
+    NativeModuleBuildFailed,
     /// 알 수 없는 에러
     Unknown,
 }
@@ -618,7 +619,23 @@ pub fn analyze_error(stderr: &str) -> ErrorAnalysis {
         };
     }
     
-    // 7. node-llama-cpp 빌드 실패 (optional, API 사용에는 영향 없음)
+    // 7. 네이티브 모듈 빌드 실패 (Node.js 버전 호환성 문제 - node-pre-gyp, Python 누락 등)
+    // @discordjs/opus, sharp 등의 네이티브 모듈이 prebuilt binary 없어서 빌드 시도 → 실패
+    if stderr_lower.contains("node-pre-gyp")
+        || stderr_lower.contains("pre-built binaries not installable")
+        || (stderr_lower.contains("gyp err!") && stderr_lower.contains("find python"))
+        || (stderr_lower.contains("404") && stderr_lower.contains("releases/download"))
+        || stderr_lower.contains("node-gyp")
+    {
+        return ErrorAnalysis {
+            error_type: InstallErrorType::NativeModuleBuildFailed,
+            description: "네이티브 모듈 빌드에 실패했습니다. Node.js 버전이 너무 최신일 수 있습니다.".to_string(),
+            solution: "Node.js LTS 22.x로 다운그레이드하거나, '--ignore-scripts' 옵션으로 재설치하세요. 텍스트 기능은 정상 작동합니다.".to_string(),
+            auto_fixable: false,
+        };
+    }
+    
+    // 8. node-llama-cpp 빌드 실패 (optional, API 사용에는 영향 없음)
     if stderr_lower.contains("node-llama-cpp")
         || stderr_lower.contains("llama.cpp")
         || stderr_lower.contains("cmake")

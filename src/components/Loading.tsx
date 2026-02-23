@@ -7,7 +7,7 @@ interface LoadingProps {
   onDashboard: () => void
 }
 
-type SetupStep = 'checking' | 'antivirus-warning' | 'node-missing' | 'node-too-new' | 'installing-prerequisites' | 'restart-required' | 'installing-openclaw' | 'ready' | 'error'
+type SetupStep = 'checking' | 'antivirus-warning' | 'node-missing' | 'installing-prerequisites' | 'restart-required' | 'installing-openclaw' | 'ready' | 'error'
 
 interface PrerequisiteStatus {
   node_installed: boolean
@@ -66,11 +66,7 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
       // Node.js 확인
       setStatus('Node.js 확인 중...')
       
-      // Node.js 24+ 감지 시 경고 (네이티브 모듈 호환성 문제)
-      if (status.node_too_new) {
-        setStep('node-too-new')
-        return
-      }
+      // Node.js 24+도 일단 설치 시도 (실패 시 에러 분석에서 안내)
       
       if (!status.node_compatible) {
         if (isWindows) {
@@ -290,58 +286,6 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
             moldClaw는 아직 개발 중입니다. 피드백을 환영합니다.<br />
             <span className="text-xs text-gray-500">문의: <span className="text-blue-400">hexagon0678@gmail.com</span></span>
           </p>
-        </div>
-      </div>
-    )
-  }
-
-  // Node.js 버전이 너무 최신 (24+) 화면
-  if (step === 'node-too-new') {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6">
-        <div className="glass rounded-2xl p-8 max-w-md text-center">
-          <div className="text-6xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold mb-2">Node.js 버전 호환성 문제</h2>
-          <p className="text-forge-text text-sm mb-4">
-            현재 설치된 <strong className="text-yellow-400">Node.js {prereqStatus?.node_version}</strong>는<br />
-            너무 최신 버전입니다.
-          </p>
-          
-          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg mb-4 text-left">
-            <p className="text-red-400 text-sm mb-2">
-              ❌ Node.js 24+는 일부 네이티브 모듈과 호환되지 않습니다.
-            </p>
-            <p className="text-gray-300 text-sm">
-              설치 중 빌드 오류가 발생할 수 있습니다.
-            </p>
-          </div>
-          
-          <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg mb-6 text-left">
-            <p className="text-green-400 text-sm mb-2">
-              ✅ 해결 방법
-            </p>
-            <p className="text-gray-300 text-sm">
-              1. 현재 Node.js 제거<br />
-              2. <strong>Node.js LTS (22.x)</strong> 버전 설치<br />
-              3. moldClaw 재시작
-            </p>
-          </div>
-          
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={async () => {
-                await open('https://nodejs.org/en/download/')
-              }}
-              className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl font-semibold hover:opacity-90"
-            >
-              Node.js LTS 다운로드 →
-            </button>
-            
-            <p className="text-xs text-gray-500 mt-2">
-              Windows 설정 → 앱 → Node.js 제거 후<br />
-              LTS 버전(22.x)을 설치해 주세요.
-            </p>
-          </div>
         </div>
       </div>
     )
