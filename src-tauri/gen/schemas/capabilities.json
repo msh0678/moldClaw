@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Default capabilities for moldClaw","local":true,"windows":["main"],"permissions":["core:default","shell:allow-open","process:allow-exit"]}}
+{"default":{"identifier":"default","description":"Default capabilities for moldClaw","local":true,"windows":["main"],"permissions":["core:default","shell:allow-open","process:allow-exit","dialog:allow-open"]}}

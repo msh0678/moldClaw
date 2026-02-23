@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import type { FullConfig, SettingsMode, Messenger } from '../../types/config';
 import { ALL_MESSENGERS } from '../../data/messengers';
 
@@ -271,9 +272,28 @@ export default function MessengerSettings({
     const [serviceAccountPath, setServiceAccountPath] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
 
+    const handleSelectFile = async () => {
+      try {
+        const selected = await open({
+          multiple: false,
+          filters: [{
+            name: 'JSON',
+            extensions: ['json']
+          }],
+          title: 'Service Account JSON 파일 선택',
+        });
+        
+        if (selected && typeof selected === 'string') {
+          setServiceAccountPath(selected);
+        }
+      } catch (err) {
+        console.error('파일 선택 실패:', err);
+      }
+    };
+
     const handleGoogleChatConnect = async () => {
       if (!serviceAccountPath) {
-        alert('Service Account JSON 파일 경로가 필요합니다.');
+        alert('Service Account JSON 파일을 선택해주세요.');
         return;
       }
 
@@ -330,21 +350,32 @@ export default function MessengerSettings({
           </li>
         </ol>
 
-        {/* Service Account 파일 경로 */}
+        {/* Service Account 파일 선택 */}
         <div>
           <label className="block text-sm font-medium text-forge-muted mb-2">
-            Service Account JSON 파일 경로
+            Service Account JSON 파일
           </label>
-          <input
-            type="text"
-            value={serviceAccountPath}
-            onChange={(e) => setServiceAccountPath(e.target.value)}
-            placeholder="C:\Users\...\service-account.json"
-            className="
-              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm font-mono
-            "
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={serviceAccountPath}
+              readOnly
+              placeholder="파일을 선택하세요..."
+              className="
+                flex-1 px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+                focus:outline-none text-sm font-mono text-forge-muted cursor-default
+              "
+            />
+            <button
+              onClick={handleSelectFile}
+              className="
+                px-4 py-3 bg-[#252836] border-2 border-[#2a2d3e] rounded-xl
+                hover:bg-[#2d303f] transition-colors text-sm font-medium
+              "
+            >
+              📁 선택
+            </button>
+          </div>
         </div>
 
         {/* DM 정책 */}
