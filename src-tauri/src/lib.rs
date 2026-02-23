@@ -281,9 +281,10 @@ async fn add_channel_to_config(
     dm_policy: String,
     allow_from: Vec<String>,
     group_policy: String,
+    group_allow_from: Vec<String>,
     require_mention: bool,
 ) -> Result<(), String> {
-    openclaw::add_channel_to_config(&channel, &bot_token, &dm_policy, &allow_from, &group_policy, require_mention).await
+    openclaw::add_channel_to_config(&channel, &bot_token, &dm_policy, &allow_from, &group_policy, &group_allow_from, require_mention).await
 }
 
 // ===== 설정 (레거시 - 하위 호환성) =====

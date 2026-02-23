@@ -73,6 +73,7 @@ export default function SummaryStep({
         dmPolicy: messengerConfig.dmPolicy,
         allowFrom: messengerConfig.allowFrom,
         groupPolicy: messengerConfig.groupPolicy,
+        groupAllowFrom: messengerConfig.groupAllowFrom || [],
         requireMention: messengerConfig.requireMention,
       });
 

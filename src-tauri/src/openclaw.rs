@@ -645,6 +645,7 @@ pub async fn add_channel_to_config(
     dm_policy: &str,
     allow_from: &[String],
     group_policy: &str,
+    group_allow_from: &[String],
     require_mention: bool,
 ) -> Result<(), String> {
     let mut config = read_existing_config();
@@ -690,6 +691,13 @@ pub async fn add_channel_to_config(
                 &["channels", "telegram", "groupPolicy"],
                 json!(group_policy),
             );
+            if !group_allow_from.is_empty() {
+                set_nested_value(
+                    &mut config,
+                    &["channels", "telegram", "groupAllowFrom"],
+                    json!(group_allow_from),
+                );
+            }
             set_nested_value(
                 &mut config,
                 &["channels", "telegram", "groups", "*", "requireMention"],
@@ -738,6 +746,14 @@ pub async fn add_channel_to_config(
                 &["channels", "discord", "guilds", "*", "requireMention"],
                 json!(require_mention),
             );
+            // Discord는 guilds.*.users로 그룹 허용 사용자 매핑
+            if !group_allow_from.is_empty() {
+                set_nested_value(
+                    &mut config,
+                    &["channels", "discord", "guilds", "*", "users"],
+                    json!(group_allow_from),
+                );
+            }
         }
         "whatsapp" => {
             // WhatsApp은 accounts 구조 사용 (OpenClaw 공식 형식)
@@ -761,6 +777,18 @@ pub async fn add_channel_to_config(
                 &mut config,
                 &["channels", "whatsapp", "accounts", "default", "groupPolicy"],
                 json!(group_policy),
+            );
+            if !group_allow_from.is_empty() {
+                set_nested_value(
+                    &mut config,
+                    &["channels", "whatsapp", "accounts", "default", "groupAllowFrom"],
+                    json!(group_allow_from),
+                );
+            }
+            set_nested_value(
+                &mut config,
+                &["channels", "whatsapp", "accounts", "default", "groups", "*", "requireMention"],
+                json!(require_mention),
             );
         }
         "slack" => {
@@ -799,6 +827,16 @@ pub async fn add_channel_to_config(
                 &["channels", "slack", "requireMention"],
                 json!(require_mention),
             );
+            // Slack은 channels 설정으로 채널 허용 목록 관리
+            if !group_allow_from.is_empty() {
+                for channel_id in group_allow_from {
+                    set_nested_value(
+                        &mut config,
+                        &["channels", "slack", "channels", channel_id, "enabled"],
+                        json!(true),
+                    );
+                }
+            }
         }
         "googlechat" => {
             // Google Chat은 Service Account 필요 (별도 처리)
@@ -828,6 +866,13 @@ pub async fn add_channel_to_config(
                 &["channels", "googlechat", "groupPolicy"],
                 json!(group_policy),
             );
+            if !group_allow_from.is_empty() {
+                set_nested_value(
+                    &mut config,
+                    &["channels", "googlechat", "groupAllowFrom"],
+                    json!(group_allow_from),
+                );
+            }
             set_nested_value(
                 &mut config,
                 &["channels", "googlechat", "requireMention"],
@@ -863,6 +908,13 @@ pub async fn add_channel_to_config(
                 &["channels", "mattermost", "groupPolicy"],
                 json!(group_policy),
             );
+            if !group_allow_from.is_empty() {
+                set_nested_value(
+                    &mut config,
+                    &["channels", "mattermost", "groupAllowFrom"],
+                    json!(group_allow_from),
+                );
+            }
             set_nested_value(
                 &mut config,
                 &["channels", "mattermost", "requireMention"],
