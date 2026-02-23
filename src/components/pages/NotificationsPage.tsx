@@ -45,7 +45,7 @@ export default function NotificationsPage({ onNavigate }: NotificationsPageProps
     if (!confirm('이 알림을 삭제하시겠습니까?')) return;
 
     try {
-      await invoke('delete_cron_job', { jobId });
+      await invoke('delete_cron_job', { job_id: jobId });
       setJobs(jobs.filter(j => j.id !== jobId));
     } catch (err) {
       setError(String(err));
@@ -54,7 +54,7 @@ export default function NotificationsPage({ onNavigate }: NotificationsPageProps
 
   const handleToggle = async (jobId: string, enabled: boolean) => {
     try {
-      await invoke('toggle_cron_job', { jobId, enabled });
+      await invoke('toggle_cron_job', { job_id: jobId, enabled });
       setJobs(jobs.map(j => j.id === jobId ? { ...j, enabled } : j));
     } catch (err) {
       setError(String(err));
