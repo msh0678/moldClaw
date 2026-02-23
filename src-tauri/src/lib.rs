@@ -1298,6 +1298,56 @@ async fn set_mattermost_url(url: String) -> Result<(), String> {
     openclaw::set_mattermost_url(&url).await
 }
 
+// ===== Gmail 연동 (gog/gogcli) =====
+
+/// gog 설치 여부 확인
+#[tauri::command]
+fn check_gog_installed() -> bool {
+    openclaw::check_gog_installed()
+}
+
+/// gog 버전 확인
+#[tauri::command]
+async fn get_gog_version() -> Result<String, String> {
+    openclaw::get_gog_version().await
+}
+
+/// gog 자동 설치
+#[tauri::command]
+async fn install_gog() -> Result<String, String> {
+    openclaw::install_gog().await
+}
+
+/// gog OAuth 인증 시작
+#[tauri::command]
+async fn start_gog_auth() -> Result<String, String> {
+    openclaw::start_gog_auth().await
+}
+
+/// gog 인증 상태 확인
+#[tauri::command]
+async fn check_gog_auth() -> Result<String, String> {
+    openclaw::check_gog_auth().await
+}
+
+/// Gmail 폴링 설정
+#[tauri::command]
+async fn setup_gmail_polling(account: String, interval_minutes: u32) -> Result<(), String> {
+    openclaw::setup_gmail_polling(&account, interval_minutes).await
+}
+
+/// Gmail 연동 해제
+#[tauri::command]
+async fn disconnect_gmail() -> Result<(), String> {
+    openclaw::disconnect_gmail().await
+}
+
+/// Gmail 연동 상태 확인
+#[tauri::command]
+async fn get_gmail_status() -> Result<serde_json::Value, String> {
+    openclaw::get_gmail_status().await
+}
+
 // ===== Windows 전용 명령어 =====
 
 /// Windows 필수 프로그램 상태 확인
@@ -1592,6 +1642,15 @@ pub fn run() {
             set_slack_app_token,
             set_googlechat_service_account,
             set_mattermost_url,
+            // Gmail 연동 (gog)
+            check_gog_installed,
+            get_gog_version,
+            install_gog,
+            start_gog_auth,
+            check_gog_auth,
+            setup_gmail_polling,
+            disconnect_gmail,
+            get_gmail_status,
         ])
         .setup(|_app| {
             eprintln!("moldClaw 시작됨");
