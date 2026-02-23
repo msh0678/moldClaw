@@ -153,7 +153,7 @@ export default function MessengerSettings({
           token: botToken,
           dmPolicy: dmPolicy,
           allowFrom: [],
-          groupPolicy: 'pairing',
+          groupPolicy: 'open',
           requireMention: true,
         });
         
@@ -307,7 +307,7 @@ export default function MessengerSettings({
           token: '',
           dmPolicy: dmPolicy,
           allowFrom: [],
-          groupPolicy: 'pairing',
+          groupPolicy: 'open',
           requireMention: true,
         });
         
@@ -433,7 +433,7 @@ export default function MessengerSettings({
           token: botToken,
           dmPolicy: dmPolicy,
           allowFrom: [],
-          groupPolicy: 'pairing',
+          groupPolicy: 'open',
           requireMention: true,
         });
         
@@ -554,7 +554,7 @@ export default function MessengerSettings({
           token: token || '',
           dmPolicy: dmPolicy,
           allowFrom: [],
-          groupPolicy: 'pairing',
+          groupPolicy: 'open',
           requireMention: true,
         });
         
@@ -687,7 +687,7 @@ export default function MessengerSettings({
         token: '',
         dmPolicy: 'pairing',
         allowFrom: [],
-        groupPolicy: 'pairing',
+        groupPolicy: 'disabled',
         requireMention: true,
       });
       
