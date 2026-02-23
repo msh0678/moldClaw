@@ -1,6 +1,7 @@
 // GmailSettings - Gmail 연동 설정 섹션
+// Gmail은 OpenClaw CLI를 통해 설정해야 함 (gogcli + Pub/Sub + Tailscale 필요)
 
-import { useState } from 'react';
+import { open } from '@tauri-apps/plugin-shell';
 import type { FullConfig, SettingsMode } from '../../types/config';
 
 interface GmailSettingsProps {
@@ -20,132 +21,82 @@ export default function GmailSettings({
   openModal: _openModal,
   closeModal: _closeModal,
 }: GmailSettingsProps) {
-  const [credentialsPath, setCredentialsPath] = useState('');
-  const [isConfigured, setIsConfigured] = useState(false);
 
-  const handleFileSelect = async () => {
-    // TODO: 파일 선택 다이얼로그 (Tauri)
-    // 임시로 경로 입력 방식 사용
+  const openDocs = () => {
+    open('https://docs.openclaw.ai/automation/gmail-pubsub').catch(console.error);
   };
 
   return (
     <div className="max-w-2xl">
       <div className="mb-8">
         <h2 className="text-xl font-bold text-forge-text mb-2">Gmail 연동</h2>
-        <p className="text-forge-muted">AI가 이메일을 읽고, 작성하고, 관리할 수 있게 설정합니다</p>
+        <p className="text-forge-muted">AI가 이메일 알림을 받고 처리할 수 있게 설정합니다</p>
       </div>
 
-      {/* 상태 표시 */}
-      <div className={`card p-5 mb-6 ${isConfigured ? 'bg-forge-success/10 border-forge-success/30' : 'bg-forge-amber/10 border-forge-amber/30'}`}>
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-xl bg-forge-surface flex items-center justify-center">
-            <span className="text-3xl">📧</span>
+      {/* 안내 */}
+      <div className="card p-5 mb-6 bg-forge-amber/10 border-forge-amber/30">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-forge-surface flex items-center justify-center flex-shrink-0">
+            <span className="text-2xl">⚠️</span>
           </div>
-          <div className="flex-1">
-            <h3 className="font-medium text-forge-text">
-              {isConfigured ? 'Gmail 연결됨' : 'Gmail 미연결'}
-            </h3>
+          <div>
+            <h3 className="font-medium text-forge-text mb-2">CLI 설정 필요</h3>
             <p className="text-sm text-forge-muted">
-              {isConfigured 
-                ? '이메일 읽기, 작성, 관리 가능'
-                : 'Google Cloud 설정이 필요합니다'}
+              Gmail 연동은 복잡한 설정이 필요하여<br />
+              <strong className="text-forge-text">터미널에서 OpenClaw CLI</strong>를 사용해야 합니다.
             </p>
           </div>
-          <span className={`text-xs px-2 py-1 rounded ${
-            isConfigured 
-              ? 'bg-forge-success/20 text-forge-success' 
-              : 'bg-forge-amber/20 text-forge-amber'
-          }`}>
-            {isConfigured ? '활성' : '미설정'}
-          </span>
         </div>
       </div>
 
-      {/* 설정 가이드 */}
+      {/* 필요 사항 */}
       <div className="card p-5 mb-6">
-        <h3 className="font-medium text-forge-text mb-4">설정 방법</h3>
-        <ol className="space-y-3">
+        <h3 className="font-medium text-forge-text mb-4">필요 사항</h3>
+        <ul className="space-y-3">
           {[
-            { step: 1, text: 'Google Cloud Console에서 프로젝트 생성', url: 'https://console.cloud.google.com/' },
-            { step: 2, text: 'Gmail API 활성화', url: 'https://console.cloud.google.com/apis/library/gmail.googleapis.com' },
-            { step: 3, text: 'OAuth 2.0 클라이언트 ID 생성', url: 'https://console.cloud.google.com/apis/credentials' },
-            { step: 4, text: 'credentials.json 다운로드' },
-            { step: 5, text: '아래에서 파일 선택' },
-          ].map(({ step, text, url }) => (
-            <li key={step} className="flex items-start gap-3">
-              <span className="
-                w-6 h-6 rounded-full bg-forge-copper/20 text-forge-copper
-                flex items-center justify-center text-sm font-medium flex-shrink-0
-              ">
-                {step}
-              </span>
-              <div className="flex-1">
-                <span className="text-sm text-forge-text">{text}</span>
-                {url && (
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-2 text-xs text-forge-copper hover:text-forge-amber"
-                  >
-                    열기 →
-                  </a>
-                )}
-              </div>
+            { icon: '☁️', text: 'Google Cloud 프로젝트 + Pub/Sub 설정' },
+            { icon: '🔑', text: 'gogcli (Gmail OAuth CLI) 설치 및 인증' },
+            { icon: '🌐', text: 'Tailscale Funnel (공개 HTTPS 엔드포인트)' },
+            { icon: '⚙️', text: 'OpenClaw hooks 설정' },
+          ].map(({ icon, text }, i) => (
+            <li key={i} className="flex items-center gap-3 text-sm text-forge-muted">
+              <span className="text-lg">{icon}</span>
+              {text}
             </li>
           ))}
-        </ol>
+        </ul>
       </div>
 
-      {/* 파일 선택 */}
+      {/* CLI 명령어 */}
       <div className="card p-5 mb-6">
-        <label className="block text-sm font-medium text-forge-muted mb-3">
-          credentials.json 파일
-        </label>
-        <div className="flex gap-3">
-          <input
-            type="text"
-            value={credentialsPath}
-            onChange={(e) => setCredentialsPath(e.target.value)}
-            placeholder="~/.openclaw/gmail-credentials.json"
-            className="
-              flex-1 px-4 py-3 bg-forge-surface border border-white/10 rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm font-mono
-            "
-          />
-          <button
-            onClick={handleFileSelect}
-            className="px-4 py-3 rounded-xl bg-forge-surface hover:bg-white/10 text-forge-text transition-colors"
-          >
-            찾아보기
-          </button>
+        <h3 className="font-medium text-forge-text mb-4">설정 방법</h3>
+        <div className="bg-[#0d0f14] rounded-lg p-4 font-mono text-sm">
+          <p className="text-forge-muted mb-2"># 터미널에서 실행:</p>
+          <p className="text-forge-success">openclaw webhooks gmail setup \</p>
+          <p className="text-forge-success pl-4">--account your@gmail.com</p>
         </div>
-        <p className="text-xs text-forge-muted mt-2">
-          Google Cloud Console에서 다운로드한 OAuth 자격 증명 파일
+        <p className="text-xs text-forge-muted mt-3">
+          이 명령어가 필요한 모든 설정을 안내합니다.
         </p>
       </div>
 
-      {/* 적용 버튼 */}
+      {/* 문서 링크 */}
       <button
-        onClick={() => setIsConfigured(true)}
-        disabled={!credentialsPath}
-        className="
-          w-full py-3 rounded-xl btn-primary
-          disabled:opacity-50 disabled:cursor-not-allowed
-        "
+        onClick={openDocs}
+        className="w-full py-3 rounded-xl btn-primary"
       >
-        Gmail 연동 적용
+        📖 Gmail 설정 가이드 열기
       </button>
 
-      {/* 주의사항 */}
-      <div className="mt-6 p-4 bg-forge-error/10 border border-forge-error/30 rounded-xl">
+      {/* 부가 설명 */}
+      <div className="mt-6 p-4 bg-forge-surface rounded-xl">
         <div className="flex items-start gap-3">
-          <span className="text-lg">⚠️</span>
+          <span className="text-lg">💡</span>
           <div className="text-sm">
-            <p className="text-forge-text font-medium mb-1">보안 주의사항</p>
+            <p className="text-forge-text font-medium mb-1">왜 CLI가 필요한가요?</p>
             <p className="text-forge-muted">
-              Gmail 연동을 통해 AI가 이메일에 접근할 수 있습니다.
-              신뢰할 수 있는 환경에서만 사용하세요.
+              Gmail은 Google Cloud Pub/Sub, OAuth 인증, Webhook 터널 설정이 필요합니다.
+              OpenClaw CLI가 이 복잡한 과정을 단계별로 안내해 드립니다.
             </p>
           </div>
         </div>

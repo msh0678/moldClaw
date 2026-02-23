@@ -266,6 +266,251 @@ export default function MessengerSettings({
     );
   };
 
+  // Google Chat 전용 모달 (Service Account 필요)
+  const GoogleChatModal = () => {
+    const [serviceAccountPath, setServiceAccountPath] = useState('');
+    const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+
+    const handleGoogleChatConnect = async () => {
+      if (!serviceAccountPath) {
+        alert('Service Account JSON 파일 경로가 필요합니다.');
+        return;
+      }
+
+      try {
+        // Service Account 파일 경로 저장
+        await invoke('set_googlechat_service_account', { filePath: serviceAccountPath });
+        
+        // 메신저 설정 저장
+        await invoke('update_messenger_config', {
+          channel: 'googlechat',
+          token: '',
+          dmPolicy,
+          allowFrom: [],
+          groupPolicy: 'pairing',
+          requireMention: true,
+        });
+        
+        // 변경 트래킹
+        const newConfig = {
+          ...config,
+          messenger: {
+            ...config.messenger,
+            type: 'googlechat' as Messenger,
+            dmPolicy,
+          }
+        };
+        commitConfig(newConfig);
+      } catch (err) {
+        console.error('Google Chat 연결 실패:', err);
+        alert(`Google Chat 연결 실패: ${err}`);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-forge-muted">
+          Google Cloud Service Account가 필요합니다.
+        </p>
+        
+        <ol className="space-y-2 text-sm text-forge-muted">
+          <li className="flex gap-2">
+            <span className="text-forge-copper">1.</span>
+            <a href="https://console.cloud.google.com/" target="_blank" rel="noopener" className="text-forge-copper hover:underline">
+              Google Cloud Console
+            </a>에서 프로젝트 생성
+          </li>
+          <li className="flex gap-2">
+            <span className="text-forge-copper">2.</span>
+            Chat API 활성화
+          </li>
+          <li className="flex gap-2">
+            <span className="text-forge-copper">3.</span>
+            Service Account 생성 → JSON 키 다운로드
+          </li>
+        </ol>
+
+        {/* Service Account 파일 경로 */}
+        <div>
+          <label className="block text-sm font-medium text-forge-muted mb-2">
+            Service Account JSON 파일 경로
+          </label>
+          <input
+            type="text"
+            value={serviceAccountPath}
+            onChange={(e) => setServiceAccountPath(e.target.value)}
+            placeholder="C:\Users\...\service-account.json"
+            className="
+              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+              focus:outline-none focus:border-forge-copper text-sm font-mono
+            "
+          />
+        </div>
+
+        {/* DM 정책 */}
+        <div>
+          <label className="block text-sm font-medium text-forge-muted mb-2">
+            DM 접근 정책
+          </label>
+          <select
+            value={dmPolicy}
+            onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
+            className="
+              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+              focus:outline-none focus:border-forge-copper text-sm
+            "
+          >
+            <option value="pairing">페어링 (코드 승인 필요)</option>
+            <option value="allowlist">허용 목록만</option>
+            <option value="open">모두 허용 ⚠️</option>
+          </select>
+        </div>
+
+        <button
+          onClick={handleGoogleChatConnect}
+          disabled={!serviceAccountPath}
+          className="
+            w-full py-3 rounded-xl btn-primary mt-4
+            disabled:opacity-50 disabled:cursor-not-allowed
+          "
+        >
+          연결
+        </button>
+      </div>
+    );
+  };
+
+  // Mattermost 전용 모달 (URL + Token 필요)
+  const MattermostModal = () => {
+    const [botToken, setBotToken] = useState('');
+    const [serverUrl, setServerUrl] = useState('');
+    const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+
+    const handleMattermostConnect = async () => {
+      if (!botToken || !serverUrl) {
+        alert('Bot Token과 서버 URL 모두 필요합니다.');
+        return;
+      }
+
+      try {
+        // Mattermost URL 저장
+        await invoke('set_mattermost_url', { url: serverUrl });
+        
+        // 메신저 설정 저장
+        await invoke('update_messenger_config', {
+          channel: 'mattermost',
+          token: botToken,
+          dmPolicy,
+          allowFrom: [],
+          groupPolicy: 'pairing',
+          requireMention: true,
+        });
+        
+        // 변경 트래킹
+        const newConfig = {
+          ...config,
+          messenger: {
+            ...config.messenger,
+            type: 'mattermost' as Messenger,
+            token: botToken,
+            dmPolicy,
+          }
+        };
+        commitConfig(newConfig);
+      } catch (err) {
+        console.error('Mattermost 연결 실패:', err);
+        alert(`Mattermost 연결 실패: ${err}`);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-forge-muted">
+          Mattermost 서버 관리자 권한이 필요합니다.
+        </p>
+        
+        <ol className="space-y-2 text-sm text-forge-muted">
+          <li className="flex gap-2">
+            <span className="text-forge-copper">1.</span>
+            Mattermost 관리자 설정 → Integrations
+          </li>
+          <li className="flex gap-2">
+            <span className="text-forge-copper">2.</span>
+            Bot Accounts → Add Bot Account
+          </li>
+          <li className="flex gap-2">
+            <span className="text-forge-copper">3.</span>
+            토큰 복사
+          </li>
+        </ol>
+
+        {/* 서버 URL */}
+        <div>
+          <label className="block text-sm font-medium text-forge-muted mb-2">
+            Mattermost 서버 URL
+          </label>
+          <input
+            type="text"
+            value={serverUrl}
+            onChange={(e) => setServerUrl(e.target.value)}
+            placeholder="https://mattermost.example.com"
+            className="
+              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+              focus:outline-none focus:border-forge-copper text-sm font-mono
+            "
+          />
+        </div>
+
+        {/* Bot Token */}
+        <div>
+          <label className="block text-sm font-medium text-forge-muted mb-2">
+            Bot Token
+          </label>
+          <input
+            type="password"
+            value={botToken}
+            onChange={(e) => setBotToken(e.target.value)}
+            placeholder="..."
+            className="
+              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+              focus:outline-none focus:border-forge-copper text-sm font-mono
+            "
+          />
+        </div>
+
+        {/* DM 정책 */}
+        <div>
+          <label className="block text-sm font-medium text-forge-muted mb-2">
+            DM 접근 정책
+          </label>
+          <select
+            value={dmPolicy}
+            onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
+            className="
+              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
+              focus:outline-none focus:border-forge-copper text-sm
+            "
+          >
+            <option value="pairing">페어링 (코드 승인 필요)</option>
+            <option value="allowlist">허용 목록만</option>
+            <option value="open">모두 허용 ⚠️</option>
+          </select>
+        </div>
+
+        <button
+          onClick={handleMattermostConnect}
+          disabled={!botToken || !serverUrl}
+          className="
+            w-full py-3 rounded-xl btn-primary mt-4
+            disabled:opacity-50 disabled:cursor-not-allowed
+          "
+        >
+          연결
+        </button>
+      </div>
+    );
+  };
+
   // 기본 메신저 모달
   const DefaultMessengerModal = ({ messenger }: { messenger: typeof ALL_MESSENGERS[0] }) => {
     const [token, setToken] = useState('');
@@ -387,6 +632,10 @@ export default function MessengerSettings({
       openModal('WhatsApp 연결', <WhatsAppModal />);
     } else if (messenger.id === 'slack') {
       openModal('Slack 연결', <SlackModal />);
+    } else if (messenger.id === 'googlechat') {
+      openModal('Google Chat 연결', <GoogleChatModal />);
+    } else if (messenger.id === 'mattermost') {
+      openModal('Mattermost 연결', <MattermostModal />);
     } else {
       openModal(`${messenger.name} 연결`, <DefaultMessengerModal messenger={messenger} />);
     }
