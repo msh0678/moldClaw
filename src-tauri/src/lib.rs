@@ -1348,6 +1348,18 @@ async fn get_gmail_status() -> Result<serde_json::Value, String> {
     openclaw::get_gmail_status().await
 }
 
+/// gog credentials 등록
+#[tauri::command]
+async fn register_gog_credentials(credentials_path: String) -> Result<(), String> {
+    openclaw::register_gog_credentials(&credentials_path).await
+}
+
+/// gog credentials 등록 여부 확인
+#[tauri::command]
+fn check_gog_credentials() -> bool {
+    openclaw::check_gog_credentials()
+}
+
 // ===== Windows 전용 명령어 =====
 
 /// Windows 필수 프로그램 상태 확인
@@ -1651,6 +1663,8 @@ pub fn run() {
             setup_gmail_polling,
             disconnect_gmail,
             get_gmail_status,
+            register_gog_credentials,
+            check_gog_credentials,
         ])
         .setup(|_app| {
             eprintln!("moldClaw 시작됨");

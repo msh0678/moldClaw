@@ -3016,3 +3016,88 @@ pub async fn get_gmail_status() -> Result<Value, String> {
         }))
     }
 }
+
+/// 번들된 OAuth credentials를 gog에 등록
+/// moldClaw 앱에 포함된 credentials.json을 gog auth credentials로 등록
+pub async fn register_gog_credentials(credentials_path: &str) -> Result<(), String> {
+    let gog_path = gog_binary_path();
+    if !gog_path.exists() {
+        return Err("gog가 설치되어 있지 않습니다.".to_string());
+    }
+    
+    // credentials 파일 존재 확인
+    let cred_path = std::path::Path::new(credentials_path);
+    if !cred_path.exists() {
+        return Err(format!("Credentials 파일을 찾을 수 없습니다: {}", credentials_path));
+    }
+    
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let output = Command::new(&gog_path)
+            .args(["auth", "credentials", credentials_path])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("gog auth credentials 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // 이미 등록된 경우도 성공으로 처리
+            if stderr.contains("already") || stderr.is_empty() {
+                Ok(())
+            } else {
+                Err(format!("Credentials 등록 실패: {}", stderr))
+            }
+        }
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let output = Command::new(&gog_path)
+            .args(["auth", "credentials", credentials_path])
+            .output()
+            .map_err(|e| format!("gog auth credentials 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("already") || stderr.is_empty() {
+                Ok(())
+            } else {
+                Err(format!("Credentials 등록 실패: {}", stderr))
+            }
+        }
+    }
+}
+
+/// gog credentials가 등록되어 있는지 확인
+pub fn check_gog_credentials() -> bool {
+    // gog의 credentials 저장 위치 확인
+    #[cfg(windows)]
+    {
+        let app_data = std::env::var("APPDATA").unwrap_or_default();
+        let cred_path = std::path::PathBuf::from(app_data)
+            .join("gogcli")
+            .join("credentials.json");
+        cred_path.exists()
+    }
+    
+    #[cfg(not(windows))]
+    {
+        // XDG_CONFIG_HOME 또는 ~/.config/gogcli/credentials.json
+        let config_home = std::env::var("XDG_CONFIG_HOME")
+            .unwrap_or_else(|_| {
+                let home = std::env::var("HOME").unwrap_or_default();
+                format!("{}/.config", home)
+            });
+        let cred_path = std::path::PathBuf::from(config_home)
+            .join("gogcli")
+            .join("credentials.json");
+        cred_path.exists()
+    }
+}

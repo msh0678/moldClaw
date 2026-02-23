@@ -1,10 +1,12 @@
-// GmailWizard - Gmail 연동 마법사 (3단계)
-// Step 1: gog 설치 (자동)
-// Step 2: Google OAuth 로그인
+// GmailWizard - Gmail 연동 마법사 (간소화 버전)
+// moldClaw 번들 OAuth credentials 사용
+// Step 1: gog 설치 + credentials 등록 (자동)
+// Step 2: Google 로그인 (경고 안내 포함)
 // Step 3: 완료
 
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { resolveResource } from '@tauri-apps/api/path';
 
 interface GmailWizardProps {
   onComplete: () => void;
@@ -33,12 +35,20 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
       const gogInstalled = await invoke<boolean>('check_gog_installed');
       
       if (!gogInstalled) {
-        setStep('install');
-        setStatus('gog 설치가 필요합니다');
+        // gog 설치 필요
+        await installAndSetup();
         return;
       }
 
       setProgress(30);
+      
+      // credentials 등록 확인
+      const credsRegistered = await invoke<boolean>('check_gog_credentials');
+      if (!credsRegistered) {
+        await registerCredentials();
+      }
+
+      setProgress(50);
       setStatus('인증 상태 확인 중...');
 
       // 이미 인증되어 있는지 확인
@@ -57,7 +67,7 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
 
       setStep('auth');
       setStatus('Google 로그인이 필요합니다');
-      setProgress(50);
+      setProgress(60);
     } catch (err) {
       console.error('초기 상태 확인 실패:', err);
       setError(String(err));
@@ -65,32 +75,45 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
     }
   };
 
-  const handleInstallGog = async () => {
+  const installAndSetup = async () => {
     try {
+      setStep('install');
       setStatus('gog 다운로드 중...');
       setProgress(20);
 
       await invoke<string>('install_gog');
       
-      setProgress(50);
-      setStatus('설치 완료!');
+      setProgress(40);
+      setStatus('OAuth 설정 중...');
       
-      // 인증 단계로 이동
-      setTimeout(() => {
-        setStep('auth');
-        setStatus('Google 로그인이 필요합니다');
-      }, 1000);
+      await registerCredentials();
+      
+      setProgress(60);
+      setStep('auth');
+      setStatus('Google 로그인이 필요합니다');
     } catch (err) {
-      console.error('gog 설치 실패:', err);
+      console.error('설치 실패:', err);
       setError(String(err));
       setStep('error');
+    }
+  };
+
+  const registerCredentials = async () => {
+    try {
+      // 번들된 credentials.json 경로
+      const credPath = await resolveResource('resources/gog_credentials.json');
+      await invoke('register_gog_credentials', { credentials_path: credPath });
+    } catch (err) {
+      console.error('Credentials 등록 실패:', err);
+      // credentials 등록 실패해도 계속 진행 시도
+      // (사용자가 이미 등록했을 수 있음)
     }
   };
 
   const handleGoogleAuth = async () => {
     try {
       setStatus('브라우저에서 로그인 중...');
-      setProgress(70);
+      setProgress(75);
 
       await invoke<string>('start_gog_auth');
       
@@ -113,7 +136,7 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
         setStatus('연결 완료!');
         setProgress(100);
       } else {
-        setError('인증을 완료해주세요');
+        setError('인증을 완료해주세요. 브라우저에서 "고급" → "계속" 버튼을 클릭하셨나요?');
         setStep('auth');
       }
     } catch (err) {
@@ -153,42 +176,43 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
         <p className="text-xs text-forge-muted mt-2 text-center">{status}</p>
       </div>
 
-      {/* Step: 확인 중 */}
-      {step === 'checking' && (
+      {/* Step: 확인/설치 중 */}
+      {(step === 'checking' || step === 'install') && (
         <div className="text-center py-8">
           <div className="animate-spin w-10 h-10 border-2 border-forge-copper/30 border-t-forge-copper rounded-full mx-auto" />
-          <p className="text-forge-muted mt-4">상태 확인 중...</p>
-        </div>
-      )}
-
-      {/* Step: gog 설치 */}
-      {step === 'install' && (
-        <div className="space-y-4">
-          <div className="card p-4 bg-forge-amber/10 border-forge-amber/30">
-            <div className="flex items-start gap-3">
-              <span className="text-xl">📦</span>
-              <div className="text-sm">
-                <p className="text-forge-text font-medium mb-1">gog 도구 설치 필요</p>
-                <p className="text-forge-muted">
-                  Gmail API 연동을 위한 gog(gogcli)가 필요합니다.
-                  자동으로 설치됩니다.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={handleInstallGog}
-            className="w-full py-3 rounded-xl btn-primary"
-          >
-            gog 설치하기
-          </button>
+          <p className="text-forge-muted mt-4">
+            {step === 'install' ? '설치 중...' : '확인 중...'}
+          </p>
         </div>
       )}
 
       {/* Step: Google 인증 */}
       {step === 'auth' && (
         <div className="space-y-4">
+          {/* 중요 안내: 확인되지 않은 앱 경고 */}
+          <div className="card p-4 bg-forge-amber/10 border-forge-amber/30">
+            <div className="flex items-start gap-3">
+              <span className="text-xl">⚠️</span>
+              <div className="text-sm">
+                <p className="text-forge-text font-medium mb-2">
+                  "확인되지 않은 앱" 경고가 표시됩니다
+                </p>
+                <p className="text-forge-muted mb-2">
+                  Google 로그인 화면에서 경고가 나타나면:
+                </p>
+                <ol className="text-forge-muted space-y-1 ml-4">
+                  <li>1. <strong className="text-forge-text">"고급"</strong> 클릭</li>
+                  <li>2. <strong className="text-forge-text">"안전하지 않은 페이지로 이동"</strong> 클릭</li>
+                  <li>3. 권한 허용</li>
+                </ol>
+                <p className="text-forge-muted mt-2 text-xs">
+                  이는 앱이 Google 검증을 받기 전까지 정상적인 현상입니다.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 권한 안내 */}
           <div className="card p-4 bg-forge-surface">
             <p className="text-sm text-forge-muted mb-3">
               Google 계정으로 로그인하여 Gmail 접근 권한을 부여합니다.
@@ -196,7 +220,7 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
             <ul className="space-y-2 text-sm text-forge-muted">
               <li className="flex items-center gap-2">
                 <span className="text-forge-success">✓</span>
-                읽기 전용 접근 (안전)
+                이메일 읽기 및 검색
               </li>
               <li className="flex items-center gap-2">
                 <span className="text-forge-success">✓</span>
@@ -223,7 +247,9 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
           </button>
 
           {error && (
-            <p className="text-sm text-forge-error text-center">{error}</p>
+            <div className="p-3 bg-forge-error/10 border border-forge-error/30 rounded-lg">
+              <p className="text-sm text-forge-error">{error}</p>
+            </div>
           )}
         </div>
       )}
@@ -241,10 +267,16 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
           </div>
 
           <div className="card p-4 bg-forge-surface text-left">
-            <p className="text-sm text-forge-muted">
+            <p className="text-sm text-forge-muted mb-2">
               이제 OpenClaw가 Gmail을 읽고 관리할 수 있습니다.
-              메신저에서 "이메일 확인해줘"라고 말해보세요!
             </p>
+            <p className="text-sm text-forge-text">
+              메신저에서 시도해보세요:
+            </p>
+            <ul className="text-sm text-forge-muted mt-2 space-y-1">
+              <li>• "최근 이메일 확인해줘"</li>
+              <li>• "오늘 온 메일 요약해줘"</li>
+            </ul>
           </div>
 
           <button
