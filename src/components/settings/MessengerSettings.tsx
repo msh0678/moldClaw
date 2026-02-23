@@ -45,6 +45,22 @@ export default function MessengerSettings({
     </div>
   );
 
+  // 그룹 정책 도움말 툴팁
+  // OpenClaw GroupPolicy: "open" | "disabled" | "allowlist" (NOT "pairing" - DM only)
+  const GroupPolicyHelp = () => (
+    <div className="group relative inline-block ml-1">
+      <span className="cursor-help text-forge-muted hover:text-forge-copper transition-colors">ⓘ</span>
+      <div className="absolute z-50 left-0 bottom-full mb-2 w-72 p-3 bg-[#252836] border border-[#3a3f52] rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+        <p className="text-xs text-forge-text font-medium mb-2">그룹 정책이란?</p>
+        <ul className="text-xs text-forge-muted space-y-1.5">
+          <li><strong className="text-forge-copper">허용 목록:</strong> 등록된 그룹/채널에서만 메시지 수신</li>
+          <li><strong className="text-forge-amber">모두 허용:</strong> 모든 그룹 메시지 수신 (⚠️ 비용 주의)</li>
+          <li><strong className="text-forge-copper">비활성화:</strong> 그룹 메시지 완전 차단</li>
+        </ul>
+      </div>
+    </div>
+  );
+
   const isConfigured = (messengerId: Messenger) => config.messenger.type === messengerId;
 
   // WhatsApp 전용 모달
@@ -194,6 +210,7 @@ export default function MessengerSettings({
     const [botToken, setBotToken] = useState('');
     const [appToken, setAppToken] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [groupPolicy, setGroupPolicy] = useState<'open' | 'allowlist' | 'disabled'>('allowlist');
     const [allowListInput, setAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -222,7 +239,7 @@ export default function MessengerSettings({
           token: botToken,
           dmPolicy: dmPolicy,
           allowFrom: allowFrom,
-          groupPolicy: 'open',
+          groupPolicy: groupPolicy,
           requireMention: true,
         });
         
@@ -335,11 +352,36 @@ export default function MessengerSettings({
 
         {dmPolicy === 'open' && (
           <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
-            <p className="text-forge-amber font-medium mb-1">⚠️ 보안 경고</p>
+            <p className="text-forge-amber font-medium mb-1">⚠️ DM 보안 경고</p>
             <p className="text-forge-muted">
-              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 메시지를 보낼 수 있습니다.
+              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 DM을 보낼 수 있습니다.
               악의적 사용자가 대량 메시지를 보내면 <strong className="text-forge-amber">AI API 비용이 급증</strong>할 수 있습니다.
-              가족/친구용이 아니라면 '페어링' 또는 '허용 목록만' 사용을 권장합니다.
+            </p>
+          </div>
+        )}
+
+        <div>
+          <label className="text-sm font-medium text-forge-muted mb-2 flex items-center">
+            그룹/채널 정책 <GroupPolicyHelp />
+          </label>
+          <select
+            value={groupPolicy}
+            onChange={(e) => setGroupPolicy(e.target.value as 'open' | 'allowlist' | 'disabled')}
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+          >
+            <option value="allowlist">허용 목록만 (안전)</option>
+            <option value="open">모두 허용 ⚠️</option>
+            <option value="disabled">비활성화</option>
+          </select>
+        </div>
+
+        {groupPolicy === 'open' && (
+          <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
+            <p className="text-forge-amber font-medium mb-1">⚠️ 그룹 보안 경고</p>
+            <p className="text-forge-muted">
+              <strong className="text-forge-text">모든 그룹/채널</strong>의 메시지가 AI에게 전달됩니다.
+              제3자 메시지도 처리되므로 <strong className="text-forge-amber">비용 및 개인정보</strong>에 주의하세요.
             </p>
           </div>
         )}
@@ -370,6 +412,7 @@ export default function MessengerSettings({
   const GoogleChatModal = () => {
     const [serviceAccountPath, setServiceAccountPath] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [groupPolicy, setGroupPolicy] = useState<'open' | 'allowlist' | 'disabled'>('allowlist');
     const [allowListInput, setAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -416,7 +459,7 @@ export default function MessengerSettings({
           token: '',
           dmPolicy: dmPolicy,
           allowFrom: allowFrom,
-          groupPolicy: 'open',
+          groupPolicy: groupPolicy,
           requireMention: true,
         });
         
@@ -520,11 +563,36 @@ export default function MessengerSettings({
 
         {dmPolicy === 'open' && (
           <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
-            <p className="text-forge-amber font-medium mb-1">⚠️ 보안 경고</p>
+            <p className="text-forge-amber font-medium mb-1">⚠️ DM 보안 경고</p>
             <p className="text-forge-muted">
-              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 메시지를 보낼 수 있습니다.
+              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 DM을 보낼 수 있습니다.
               악의적 사용자가 대량 메시지를 보내면 <strong className="text-forge-amber">AI API 비용이 급증</strong>할 수 있습니다.
-              가족/친구용이 아니라면 '페어링' 또는 '허용 목록만' 사용을 권장합니다.
+            </p>
+          </div>
+        )}
+
+        <div>
+          <label className="text-sm font-medium text-forge-muted mb-2 flex items-center">
+            Space 정책 <GroupPolicyHelp />
+          </label>
+          <select
+            value={groupPolicy}
+            onChange={(e) => setGroupPolicy(e.target.value as 'open' | 'allowlist' | 'disabled')}
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+          >
+            <option value="allowlist">허용 목록만 (안전)</option>
+            <option value="open">모두 허용 ⚠️</option>
+            <option value="disabled">비활성화</option>
+          </select>
+        </div>
+
+        {groupPolicy === 'open' && (
+          <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
+            <p className="text-forge-amber font-medium mb-1">⚠️ Space 보안 경고</p>
+            <p className="text-forge-muted">
+              <strong className="text-forge-text">모든 Space</strong>의 메시지가 AI에게 전달됩니다.
+              제3자 메시지도 처리되므로 <strong className="text-forge-amber">비용 및 개인정보</strong>에 주의하세요.
             </p>
           </div>
         )}
@@ -556,6 +624,7 @@ export default function MessengerSettings({
     const [botToken, setBotToken] = useState('');
     const [serverUrl, setServerUrl] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [groupPolicy, setGroupPolicy] = useState<'open' | 'allowlist' | 'disabled'>('allowlist');
     const [allowListInput, setAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -585,7 +654,7 @@ export default function MessengerSettings({
           token: botToken,
           dmPolicy: dmPolicy,
           allowFrom: allowFrom,
-          groupPolicy: 'open',
+          groupPolicy: groupPolicy,
           requireMention: true,
         });
         
@@ -694,11 +763,36 @@ export default function MessengerSettings({
 
         {dmPolicy === 'open' && (
           <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
-            <p className="text-forge-amber font-medium mb-1">⚠️ 보안 경고</p>
+            <p className="text-forge-amber font-medium mb-1">⚠️ DM 보안 경고</p>
             <p className="text-forge-muted">
-              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 메시지를 보낼 수 있습니다.
+              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 DM을 보낼 수 있습니다.
               악의적 사용자가 대량 메시지를 보내면 <strong className="text-forge-amber">AI API 비용이 급증</strong>할 수 있습니다.
-              가족/친구용이 아니라면 '페어링' 또는 '허용 목록만' 사용을 권장합니다.
+            </p>
+          </div>
+        )}
+
+        <div>
+          <label className="text-sm font-medium text-forge-muted mb-2 flex items-center">
+            채널 정책 <GroupPolicyHelp />
+          </label>
+          <select
+            value={groupPolicy}
+            onChange={(e) => setGroupPolicy(e.target.value as 'open' | 'allowlist' | 'disabled')}
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+          >
+            <option value="allowlist">허용 목록만 (안전)</option>
+            <option value="open">모두 허용 ⚠️</option>
+            <option value="disabled">비활성화</option>
+          </select>
+        </div>
+
+        {groupPolicy === 'open' && (
+          <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
+            <p className="text-forge-amber font-medium mb-1">⚠️ 채널 보안 경고</p>
+            <p className="text-forge-muted">
+              <strong className="text-forge-text">모든 채널</strong>의 메시지가 AI에게 전달됩니다.
+              제3자 메시지도 처리되므로 <strong className="text-forge-amber">비용 및 개인정보</strong>에 주의하세요.
             </p>
           </div>
         )}
@@ -754,6 +848,7 @@ export default function MessengerSettings({
   const DefaultMessengerModal = ({ messenger }: { messenger: typeof ALL_MESSENGERS[0] }) => {
     const [token, setToken] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [groupPolicy, setGroupPolicy] = useState<'open' | 'allowlist' | 'disabled'>('allowlist');
     const [allowListInput, setAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -781,7 +876,7 @@ export default function MessengerSettings({
           token: token || '',
           dmPolicy: dmPolicy,
           allowFrom: allowFrom,
-          groupPolicy: 'open',
+          groupPolicy: groupPolicy,
           requireMention: true,
         });
         
@@ -872,11 +967,36 @@ export default function MessengerSettings({
 
         {dmPolicy === 'open' && (
           <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
-            <p className="text-forge-amber font-medium mb-1">⚠️ 보안 경고</p>
+            <p className="text-forge-amber font-medium mb-1">⚠️ DM 보안 경고</p>
             <p className="text-forge-muted">
-              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 메시지를 보낼 수 있습니다.
+              인터넷의 <strong className="text-forge-text">모든 사람</strong>이 이 봇에게 DM을 보낼 수 있습니다.
               악의적 사용자가 대량 메시지를 보내면 <strong className="text-forge-amber">AI API 비용이 급증</strong>할 수 있습니다.
-              가족/친구용이 아니라면 '페어링' 또는 '허용 목록만' 사용을 권장합니다.
+            </p>
+          </div>
+        )}
+
+        <div>
+          <label className="text-sm font-medium text-forge-muted mb-2 flex items-center">
+            그룹 정책 <GroupPolicyHelp />
+          </label>
+          <select
+            value={groupPolicy}
+            onChange={(e) => setGroupPolicy(e.target.value as 'open' | 'allowlist' | 'disabled')}
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
+          >
+            <option value="allowlist">허용 목록만 (안전)</option>
+            <option value="open">모두 허용 ⚠️</option>
+            <option value="disabled">비활성화</option>
+          </select>
+        </div>
+
+        {groupPolicy === 'open' && (
+          <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
+            <p className="text-forge-amber font-medium mb-1">⚠️ 그룹 보안 경고</p>
+            <p className="text-forge-muted">
+              <strong className="text-forge-text">모든 그룹</strong>의 메시지가 AI에게 전달됩니다.
+              제3자 메시지도 처리되므로 <strong className="text-forge-amber">비용 및 개인정보</strong>에 주의하세요.
             </p>
           </div>
         )}
