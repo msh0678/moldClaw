@@ -204,20 +204,6 @@ const SKILLS: Skill[] = [
     guideUrl: 'https://gitlab.com/-/profile/personal_access_tokens',
   },
   {
-    id: 'google-workspace',
-    name: 'Google 연동',
-    icon: '🔷',
-    logo: 'https://cdn.simpleicons.org/google/4285F4',
-    description: 'Gmail, Calendar',
-    detailedDesc: 'Gmail 확인, Google Calendar 일정 관리를 할 수 있습니다. 설정이 복잡하므로 "Google 연결" 메뉴를 이용하세요.',
-    guideSteps: [
-      '⚠️ 이 스킬은 별도 설정이 필요합니다',
-      '설정 → "Google 연결" 메뉴 사용',
-      'Gmail 연동 마법사를 따라주세요',
-    ],
-    comingSoon: true,
-  },
-  {
     id: 'obsidian',
     name: 'Obsidian',
     icon: '💎',
