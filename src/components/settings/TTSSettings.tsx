@@ -1,13 +1,14 @@
 // TTSSettings - TTS(음성 합성) 설정 섹션
+// QA 강화: 연타 방지, 모달 자동 닫기, 해제 기능
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { FullConfig, SettingsMode } from '../../types/config';
 
 interface TTSSettingsProps {
   config: FullConfig;
   updateConfig: (updates: Partial<FullConfig>) => void;
-  commitConfig: (newConfig: FullConfig) => void;  // 저장 성공 시 호출
+  commitConfig: (newConfig: FullConfig) => void;
   mode: SettingsMode;
   openModal: (title: string, component: React.ReactNode) => void;
   closeModal: () => void;
@@ -50,27 +51,35 @@ export default function TTSSettings({
   commitConfig,
   mode: _mode,
   openModal,
-  closeModal: _closeModal,
+  closeModal,
 }: TTSSettingsProps) {
+  const [disconnectTarget, setDisconnectTarget] = useState<TTSProvider | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const isWorkingRef = useRef(false);
+
+  const isConfigured = (provider: TTSProvider) => !!config.integrations[provider.envVar];
+
   const handleAddTTS = (provider: TTSProvider) => {
-    // TTS 모달 컴포넌트 (저장 버튼 포함)
+    if (isWorkingRef.current || isDisconnecting) return;
+    
     const TTSModal = () => {
       const [apiKey, setApiKey] = useState(config.integrations[provider.envVar] || '');
       const [saving, setSaving] = useState(false);
       const [error, setError] = useState<string | null>(null);
       
       const handleSave = async () => {
+        if (saving) return; // 연타 방지
         if (!apiKey.trim()) return;
         
         setSaving(true);
         setError(null);
+        isWorkingRef.current = true;
         
         try {
           await invoke('update_integrations_config', {
             integrations: { [provider.envVar]: apiKey.trim() }
           });
           
-          // 변경 트래킹
           const newConfig = {
             ...config,
             integrations: {
@@ -79,11 +88,13 @@ export default function TTSSettings({
             }
           };
           commitConfig(newConfig);
+          closeModal(); // 성공 시 자동 닫기
         } catch (err) {
           console.error('TTS 저장 실패:', err);
           setError(String(err));
         } finally {
           setSaving(false);
+          isWorkingRef.current = false;
         }
       };
       
@@ -106,9 +117,11 @@ export default function TTSSettings({
               placeholder={provider.placeholder}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
+              disabled={saving}
               className="
                 w-full px-4 py-3 bg-forge-surface border border-white/10 rounded-xl
                 focus:outline-none focus:border-forge-copper text-sm font-mono
+                disabled:opacity-50 disabled:cursor-not-allowed
               "
             />
           </div>
@@ -123,7 +136,7 @@ export default function TTSSettings({
           </a>
           
           {error && (
-            <p className="text-sm text-forge-error">{error}</p>
+            <p className="text-sm text-forge-error bg-forge-error/10 p-3 rounded-lg">{error}</p>
           )}
           
           <button
@@ -132,9 +145,17 @@ export default function TTSSettings({
             className="
               w-full py-3 rounded-xl btn-primary mt-2
               disabled:opacity-50 disabled:cursor-not-allowed
+              flex items-center justify-center gap-2
             "
           >
-            {saving ? '저장 중...' : '저장'}
+            {saving ? (
+              <>
+                <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                저장 중...
+              </>
+            ) : (
+              '저장'
+            )}
           </button>
         </div>
       );
@@ -143,7 +164,43 @@ export default function TTSSettings({
     openModal(`${provider.name} 설정`, <TTSModal />);
   };
 
-  const isConfigured = (provider: TTSProvider) => !!config.integrations[provider.envVar];
+  const handleDisconnect = (provider: TTSProvider, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isWorkingRef.current || isDisconnecting) return;
+    setDisconnectTarget(provider);
+  };
+
+  const confirmDisconnect = async () => {
+    if (!disconnectTarget || isDisconnecting) return;
+    
+    setIsDisconnecting(true);
+    isWorkingRef.current = true;
+    
+    try {
+      await invoke('update_integrations_config', {
+        integrations: { [disconnectTarget.envVar]: '' }
+      });
+      
+      const newIntegrations = { ...config.integrations };
+      delete newIntegrations[disconnectTarget.envVar];
+      const newConfig = { ...config, integrations: newIntegrations };
+      commitConfig(newConfig);
+      setDisconnectTarget(null);
+    } catch (err) {
+      console.error('연결 해제 실패:', err);
+      alert(`연결 해제 실패: ${err}`);
+    } finally {
+      setIsDisconnecting(false);
+      isWorkingRef.current = false;
+    }
+  };
+
+  const cancelDisconnect = () => {
+    if (isDisconnecting) return;
+    setDisconnectTarget(null);
+  };
+
+  const isWorking = isWorkingRef.current || isDisconnecting;
 
   return (
     <div className="max-w-2xl">
@@ -160,10 +217,11 @@ export default function TTSSettings({
             <div
               key={provider.id}
               className={`
-                card p-5 cursor-pointer transition-all hover:bg-white/5
+                card p-5 transition-all
                 ${configured ? 'border-forge-success/30' : ''}
+                ${isWorking ? 'opacity-60 pointer-events-none' : 'cursor-pointer hover:bg-white/5'}
               `}
-              onClick={() => handleAddTTS(provider)}
+              onClick={() => !configured && handleAddTTS(provider)}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -176,11 +234,23 @@ export default function TTSSettings({
                   </div>
                 </div>
                 {configured ? (
-                  <span className="text-xs px-2 py-1 bg-forge-success/20 text-forge-success rounded">
-                    설정됨
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs px-2 py-1 bg-forge-success/20 text-forge-success rounded">
+                      설정됨
+                    </span>
+                    <button
+                      onClick={(e) => handleDisconnect(provider, e)}
+                      disabled={isWorking}
+                      className="text-xs px-2 py-1 bg-forge-error/10 text-forge-error rounded hover:bg-forge-error/20 disabled:opacity-50"
+                    >
+                      해제
+                    </button>
+                  </div>
                 ) : (
-                  <button className="text-xs px-3 py-1.5 bg-forge-copper/20 text-forge-copper rounded hover:bg-forge-copper/30">
+                  <button 
+                    className="text-xs px-3 py-1.5 bg-forge-copper/20 text-forge-copper rounded hover:bg-forge-copper/30 disabled:opacity-50"
+                    disabled={isWorking}
+                  >
                     설정
                   </button>
                 )}
@@ -200,6 +270,47 @@ export default function TTSSettings({
           </p>
         </div>
       </div>
+
+      {/* 연결 해제 확인 모달 */}
+      {disconnectTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className={`absolute inset-0 bg-[#0a0b0f]/70 backdrop-blur-md ${isDisconnecting ? '' : 'cursor-pointer'}`}
+            onClick={cancelDisconnect}
+          />
+          <div className="relative z-10 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-2xl p-6 max-w-sm shadow-2xl">
+            <h3 className="text-lg font-bold text-forge-text mb-2">연결 해제 확인</h3>
+            <p className="text-sm text-forge-muted mb-4">
+              <span className="text-forge-copper">{disconnectTarget.name}</span> TTS를 해제하시겠습니까?
+              <br />
+              저장된 API 키가 삭제됩니다.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={cancelDisconnect}
+                disabled={isDisconnecting}
+                className="flex-1 px-4 py-2 rounded-lg bg-[#252836] text-forge-text hover:bg-[#2d3142] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmDisconnect}
+                disabled={isDisconnecting}
+                className="flex-1 px-4 py-2 rounded-lg bg-forge-error text-white hover:bg-forge-error/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isDisconnecting ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                    해제 중...
+                  </>
+                ) : (
+                  '해제'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

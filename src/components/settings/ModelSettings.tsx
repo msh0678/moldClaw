@@ -1,4 +1,5 @@
 // ModelSettings - AI 모델 설정 섹션
+// QA 강화: 저장 중 UI 비활성화, 로딩 스피너, 성공 피드백
 
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
@@ -8,7 +9,7 @@ import { ALL_PROVIDERS } from '../../data/providers';
 interface ModelSettingsProps {
   config: FullConfig;
   updateConfig: (updates: Partial<FullConfig>) => void;
-  commitConfig: (newConfig: FullConfig) => void;  // 저장 성공 시 호출
+  commitConfig: (newConfig: FullConfig) => void;
   mode: SettingsMode;
   openModal: (title: string, component: React.ReactNode) => void;
   closeModal: () => void;
@@ -30,33 +31,43 @@ export default function ModelSettings({
   );
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const provider = ALL_PROVIDERS.find(p => p.id === selectedProvider);
 
   const handleProviderChange = (providerId: AIProvider) => {
+    if (saving) return; // 저장 중 변경 방지
     setSelectedProvider(providerId);
     setSelectedModel(null);
     setApiKey('');
+    setSaveError(null);
+    setSaveSuccess(false);
   };
 
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const handleModelChange = (modelId: string) => {
+    if (saving) return; // 저장 중 변경 방지
+    setSelectedModel(modelId);
+    setSaveError(null);
+    setSaveSuccess(false);
+  };
 
   const handleSaveModel = async () => {
+    if (saving) return; // 연타 방지
     if (!selectedProvider || !selectedModel) return;
     
     setSaving(true);
     setSaveError(null);
+    setSaveSuccess(false);
     
     try {
-      // Rust 백엔드에 저장
       await invoke('update_model_config', {
         provider: selectedProvider,
         model: selectedModel,
-        apiKey: apiKey || '',  // 빈 문자열이면 기존 키 유지
+        apiKey: apiKey || '',
       });
       
-      // 새 설정 객체 생성
       const newModel: ModelConfig = {
         provider: selectedProvider,
         model: selectedModel,
@@ -64,12 +75,13 @@ export default function ModelSettings({
       };
       
       const newConfig = { ...config, model: newModel };
-      
-      // 저장 성공 - commitConfig 호출 (변경 트래킹용)
       commitConfig(newConfig);
-      
-      // API 키 입력 필드 초기화 (저장됐으므로)
       setApiKey('');
+      setSaveSuccess(true);
+      
+      // 3초 후 성공 메시지 숨기기
+      setTimeout(() => setSaveSuccess(false), 3000);
+      
     } catch (err) {
       console.error('모델 설정 저장 실패:', err);
       setSaveError(String(err));
@@ -100,22 +112,24 @@ export default function ModelSettings({
         </div>
       )}
 
-      {/* 프로바이더 선택 - 3줄 그리드 */}
+      {/* 프로바이더 선택 */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-forge-muted mb-3">
           AI 서비스
         </label>
-        <div className="grid grid-cols-3 gap-3">
+        <div className={`grid grid-cols-3 gap-3 ${saving ? 'opacity-60 pointer-events-none' : ''}`}>
           {ALL_PROVIDERS.map((p) => (
             <button
               key={p.id}
               onClick={() => handleProviderChange(p.id)}
+              disabled={saving}
               className={`
                 p-4 rounded-xl text-center transition-all
                 ${selectedProvider === p.id
                   ? 'bg-forge-copper/20 border-2 border-forge-copper'
                   : 'bg-[#1e2030] border-2 border-[#2a2d3e] hover:border-[#3a3f52]'
                 }
+                disabled:cursor-not-allowed
               `}
             >
               <div className="h-8 flex items-center justify-center mb-2">
@@ -133,7 +147,7 @@ export default function ModelSettings({
 
       {/* 모델 선택 */}
       {provider && (
-        <div className="mb-6 animate-fadeIn">
+        <div className={`mb-6 animate-fadeIn ${saving ? 'opacity-60 pointer-events-none' : ''}`}>
           <label className="block text-sm font-medium text-forge-muted mb-3">
             모델
           </label>
@@ -141,13 +155,15 @@ export default function ModelSettings({
             {provider.models.map((m) => (
               <button
                 key={m.id}
-                onClick={() => setSelectedModel(m.id)}
+                onClick={() => handleModelChange(m.id)}
+                disabled={saving}
                 className={`
                   p-4 rounded-xl text-left transition-all
                   ${selectedModel === m.id
                     ? 'bg-forge-copper/20 border-2 border-forge-copper'
                     : 'bg-[#1e2030] border-2 border-[#2a2d3e] hover:border-[#3a3f52]'
                   }
+                  disabled:cursor-not-allowed
                 `}
               >
                 <div className="font-medium text-forge-text text-sm">{m.name}</div>
@@ -183,15 +199,18 @@ export default function ModelSettings({
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={config.model?.apiKey ? '(변경하려면 새 키 입력)' : provider.keyPlaceholder}
+              disabled={saving}
               className="
                 w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
                 focus:outline-none focus:border-forge-copper transition-colors
                 text-sm font-mono pr-12
+                disabled:opacity-50 disabled:cursor-not-allowed
               "
             />
             <button
               onClick={() => setShowKey(!showKey)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-forge-muted hover:text-forge-text"
+              disabled={saving}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-forge-muted hover:text-forge-text disabled:opacity-50"
             >
               {showKey ? '🙈' : '👁️'}
             </button>
@@ -199,25 +218,41 @@ export default function ModelSettings({
         </div>
       )}
 
+      {/* 성공 메시지 */}
+      {saveSuccess && (
+        <div className="mb-3 p-3 rounded-xl bg-forge-success/10 border border-forge-success/30 text-forge-success text-sm flex items-center gap-2 animate-fadeIn">
+          <span>✓</span>
+          모델 설정이 저장되었습니다
+        </div>
+      )}
+
+      {/* 에러 메시지 */}
+      {saveError && (
+        <div className="mb-3 p-3 rounded-xl bg-forge-error/10 border border-forge-error/30 text-forge-error text-sm">
+          {saveError}
+        </div>
+      )}
+
       {/* 적용 버튼 */}
       {selectedModel && (
-        <>
-          {saveError && (
-            <div className="mb-3 p-3 rounded-xl bg-forge-error/10 border border-forge-error/30 text-forge-error text-sm">
-              {saveError}
-            </div>
+        <button
+          onClick={handleSaveModel}
+          disabled={saving || !selectedProvider || !selectedModel || (!apiKey && !config.model?.apiKey)}
+          className="
+            w-full py-3 rounded-xl btn-primary
+            disabled:opacity-50 disabled:cursor-not-allowed
+            flex items-center justify-center gap-2
+          "
+        >
+          {saving ? (
+            <>
+              <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+              저장 중...
+            </>
+          ) : (
+            '변경 적용'
           )}
-          <button
-            onClick={handleSaveModel}
-            disabled={saving || !selectedProvider || !selectedModel || (!apiKey && !config.model?.apiKey)}
-            className="
-              w-full py-3 rounded-xl btn-primary
-              disabled:opacity-50 disabled:cursor-not-allowed
-            "
-          >
-            {saving ? '저장 중...' : '변경 적용'}
-          </button>
-        </>
+        </button>
       )}
     </div>
   );

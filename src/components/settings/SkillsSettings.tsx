@@ -1,13 +1,14 @@
 // SkillsSettings - 스킬(Skills) 설정 섹션
+// QA 강화: 연타 방지, 모달 자동 닫기, 해제 연타 방지
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { FullConfig, SettingsMode } from '../../types/config';
 
 interface SkillsSettingsProps {
   config: FullConfig;
   updateConfig: (updates: Partial<FullConfig>) => void;
-  commitConfig: (newConfig: FullConfig) => void;  // 저장 성공 시 호출
+  commitConfig: (newConfig: FullConfig) => void;
   mode: SettingsMode;
   openModal: (title: string, component: React.ReactNode) => void;
   closeModal: () => void;
@@ -160,9 +161,11 @@ export default function SkillsSettings({
   commitConfig,
   mode: _mode,
   openModal,
-  closeModal: _closeModal,
+  closeModal,
 }: SkillsSettingsProps) {
   const [disconnectTarget, setDisconnectTarget] = useState<Skill | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const isWorkingRef = useRef(false);
 
   const isConfigured = (skill: Skill) => {
     if (!skill.envVar) return false;
@@ -171,25 +174,26 @@ export default function SkillsSettings({
 
   const handleConnect = (skill: Skill, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isWorkingRef.current || isDisconnecting) return;
     
-    // 스킬 모달 컴포넌트 (저장 버튼 포함)
     const SkillModal = () => {
       const [apiKey, setApiKey] = useState(config.integrations[skill.envVar!] || '');
       const [saving, setSaving] = useState(false);
       const [error, setError] = useState<string | null>(null);
       
       const handleSave = async () => {
+        if (saving) return; // 연타 방지
         if (!skill.envVar || !apiKey.trim()) return;
         
         setSaving(true);
         setError(null);
+        isWorkingRef.current = true;
         
         try {
           await invoke('update_integrations_config', {
             integrations: { [skill.envVar]: apiKey.trim() }
           });
           
-          // 변경 트래킹
           const newConfig = {
             ...config,
             integrations: {
@@ -198,11 +202,13 @@ export default function SkillsSettings({
             }
           };
           commitConfig(newConfig);
+          closeModal(); // 성공 시 자동 닫기
         } catch (err) {
           console.error('스킬 저장 실패:', err);
           setError(String(err));
         } finally {
           setSaving(false);
+          isWorkingRef.current = false;
         }
       };
       
@@ -229,9 +235,11 @@ export default function SkillsSettings({
                 placeholder="API 키 입력"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
+                disabled={saving}
                 className="
                   w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
                   focus:outline-none focus:border-forge-copper text-sm font-mono
+                  disabled:opacity-50 disabled:cursor-not-allowed
                 "
               />
             </div>
@@ -249,7 +257,7 @@ export default function SkillsSettings({
           )}
           
           {error && (
-            <p className="text-sm text-forge-error">{error}</p>
+            <p className="text-sm text-forge-error bg-forge-error/10 p-3 rounded-lg">{error}</p>
           )}
           
           {skill.envVar && (
@@ -259,9 +267,17 @@ export default function SkillsSettings({
               className="
                 w-full py-3 rounded-xl btn-primary mt-2
                 disabled:opacity-50 disabled:cursor-not-allowed
+                flex items-center justify-center gap-2
               "
             >
-              {saving ? '저장 중...' : '저장'}
+              {saving ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                  저장 중...
+                </>
+              ) : (
+                '저장'
+              )}
             </button>
           )}
         </div>
@@ -273,30 +289,41 @@ export default function SkillsSettings({
 
   const handleDisconnect = (skill: Skill, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isWorkingRef.current || isDisconnecting) return;
     setDisconnectTarget(skill);
   };
 
   const confirmDisconnect = async () => {
-    if (!disconnectTarget?.envVar) return;
+    if (!disconnectTarget?.envVar || isDisconnecting) return;
+    
+    setIsDisconnecting(true);
+    isWorkingRef.current = true;
     
     try {
-      // 백엔드에 빈 값 전달 → 삭제됨
       await invoke('update_integrations_config', {
         integrations: { [disconnectTarget.envVar]: '' }
       });
       
-      // 상태 업데이트 + 변경 트래킹
       const newIntegrations = { ...config.integrations };
       delete newIntegrations[disconnectTarget.envVar];
       const newConfig = { ...config, integrations: newIntegrations };
       commitConfig(newConfig);
-      
       setDisconnectTarget(null);
     } catch (err) {
       console.error('연결 해제 실패:', err);
       alert(`연결 해제 실패: ${err}`);
+    } finally {
+      setIsDisconnecting(false);
+      isWorkingRef.current = false;
     }
   };
+
+  const cancelDisconnect = () => {
+    if (isDisconnecting) return;
+    setDisconnectTarget(null);
+  };
+
+  const isWorking = isWorkingRef.current || isDisconnecting;
 
   return (
     <div className="w-full">
@@ -305,7 +332,7 @@ export default function SkillsSettings({
         <p className="text-forge-muted text-sm">외부 서비스와 연동하여 AI의 기능을 확장합니다</p>
       </div>
 
-      {/* 스킬 그리드 - 3줄 레이아웃 */}
+      {/* 스킬 그리드 */}
       <div className="grid grid-cols-3 gap-3">
         {SKILLS.map((skill) => {
           const configured = isConfigured(skill);
@@ -317,6 +344,7 @@ export default function SkillsSettings({
                 ${configured 
                   ? 'border-forge-success/40 hover:border-forge-success/60' 
                   : 'border-[#2a2d3e] hover:border-[#3a3f52]'}
+                ${isWorking ? 'opacity-60 pointer-events-none' : ''}
               `}
             >
               <div className="flex items-center gap-3 mb-2">
@@ -332,10 +360,12 @@ export default function SkillsSettings({
               {configured ? (
                 <button
                   onClick={(e) => handleDisconnect(skill, e)}
+                  disabled={isWorking}
                   className="
                     w-full text-xs px-3 py-2 rounded-lg
                     bg-forge-error/10 text-forge-error border border-forge-error/30
                     hover:bg-forge-error/20 transition-colors
+                    disabled:opacity-50 disabled:cursor-not-allowed
                   "
                 >
                   연결 해제
@@ -343,10 +373,12 @@ export default function SkillsSettings({
               ) : (
                 <button
                   onClick={(e) => handleConnect(skill, e)}
+                  disabled={isWorking}
                   className="
                     w-full text-xs px-3 py-2 rounded-lg
                     bg-white text-[#1a1c24] font-medium
                     hover:bg-gray-100 transition-colors
+                    disabled:opacity-50 disabled:cursor-not-allowed
                   "
                 >
                   연결
@@ -361,8 +393,8 @@ export default function SkillsSettings({
       {disconnectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="absolute inset-0 bg-[#0a0b0f]/70 backdrop-blur-md"
-            onClick={() => setDisconnectTarget(null)}
+            className={`absolute inset-0 bg-[#0a0b0f]/70 backdrop-blur-md ${isDisconnecting ? '' : 'cursor-pointer'}`}
+            onClick={cancelDisconnect}
           />
           <div className="relative z-10 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-2xl p-6 max-w-sm shadow-2xl">
             <h3 className="text-lg font-bold text-forge-text mb-2">연결 해제 확인</h3>
@@ -373,16 +405,25 @@ export default function SkillsSettings({
             </p>
             <div className="flex gap-3">
               <button
-                onClick={() => setDisconnectTarget(null)}
-                className="flex-1 px-4 py-2 rounded-lg bg-[#252836] text-forge-text hover:bg-[#2d3142] transition-colors"
+                onClick={cancelDisconnect}
+                disabled={isDisconnecting}
+                className="flex-1 px-4 py-2 rounded-lg bg-[#252836] text-forge-text hover:bg-[#2d3142] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 취소
               </button>
               <button
                 onClick={confirmDisconnect}
-                className="flex-1 px-4 py-2 rounded-lg bg-forge-error text-white hover:bg-forge-error/80 transition-colors"
+                disabled={isDisconnecting}
+                className="flex-1 px-4 py-2 rounded-lg bg-forge-error text-white hover:bg-forge-error/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                해제
+                {isDisconnecting ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                    해제 중...
+                  </>
+                ) : (
+                  '해제'
+                )}
               </button>
             </div>
           </div>
