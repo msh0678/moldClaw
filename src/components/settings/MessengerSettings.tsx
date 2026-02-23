@@ -151,10 +151,10 @@ export default function MessengerSettings({
         await invoke('update_messenger_config', {
           channel: 'slack',
           token: botToken,
-          dmPolicy,
-          allowFrom: [],
-          groupPolicy: 'pairing',
-          requireMention: true,
+          dm_policy: dmPolicy,
+          allow_from: [],
+          group_policy: 'pairing',
+          require_mention: true,
         });
         
         // App Token도 별도 저장
@@ -305,10 +305,10 @@ export default function MessengerSettings({
         await invoke('update_messenger_config', {
           channel: 'googlechat',
           token: '',
-          dmPolicy,
-          allowFrom: [],
-          groupPolicy: 'pairing',
-          requireMention: true,
+          dm_policy: dmPolicy,
+          allow_from: [],
+          group_policy: 'pairing',
+          require_mention: true,
         });
         
         // 변경 트래킹
@@ -431,10 +431,10 @@ export default function MessengerSettings({
         await invoke('update_messenger_config', {
           channel: 'mattermost',
           token: botToken,
-          dmPolicy,
-          allowFrom: [],
-          groupPolicy: 'pairing',
-          requireMention: true,
+          dm_policy: dmPolicy,
+          allow_from: [],
+          group_policy: 'pairing',
+          require_mention: true,
         });
         
         // 변경 트래킹
@@ -552,10 +552,10 @@ export default function MessengerSettings({
         await invoke('update_messenger_config', {
           channel: messenger.id,
           token: token || '',
-          dmPolicy,
-          allowFrom: [],
-          groupPolicy: 'pairing',
-          requireMention: true,
+          dm_policy: dmPolicy,
+          allow_from: [],
+          group_policy: 'pairing',
+          require_mention: true,
         });
         
         // 변경 트래킹용 commitConfig
@@ -685,10 +685,10 @@ export default function MessengerSettings({
       await invoke('update_messenger_config', {
         channel: disconnectTarget.id,
         token: '',
-        dmPolicy: 'pairing' as const,
-        allowFrom: [],
-        groupPolicy: 'pairing',
-        requireMention: true,
+        dm_policy: 'pairing',
+        allow_from: [],
+        group_policy: 'pairing',
+        require_mention: true,
       });
       
       // 변경 트래킹용 commitConfig

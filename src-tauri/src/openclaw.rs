@@ -806,14 +806,20 @@ pub async fn add_channel_to_config(
                 &["channels", "googlechat", "enabled"],
                 json!(true),
             );
+            // DM 설정 (중첩 구조 - OpenClaw 공식 스키마)
             set_nested_value(
                 &mut config,
-                &["channels", "googlechat", "dmPolicy"],
+                &["channels", "googlechat", "dm", "enabled"],
+                json!(true),
+            );
+            set_nested_value(
+                &mut config,
+                &["channels", "googlechat", "dm", "policy"],
                 json!(dm_policy),
             );
             set_nested_value(
                 &mut config,
-                &["channels", "googlechat", "allowFrom"],
+                &["channels", "googlechat", "dm", "allowFrom"],
                 json!(allow_from),
             );
             set_nested_value(
@@ -2000,9 +2006,11 @@ pub async fn update_messenger_config(
         }
         "googlechat" => {
             set_nested_value(&mut config, &["channels", "googlechat", "enabled"], json!(true));
-            set_nested_value(&mut config, &["channels", "googlechat", "dmPolicy"], json!(dm_policy));
+            // DM 설정 (중첩 구조 - OpenClaw 공식 스키마)
+            set_nested_value(&mut config, &["channels", "googlechat", "dm", "enabled"], json!(true));
+            set_nested_value(&mut config, &["channels", "googlechat", "dm", "policy"], json!(dm_policy));
             if !allow_from.is_empty() {
-                set_nested_value(&mut config, &["channels", "googlechat", "allowFrom"], json!(allow_from));
+                set_nested_value(&mut config, &["channels", "googlechat", "dm", "allowFrom"], json!(allow_from));
             }
             set_nested_value(&mut config, &["channels", "googlechat", "groupPolicy"], json!(group_policy));
             set_nested_value(&mut config, &["channels", "googlechat", "requireMention"], json!(require_mention));
@@ -2631,10 +2639,10 @@ pub async fn set_mattermost_url(url: &str) -> Result<(), String> {
     let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
     
-    // Mattermost URL 설정
+    // Mattermost Base URL 설정 (OpenClaw 공식 스키마)
     set_nested_value(
         &mut config,
-        &["channels", "mattermost", "url"],
+        &["channels", "mattermost", "baseUrl"],
         json!(url),
     );
     

@@ -187,10 +187,10 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
         await invoke('update_messenger_config', {
           channel: selectedMessenger,
           token: token,  // 빈 문자열이면 기존 토큰 유지
-          dmPolicy: dmPolicy,
-          allowFrom: [],
-          groupPolicy: 'allowlist',
-          requireMention: true,
+          dm_policy: dmPolicy,
+          allow_from: [],
+          group_policy: 'allowlist',
+          require_mention: true,
         })
         onComplete({
           ...defaultMessengerConfig,
