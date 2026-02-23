@@ -1915,6 +1915,7 @@ pub async fn update_model_config(provider: &str, model: &str, api_key: &str) -> 
 }
 
 /// 메신저 설정만 업데이트 (기존 config에 패치)
+/// 토큰이 비어있으면 해당 채널을 비활성화 (삭제 모드)
 pub async fn update_messenger_config(
     channel: &str,
     token: &str,
@@ -1923,16 +1924,8 @@ pub async fn update_messenger_config(
     group_policy: &str,
     require_mention: bool,
 ) -> Result<(), String> {
-    // 토큰이 비어있으면 삭제 모드 - 플러그인 활성화/채널 추가 스킵
+    // 토큰이 비어있으면 삭제(비활성화) 모드
     let is_delete_mode = token.is_empty();
-    
-    if !is_delete_mode {
-        // 플러그인 활성화 (Discord/WhatsApp 제외)
-        let _ = enable_channel_plugin(channel); // 실패해도 계속 진행
-        
-        // 채널 추가 (이미 있으면 무시됨)
-        let _ = add_channel(channel);
-    }
     
     let mut config = read_existing_config();
     
@@ -1941,33 +1934,46 @@ pub async fn update_messenger_config(
         return Err("Config가 없습니다.".to_string());
     }
     
-    // 기존 채널 비활성화 (중복 방지)
-    // WhatsApp은 multi-account 구조라서 enabled 위치가 다름
-    for ch in ["telegram", "discord"] {
-        if ch != channel {
-            if config.get("channels").and_then(|c| c.get(ch)).is_some() {
-                set_nested_value(&mut config, &["channels", ch, "enabled"], json!(false));
-            }
-        }
-    }
-    // WhatsApp 비활성화는 accounts.default.enabled 사용
-    if channel != "whatsapp" {
-        if config.get("channels").and_then(|c| c.get("whatsapp")).is_some() {
-            set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "enabled"], json!(false));
-        }
-    }
-    
     // meta.lastTouchedAt 업데이트
     let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
+    
+    // 삭제 모드: 해당 채널만 비활성화
+    if is_delete_mode {
+        match channel {
+            "telegram" => {
+                set_nested_value(&mut config, &["channels", "telegram", "enabled"], json!(false));
+            }
+            "discord" => {
+                set_nested_value(&mut config, &["channels", "discord", "enabled"], json!(false));
+            }
+            "whatsapp" => {
+                set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "enabled"], json!(false));
+            }
+            "slack" => {
+                set_nested_value(&mut config, &["channels", "slack", "enabled"], json!(false));
+            }
+            "googlechat" => {
+                set_nested_value(&mut config, &["channels", "googlechat", "enabled"], json!(false));
+            }
+            "mattermost" => {
+                set_nested_value(&mut config, &["channels", "mattermost", "enabled"], json!(false));
+            }
+            _ => {}
+        }
+        write_config(&config)?;
+        return Ok(());
+    }
+    
+    // 활성화 모드: 플러그인 활성화 + 채널 추가 (에러 무시)
+    let _ = enable_channel_plugin(channel);
+    let _ = add_channel(channel);
     
     // 새 채널 설정
     match channel {
         "telegram" => {
             set_nested_value(&mut config, &["channels", "telegram", "enabled"], json!(true));
-            if !token.is_empty() {
-                set_nested_value(&mut config, &["channels", "telegram", "botToken"], json!(token));
-            }
+            set_nested_value(&mut config, &["channels", "telegram", "botToken"], json!(token));
             set_nested_value(&mut config, &["channels", "telegram", "dmPolicy"], json!(dm_policy));
             if !allow_from.is_empty() {
                 set_nested_value(&mut config, &["channels", "telegram", "allowFrom"], json!(allow_from));
@@ -1977,9 +1983,7 @@ pub async fn update_messenger_config(
         }
         "discord" => {
             set_nested_value(&mut config, &["channels", "discord", "enabled"], json!(true));
-            if !token.is_empty() {
-                set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
-            }
+            set_nested_value(&mut config, &["channels", "discord", "token"], json!(token));
             set_nested_value(&mut config, &["channels", "discord", "dm", "enabled"], json!(true));
             set_nested_value(&mut config, &["channels", "discord", "dm", "policy"], json!(dm_policy));
             if !allow_from.is_empty() {
@@ -1988,22 +1992,18 @@ pub async fn update_messenger_config(
             set_nested_value(&mut config, &["channels", "discord", "groupPolicy"], json!(group_policy));
         }
         "whatsapp" => {
-            // WhatsApp은 multi-account 구조 사용 (공식 스키마)
-            // channels.whatsapp.accounts.default.enabled 사용
+            // WhatsApp은 QR 인증 - 토큰 대신 enabled만 설정
             set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "enabled"], json!(true));
             set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "dmPolicy"], json!(dm_policy));
             if !allow_from.is_empty() {
                 set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "allowFrom"], json!(allow_from));
             }
             set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "groups", "*", "requireMention"], json!(require_mention));
-            // 최상위 레벨에도 기본값 설정 (호환성)
             set_nested_value(&mut config, &["channels", "whatsapp", "groupPolicy"], json!(group_policy));
         }
         "slack" => {
             set_nested_value(&mut config, &["channels", "slack", "enabled"], json!(true));
-            if !token.is_empty() {
-                set_nested_value(&mut config, &["channels", "slack", "botToken"], json!(token));
-            }
+            set_nested_value(&mut config, &["channels", "slack", "botToken"], json!(token));
             set_nested_value(&mut config, &["channels", "slack", "groupPolicy"], json!(group_policy));
             set_nested_value(&mut config, &["channels", "slack", "dm", "policy"], json!(dm_policy));
             if !allow_from.is_empty() {
@@ -2013,7 +2013,6 @@ pub async fn update_messenger_config(
         }
         "googlechat" => {
             set_nested_value(&mut config, &["channels", "googlechat", "enabled"], json!(true));
-            // DM 설정 (중첩 구조 - OpenClaw 공식 스키마)
             set_nested_value(&mut config, &["channels", "googlechat", "dm", "enabled"], json!(true));
             set_nested_value(&mut config, &["channels", "googlechat", "dm", "policy"], json!(dm_policy));
             if !allow_from.is_empty() {
@@ -2024,9 +2023,7 @@ pub async fn update_messenger_config(
         }
         "mattermost" => {
             set_nested_value(&mut config, &["channels", "mattermost", "enabled"], json!(true));
-            if !token.is_empty() {
-                set_nested_value(&mut config, &["channels", "mattermost", "botToken"], json!(token));
-            }
+            set_nested_value(&mut config, &["channels", "mattermost", "botToken"], json!(token));
             set_nested_value(&mut config, &["channels", "mattermost", "dmPolicy"], json!(dm_policy));
             if !allow_from.is_empty() {
                 set_nested_value(&mut config, &["channels", "mattermost", "allowFrom"], json!(allow_from));
