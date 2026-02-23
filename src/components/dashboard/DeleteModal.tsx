@@ -1,5 +1,7 @@
 // DeleteModal - 삭제 확인 모달 (호버 창 + 블러 효과)
 
+import { useState, useEffect } from 'react';
+
 interface DeleteModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -7,6 +9,15 @@ interface DeleteModalProps {
 }
 
 export default function DeleteModal({ isOpen, onClose, onConfirm }: DeleteModalProps) {
+  const [confirmChecked, setConfirmChecked] = useState(false);
+  
+  // 모달 열릴 때마다 체크박스 초기화
+  useEffect(() => {
+    if (isOpen) {
+      setConfirmChecked(false);
+    }
+  }, [isOpen]);
+  
   if (!isOpen) return null;
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -16,6 +27,7 @@ export default function DeleteModal({ isOpen, onClose, onConfirm }: DeleteModalP
   };
 
   const handleConfirm = () => {
+    if (!confirmChecked) return;
     onConfirm();
     onClose();
   };
@@ -73,9 +85,22 @@ export default function DeleteModal({ isOpen, onClose, onConfirm }: DeleteModalP
             </ul>
           </div>
 
-          <p className="text-sm text-forge-error text-center mb-6">
+          <p className="text-sm text-forge-error text-center mb-4">
             ⚠️ 이 작업은 되돌릴 수 없습니다
           </p>
+
+          {/* 안전장치: 체크박스 확인 */}
+          <label className="flex items-center gap-3 p-4 bg-forge-error/20 border border-forge-error/40 rounded-xl mb-4 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={confirmChecked}
+              onChange={(e) => setConfirmChecked(e.target.checked)}
+              className="w-5 h-5 rounded border-forge-error/50 text-forge-error focus:ring-forge-error"
+            />
+            <span className="text-sm text-forge-error font-medium">
+              위 내용을 확인했으며, 삭제하겠습니다
+            </span>
+          </label>
 
           {/* 버튼들 */}
           <div className="flex gap-3">
@@ -91,11 +116,14 @@ export default function DeleteModal({ isOpen, onClose, onConfirm }: DeleteModalP
             </button>
             <button
               onClick={handleConfirm}
-              className="
+              disabled={!confirmChecked}
+              className={`
                 flex-1 py-3 rounded-xl
-                bg-forge-error hover:bg-forge-error/80
-                text-white font-semibold transition-colors
-              "
+                font-semibold transition-colors
+                ${confirmChecked 
+                  ? 'bg-forge-error hover:bg-forge-error/80 text-white cursor-pointer' 
+                  : 'bg-forge-error/30 text-forge-error/50 cursor-not-allowed'}
+              `}
             >
               🗑️ 삭제
             </button>
