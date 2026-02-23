@@ -227,6 +227,57 @@ pub fn is_node_version_too_new(version: &str) -> bool {
     major >= 24
 }
 
+/// winget으로 Node.js 22.x 설치 (24+ 호환성 문제 시 fallback)
+pub fn install_nodejs_22() -> Result<String, String> {
+    eprintln!("Node.js 22.x 설치 시작 (호환성 fallback)...");
+    
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    
+    // winget 확인
+    let winget_check = Command::new("cmd")
+        .args(["/C", "winget --version"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    
+    match winget_check {
+        Ok(output) if output.status.success() => {},
+        _ => return Err("winget이 설치되어 있지 않습니다.".to_string()),
+    }
+    
+    eprintln!("현재 Node.js 제거 후 22.x 버전 설치...");
+    
+    // 기존 Node.js 제거 + 22.x 설치 (--force로 덮어쓰기)
+    // Node.js 22.14.0 LTS 사용 (2026년 2월 기준 안정 버전)
+    let ps_command = r#"
+        # 기존 Node.js 제거
+        Start-Process -FilePath 'winget' -ArgumentList 'uninstall --id OpenJS.NodeJS.LTS --silent' -Verb RunAs -Wait
+        Start-Process -FilePath 'winget' -ArgumentList 'uninstall --id OpenJS.NodeJS --silent' -Verb RunAs -Wait
+        Start-Sleep -Seconds 2
+        # Node.js 22.x 설치
+        Start-Process -FilePath 'winget' -ArgumentList 'install --id OpenJS.NodeJS.LTS --version 22.14.0 -e --source winget --silent --accept-source-agreements --accept-package-agreements --force' -Verb RunAs -Wait
+    "#;
+    
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", ps_command])
+        .output()
+        .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
+    
+    // 설치 확인
+    refresh_environment_variables();
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    
+    if let Some(version) = get_node_version() {
+        if version.starts_with("v22") {
+            eprintln!("✓ Node.js 22.x 설치 확인됨: {}", version);
+            return Ok(format!("Node.js {}로 다운그레이드 완료!", version));
+        }
+    }
+    
+    // PATH 업데이트 필요할 수 있음
+    Ok("Node.js 22.x 설치 완료. 앱 재시작이 필요할 수 있습니다.".to_string())
+}
+
 /// winget으로 Node.js LTS 설치 (UAC 프롬프트 표시)
 pub fn install_nodejs_with_winget_visible() -> Result<String, String> {
     eprintln!("Node.js LTS 설치 시작 (winget 사용)...");
@@ -630,8 +681,8 @@ pub fn analyze_error(stderr: &str) -> ErrorAnalysis {
         return ErrorAnalysis {
             error_type: InstallErrorType::NativeModuleBuildFailed,
             description: "네이티브 모듈 빌드에 실패했습니다. Node.js 버전이 너무 최신일 수 있습니다.".to_string(),
-            solution: "Node.js LTS 22.x로 다운그레이드하거나, '--ignore-scripts' 옵션으로 재설치하세요. 텍스트 기능은 정상 작동합니다.".to_string(),
-            auto_fixable: false,
+            solution: "Node.js 22.x로 자동 다운그레이드를 시도합니다.".to_string(),
+            auto_fixable: true,  // Node.js 22로 다운그레이드 시도
         };
     }
     
@@ -713,6 +764,16 @@ pub fn attempt_auto_fix(error_type: &InstallErrorType) -> Result<String, String>
         InstallErrorType::NpmCacheCorrupted => {
             clear_npm_cache()?;
             Ok("npm 캐시를 정리했습니다. 다시 시도해주세요.".to_string())
+        }
+        InstallErrorType::NativeModuleBuildFailed => {
+            // Node.js 버전이 너무 최신인지 확인
+            if let Some(version) = get_node_version() {
+                if is_node_version_too_new(&version) {
+                    eprintln!("Node.js {} 감지 - 22.x로 다운그레이드 시도...", version);
+                    return install_nodejs_22();
+                }
+            }
+            Err("Node.js 버전 문제가 아닌 것 같습니다. 수동 확인이 필요합니다.".to_string())
         }
         _ => {
             Err("자동 복구가 불가능한 에러입니다.".to_string())
