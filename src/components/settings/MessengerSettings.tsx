@@ -662,17 +662,17 @@ export default function MessengerSettings({
         {groupPolicy === 'allowlist' && (
           <div>
             <label className="block text-sm font-medium text-forge-muted mb-2">
-              허용 Space (한 줄에 하나씩)
+              Space 허용 발신자 (한 줄에 하나씩)
             </label>
             <textarea
               value={groupAllowListInput}
               onChange={(e) => setGroupAllowListInput(e.target.value)}
-              placeholder="spaces/AAAA...&#10;spaces/BBBB..."
+              placeholder="user@company.com&#10;users/123456789"
               disabled={saving}
               rows={3}
               className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50 resize-none"
             />
-            <p className="text-xs text-forge-muted mt-1">Google Chat Space ID</p>
+            <p className="text-xs text-forge-muted mt-1">이메일 또는 Google Chat 사용자 ID (Space 내에서 메시지를 허용할 발신자)</p>
           </div>
         )}
 
@@ -888,17 +888,17 @@ export default function MessengerSettings({
         {groupPolicy === 'allowlist' && (
           <div>
             <label className="block text-sm font-medium text-forge-muted mb-2">
-              허용 채널 (한 줄에 하나씩)
+              채널 허용 발신자 (한 줄에 하나씩)
             </label>
             <textarea
               value={groupAllowListInput}
               onChange={(e) => setGroupAllowListInput(e.target.value)}
-              placeholder="channel-name&#10;another-channel"
+              placeholder="username1&#10;username2"
               disabled={saving}
               rows={3}
               className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50 resize-none"
             />
-            <p className="text-xs text-forge-muted mt-1">Mattermost 채널 이름</p>
+            <p className="text-xs text-forge-muted mt-1">Mattermost 사용자명 (채널에서 메시지를 허용할 발신자)</p>
           </div>
         )}
 
@@ -960,28 +960,41 @@ export default function MessengerSettings({
   };
 
   // 그룹 허용 목록 플레이스홀더
+  // 주의: Slack은 "채널 ID", 나머지는 "그룹 내 허용 발신자(사용자 ID)"
   const getGroupAllowListPlaceholder = (messengerId: Messenger) => {
     switch (messengerId) {
-      case 'telegram': return '-1001234567890\n그룹ID';
-      case 'discord': return 'guild:123456789\nguild:987654321';
-      case 'whatsapp': return '그룹JID@g.us';
+      // 발신자(사용자) 허용 목록
+      case 'telegram': return '123456789\nusername';
+      case 'discord': return 'user:123456789012345678\nuser:987654321098765432';
+      case 'whatsapp': return '+821012345678\n+821087654321';
+      case 'googlechat': return 'user@company.com\nusers/123456789';
+      case 'mattermost': return 'username1\nusername2';
+      // 채널 허용 목록 (Slack만 해당)
       case 'slack': return 'C1234567890\nC0987654321';
-      case 'mattermost': return 'channel-name\nanother-channel';
-      case 'googlechat': return 'spaces/AAAA...\nspaces/BBBB...';
-      default: return 'group_id_1\ngroup_id_2';
+      default: return 'user_id_1\nuser_id_2';
     }
   };
 
   const getGroupAllowListHint = (messengerId: Messenger) => {
     switch (messengerId) {
-      case 'telegram': return '그룹 ID (음수)';
-      case 'discord': return 'guild:서버ID 형식';
-      case 'whatsapp': return '그룹 JID';
+      // 발신자(사용자) 허용 목록
+      case 'telegram': return '숫자 ID 또는 유저네임 (@없이)';
+      case 'discord': return 'user:숫자ID 형식 (Discord 사용자 ID)';
+      case 'whatsapp': return '전화번호 (+국가코드 포함)';
+      case 'googlechat': return '이메일 또는 Google Chat 사용자 ID';
+      case 'mattermost': return 'Mattermost 사용자명';
+      // 채널 허용 목록 (Slack만 해당)
       case 'slack': return 'Slack 채널 ID (C로 시작)';
-      case 'mattermost': return 'Mattermost 채널 이름';
-      case 'googlechat': return 'Google Chat Space ID';
-      default: return '그룹/채널 ID';
+      default: return '사용자 ID';
     }
+  };
+
+  // 그룹 허용 목록 라벨 반환 (Slack만 "채널", 나머지는 "발신자")
+  const getGroupAllowListLabel = (messengerId: Messenger) => {
+    if (messengerId === 'slack') {
+      return '허용 채널 (한 줄에 하나씩)';
+    }
+    return '그룹 허용 발신자 (한 줄에 하나씩)';
   };
 
   // 기본 메신저 모달
@@ -1143,7 +1156,7 @@ export default function MessengerSettings({
         {groupPolicy === 'allowlist' && (
           <div>
             <label className="block text-sm font-medium text-forge-muted mb-2">
-              허용 그룹/채널 (한 줄에 하나씩)
+              {getGroupAllowListLabel(messenger.id)}
             </label>
             <textarea
               value={groupAllowListInput}

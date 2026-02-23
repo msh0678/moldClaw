@@ -863,6 +863,11 @@ pub async fn add_channel_to_config(
                 &["channels", "mattermost", "groupPolicy"],
                 json!(group_policy),
             );
+            set_nested_value(
+                &mut config,
+                &["channels", "mattermost", "requireMention"],
+                json!(require_mention),
+            );
         }
         _ => {}
     }
@@ -2064,6 +2069,7 @@ pub async fn update_messenger_config(
             if !group_allow_from.is_empty() {
                 set_nested_value(&mut config, &["channels", "mattermost", "groupAllowFrom"], json!(group_allow_from));
             }
+            set_nested_value(&mut config, &["channels", "mattermost", "requireMention"], json!(require_mention));
         }
         _ => return Err(format!("지원하지 않는 채널: {}", channel)),
     }
