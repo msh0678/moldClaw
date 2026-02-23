@@ -1592,7 +1592,14 @@ pub async fn login_whatsapp() -> Result<String, String> {
     // 2. 채널 추가 (이미 있으면 무시)
     let _ = add_channel("whatsapp");
     
-    // 3. QR 로그인 실행
+    // 3. credentials 디렉토리 미리 생성 (없으면 QR 안 뜨는 버그 방지)
+    if let Some(creds_dir) = dirs::home_dir()
+        .map(|h| h.join(".openclaw").join("credentials").join("whatsapp").join("default"))
+    {
+        let _ = fs::create_dir_all(&creds_dir);
+    }
+    
+    // 4. QR 로그인 실행
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
