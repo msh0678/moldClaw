@@ -1,8 +1,7 @@
 // MessengerSettings - 메신저 설정 섹션
-// WhatsApp: QR 코드 모달
-// Slack: 2개 토큰 (botToken + appToken)
+// QA 강화: 연타 방지, 로딩 상태, 에러 핸들링, 모달 자동 닫기
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { FullConfig, SettingsMode, Messenger } from '../../types/config';
@@ -11,7 +10,7 @@ import { ALL_MESSENGERS } from '../../data/messengers';
 interface MessengerSettingsProps {
   config: FullConfig;
   updateConfig: (updates: Partial<FullConfig>) => void;
-  commitConfig: (newConfig: FullConfig) => void;  // 저장 성공 시 호출
+  commitConfig: (newConfig: FullConfig) => void;
   mode: SettingsMode;
   openModal: (title: string, component: React.ReactNode) => void;
   closeModal: () => void;
@@ -23,45 +22,71 @@ export default function MessengerSettings({
   commitConfig,
   mode: _mode,
   openModal,
-  closeModal: _closeModal,
+  closeModal,
 }: MessengerSettingsProps) {
   const [disconnectTarget, setDisconnectTarget] = useState<typeof ALL_MESSENGERS[0] | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  
+  // 전역 작업 중 플래그 (연결/해제 중 다른 작업 방지)
+  const isWorkingRef = useRef(false);
 
   const isConfigured = (messengerId: Messenger) => config.messenger.type === messengerId;
 
   // WhatsApp 전용 모달
-  // OpenClaw WhatsApp QR은 터미널 창에서 ASCII로 표시됨
   const WhatsAppModal = () => {
     const [status, setStatus] = useState<'init' | 'waiting' | 'connected' | 'error'>('init');
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const abortRef = useRef(false);
 
     const startConnection = async () => {
+      if (status === 'waiting') return; // 이미 진행 중
+      
       setStatus('waiting');
       setErrorMsg(null);
+      abortRef.current = false;
+      isWorkingRef.current = true;
+      
       try {
-        // 터미널 창에서 QR 코드 표시 (login_whatsapp)
         const result = await invoke<string>('login_whatsapp');
-        console.log('WhatsApp 결과:', result);
         
-        // 성공 시 연결 완료
+        // 모달이 닫혔으면 무시
+        if (abortRef.current) return;
+        
+        console.log('WhatsApp 결과:', result);
         setStatus('connected');
         
-        // 메신저 설정 업데이트 + 변경 트래킹
         const newConfig = {
           ...config,
           messenger: {
             ...config.messenger,
             type: 'whatsapp' as Messenger,
-            token: '', // WhatsApp은 토큰 없음
+            token: '',
             dmPolicy: 'pairing' as const,
           }
         };
         commitConfig(newConfig);
+        
+        // 1.5초 후 모달 자동 닫기
+        setTimeout(() => {
+          if (!abortRef.current) {
+            closeModal();
+          }
+        }, 1500);
+        
       } catch (err) {
+        if (abortRef.current) return;
         console.error('WhatsApp QR 실패:', err);
         setErrorMsg(String(err));
         setStatus('error');
+      } finally {
+        isWorkingRef.current = false;
       }
+    };
+
+    const handleCancel = () => {
+      abortRef.current = true;
+      isWorkingRef.current = false;
+      closeModal();
     };
 
     return (
@@ -101,9 +126,14 @@ export default function MessengerSettings({
               터미널 창이 열렸습니다!
             </p>
             <p className="text-xs text-forge-muted mt-2">
-              터미널에서 QR 코드를 휴대폰으로 스캔하세요.<br />
-              완료되면 자동으로 연결됩니다.
+              터미널에서 QR 코드를 휴대폰으로 스캔하세요.
             </p>
+            <button
+              onClick={handleCancel}
+              className="mt-4 px-4 py-2 rounded-lg bg-[#252836] text-forge-muted hover:text-forge-text hover:bg-[#2d303f] transition-colors text-sm"
+            >
+              취소
+            </button>
           </div>
         )}
 
@@ -113,6 +143,7 @@ export default function MessengerSettings({
               <span className="text-2xl">✓</span>
             </div>
             <p className="text-forge-success font-medium">WhatsApp 연결 완료!</p>
+            <p className="text-xs text-forge-muted mt-2">잠시 후 자동으로 닫힙니다...</p>
           </div>
         )}
 
@@ -139,15 +170,22 @@ export default function MessengerSettings({
     const [botToken, setBotToken] = useState('');
     const [appToken, setAppToken] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleSlackConnect = async () => {
+      if (saving) return; // 연타 방지
       if (!botToken || !appToken) {
-        alert('Bot Token과 App Token 모두 필요합니다.');
+        setError('Bot Token과 App Token 모두 필요합니다.');
         return;
       }
 
+      setSaving(true);
+      setError(null);
+      isWorkingRef.current = true;
+
       try {
-        // Slack 설정 저장
+        // 두 invoke를 동시에 실행하지 않고 순차적으로, 하나라도 실패하면 중단
         await invoke('update_messenger_config', {
           channel: 'slack',
           token: botToken,
@@ -157,10 +195,8 @@ export default function MessengerSettings({
           requireMention: true,
         });
         
-        // App Token도 별도 저장
         await invoke('set_slack_app_token', { appToken: appToken });
         
-        // 변경 트래킹용 commitConfig
         const newConfig = {
           ...config,
           messenger: {
@@ -171,9 +207,14 @@ export default function MessengerSettings({
           }
         };
         commitConfig(newConfig);
+        closeModal(); // 성공 시 모달 닫기
+        
       } catch (err) {
         console.error('Slack 연결 실패:', err);
-        alert(`Slack 연결 실패: ${err}`);
+        setError(String(err));
+      } finally {
+        setSaving(false);
+        isWorkingRef.current = false;
       }
     };
 
@@ -200,7 +241,6 @@ export default function MessengerSettings({
           </li>
         </ol>
 
-        {/* Bot Token */}
         <div>
           <label className="block text-sm font-medium text-forge-muted mb-2">
             Bot Token (xoxb-)
@@ -210,14 +250,11 @@ export default function MessengerSettings({
             value={botToken}
             onChange={(e) => setBotToken(e.target.value)}
             placeholder="xoxb-..."
-            className="
-              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm font-mono
-            "
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50"
           />
         </div>
 
-        {/* App Token */}
         <div>
           <label className="block text-sm font-medium text-forge-muted mb-2">
             App Token (xapp-)
@@ -227,14 +264,11 @@ export default function MessengerSettings({
             value={appToken}
             onChange={(e) => setAppToken(e.target.value)}
             placeholder="xapp-..."
-            className="
-              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm font-mono
-            "
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50"
           />
         </div>
 
-        {/* DM 정책 */}
         <div>
           <label className="block text-sm font-medium text-forge-muted mb-2">
             DM 접근 정책
@@ -242,10 +276,8 @@ export default function MessengerSettings({
           <select
             value={dmPolicy}
             onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
-            className="
-              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm
-            "
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
           >
             <option value="pairing">페어링 (코드 승인 필요)</option>
             <option value="allowlist">허용 목록만</option>
@@ -253,33 +285,41 @@ export default function MessengerSettings({
           </select>
         </div>
 
+        {error && (
+          <p className="text-sm text-forge-error bg-forge-error/10 p-3 rounded-lg">{error}</p>
+        )}
+
         <button
           onClick={handleSlackConnect}
-          disabled={!botToken || !appToken}
-          className="
-            w-full py-3 rounded-xl btn-primary mt-4
-            disabled:opacity-50 disabled:cursor-not-allowed
-          "
+          disabled={!botToken || !appToken || saving}
+          className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          연결
+          {saving ? (
+            <>
+              <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+              연결 중...
+            </>
+          ) : (
+            '연결'
+          )}
         </button>
       </div>
     );
   };
 
-  // Google Chat 전용 모달 (Service Account 필요)
+  // Google Chat 전용 모달
   const GoogleChatModal = () => {
     const [serviceAccountPath, setServiceAccountPath] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleSelectFile = async () => {
+      if (saving) return;
       try {
         const selected = await open({
           multiple: false,
-          filters: [{
-            name: 'JSON',
-            extensions: ['json']
-          }],
+          filters: [{ name: 'JSON', extensions: ['json'] }],
           title: 'Service Account JSON 파일 선택',
         });
         
@@ -292,16 +332,19 @@ export default function MessengerSettings({
     };
 
     const handleGoogleChatConnect = async () => {
+      if (saving) return;
       if (!serviceAccountPath) {
-        alert('Service Account JSON 파일을 선택해주세요.');
+        setError('Service Account JSON 파일을 선택해주세요.');
         return;
       }
 
+      setSaving(true);
+      setError(null);
+      isWorkingRef.current = true;
+
       try {
-        // Service Account 파일 경로 저장
         await invoke('set_googlechat_service_account', { filePath: serviceAccountPath });
         
-        // 메신저 설정 저장
         await invoke('update_messenger_config', {
           channel: 'googlechat',
           token: '',
@@ -311,7 +354,6 @@ export default function MessengerSettings({
           requireMention: true,
         });
         
-        // 변경 트래킹
         const newConfig = {
           ...config,
           messenger: {
@@ -321,9 +363,14 @@ export default function MessengerSettings({
           }
         };
         commitConfig(newConfig);
+        closeModal();
+        
       } catch (err) {
         console.error('Google Chat 연결 실패:', err);
-        alert(`Google Chat 연결 실패: ${err}`);
+        setError(String(err));
+      } finally {
+        setSaving(false);
+        isWorkingRef.current = false;
       }
     };
 
@@ -350,7 +397,6 @@ export default function MessengerSettings({
           </li>
         </ol>
 
-        {/* Service Account 파일 선택 */}
         <div>
           <label className="block text-sm font-medium text-forge-muted mb-2">
             Service Account JSON 파일
@@ -361,24 +407,18 @@ export default function MessengerSettings({
               value={serviceAccountPath}
               readOnly
               placeholder="파일을 선택하세요..."
-              className="
-                flex-1 px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-                focus:outline-none text-sm font-mono text-forge-muted cursor-default
-              "
+              className="flex-1 px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none text-sm font-mono text-forge-muted cursor-default"
             />
             <button
               onClick={handleSelectFile}
-              className="
-                px-4 py-3 bg-[#252836] border-2 border-[#2a2d3e] rounded-xl
-                hover:bg-[#2d303f] transition-colors text-sm font-medium
-              "
+              disabled={saving}
+              className="px-4 py-3 bg-[#252836] border-2 border-[#2a2d3e] rounded-xl hover:bg-[#2d303f] transition-colors text-sm font-medium disabled:opacity-50"
             >
               📁 선택
             </button>
           </div>
         </div>
 
-        {/* DM 정책 */}
         <div>
           <label className="block text-sm font-medium text-forge-muted mb-2">
             DM 접근 정책
@@ -386,10 +426,8 @@ export default function MessengerSettings({
           <select
             value={dmPolicy}
             onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
-            className="
-              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm
-            "
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
           >
             <option value="pairing">페어링 (코드 승인 필요)</option>
             <option value="allowlist">허용 목록만</option>
@@ -397,37 +435,50 @@ export default function MessengerSettings({
           </select>
         </div>
 
+        {error && (
+          <p className="text-sm text-forge-error bg-forge-error/10 p-3 rounded-lg">{error}</p>
+        )}
+
         <button
           onClick={handleGoogleChatConnect}
-          disabled={!serviceAccountPath}
-          className="
-            w-full py-3 rounded-xl btn-primary mt-4
-            disabled:opacity-50 disabled:cursor-not-allowed
-          "
+          disabled={!serviceAccountPath || saving}
+          className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          연결
+          {saving ? (
+            <>
+              <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+              연결 중...
+            </>
+          ) : (
+            '연결'
+          )}
         </button>
       </div>
     );
   };
 
-  // Mattermost 전용 모달 (URL + Token 필요)
+  // Mattermost 전용 모달
   const MattermostModal = () => {
     const [botToken, setBotToken] = useState('');
     const [serverUrl, setServerUrl] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleMattermostConnect = async () => {
+      if (saving) return;
       if (!botToken || !serverUrl) {
-        alert('Bot Token과 서버 URL 모두 필요합니다.');
+        setError('Bot Token과 서버 URL 모두 필요합니다.');
         return;
       }
 
+      setSaving(true);
+      setError(null);
+      isWorkingRef.current = true;
+
       try {
-        // Mattermost URL 저장
         await invoke('set_mattermost_url', { url: serverUrl });
         
-        // 메신저 설정 저장
         await invoke('update_messenger_config', {
           channel: 'mattermost',
           token: botToken,
@@ -437,7 +488,6 @@ export default function MessengerSettings({
           requireMention: true,
         });
         
-        // 변경 트래킹
         const newConfig = {
           ...config,
           messenger: {
@@ -448,9 +498,14 @@ export default function MessengerSettings({
           }
         };
         commitConfig(newConfig);
+        closeModal();
+        
       } catch (err) {
         console.error('Mattermost 연결 실패:', err);
-        alert(`Mattermost 연결 실패: ${err}`);
+        setError(String(err));
+      } finally {
+        setSaving(false);
+        isWorkingRef.current = false;
       }
     };
 
@@ -475,7 +530,6 @@ export default function MessengerSettings({
           </li>
         </ol>
 
-        {/* 서버 URL */}
         <div>
           <label className="block text-sm font-medium text-forge-muted mb-2">
             Mattermost 서버 URL
@@ -485,14 +539,11 @@ export default function MessengerSettings({
             value={serverUrl}
             onChange={(e) => setServerUrl(e.target.value)}
             placeholder="https://mattermost.example.com"
-            className="
-              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm font-mono
-            "
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50"
           />
         </div>
 
-        {/* Bot Token */}
         <div>
           <label className="block text-sm font-medium text-forge-muted mb-2">
             Bot Token
@@ -502,14 +553,11 @@ export default function MessengerSettings({
             value={botToken}
             onChange={(e) => setBotToken(e.target.value)}
             placeholder="..."
-            className="
-              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm font-mono
-            "
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50"
           />
         </div>
 
-        {/* DM 정책 */}
         <div>
           <label className="block text-sm font-medium text-forge-muted mb-2">
             DM 접근 정책
@@ -517,10 +565,8 @@ export default function MessengerSettings({
           <select
             value={dmPolicy}
             onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
-            className="
-              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm
-            "
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
           >
             <option value="pairing">페어링 (코드 승인 필요)</option>
             <option value="allowlist">허용 목록만</option>
@@ -528,15 +574,23 @@ export default function MessengerSettings({
           </select>
         </div>
 
+        {error && (
+          <p className="text-sm text-forge-error bg-forge-error/10 p-3 rounded-lg">{error}</p>
+        )}
+
         <button
           onClick={handleMattermostConnect}
-          disabled={!botToken || !serverUrl}
-          className="
-            w-full py-3 rounded-xl btn-primary mt-4
-            disabled:opacity-50 disabled:cursor-not-allowed
-          "
+          disabled={!botToken || !serverUrl || saving}
+          className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          연결
+          {saving ? (
+            <>
+              <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+              연결 중...
+            </>
+          ) : (
+            '연결'
+          )}
         </button>
       </div>
     );
@@ -546,8 +600,20 @@ export default function MessengerSettings({
   const DefaultMessengerModal = ({ messenger }: { messenger: typeof ALL_MESSENGERS[0] }) => {
     const [token, setToken] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleConnect = async () => {
+      if (saving) return;
+      if (messenger.needsToken && !token) {
+        setError('토큰을 입력해주세요.');
+        return;
+      }
+
+      setSaving(true);
+      setError(null);
+      isWorkingRef.current = true;
+
       try {
         await invoke('update_messenger_config', {
           channel: messenger.id,
@@ -558,7 +624,6 @@ export default function MessengerSettings({
           requireMention: true,
         });
         
-        // 변경 트래킹용 commitConfig
         const newConfig = {
           ...config,
           messenger: {
@@ -569,9 +634,14 @@ export default function MessengerSettings({
           }
         };
         commitConfig(newConfig);
+        closeModal();
+        
       } catch (err) {
         console.error('메신저 연결 실패:', err);
-        alert(`연결 실패: ${err}`);
+        setError(String(err));
+      } finally {
+        setSaving(false);
+        isWorkingRef.current = false;
       }
     };
 
@@ -579,7 +649,6 @@ export default function MessengerSettings({
       <div className="space-y-4">
         <p className="text-sm text-forge-muted">{messenger.desc}</p>
         
-        {/* 가이드 단계 */}
         {messenger.guideSteps && (
           <ol className="space-y-2 text-sm text-forge-muted">
             {messenger.guideSteps.map((step, i) => (
@@ -591,7 +660,6 @@ export default function MessengerSettings({
           </ol>
         )}
         
-        {/* 토큰 입력 */}
         {messenger.needsToken && (
           <div>
             <label className="block text-sm font-medium text-forge-muted mb-2">
@@ -602,15 +670,12 @@ export default function MessengerSettings({
               value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder={messenger.tokenPlaceholder}
-              className="
-                w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-                focus:outline-none focus:border-forge-copper text-sm font-mono
-              "
+              disabled={saving}
+              className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50"
             />
           </div>
         )}
 
-        {/* DM 정책 */}
         <div>
           <label className="block text-sm font-medium text-forge-muted mb-2">
             DM 접근 정책
@@ -618,10 +683,8 @@ export default function MessengerSettings({
           <select
             value={dmPolicy}
             onChange={(e) => setDmPolicy(e.target.value as 'pairing' | 'allowlist' | 'open')}
-            className="
-              w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl
-              focus:outline-none focus:border-forge-copper text-sm
-            "
+            disabled={saving}
+            className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm disabled:opacity-50"
           >
             <option value="pairing">페어링 (코드 승인 필요)</option>
             <option value="allowlist">허용 목록만</option>
@@ -629,7 +692,6 @@ export default function MessengerSettings({
           </select>
         </div>
 
-        {/* 공식 문서 링크 */}
         {messenger.guideUrl && (
           <a
             href={messenger.guideUrl}
@@ -641,15 +703,23 @@ export default function MessengerSettings({
           </a>
         )}
 
+        {error && (
+          <p className="text-sm text-forge-error bg-forge-error/10 p-3 rounded-lg">{error}</p>
+        )}
+
         <button
           onClick={handleConnect}
-          disabled={messenger.needsToken && !token}
-          className="
-            w-full py-3 rounded-xl btn-primary mt-4
-            disabled:opacity-50 disabled:cursor-not-allowed
-          "
+          disabled={(messenger.needsToken && !token) || saving}
+          className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          연결
+          {saving ? (
+            <>
+              <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+              연결 중...
+            </>
+          ) : (
+            '연결'
+          )}
         </button>
       </div>
     );
@@ -658,7 +728,9 @@ export default function MessengerSettings({
   const handleConnect = (messenger: typeof ALL_MESSENGERS[0], e: React.MouseEvent) => {
     e.stopPropagation();
     
-    // 메신저별 전용 모달
+    // 작업 중이면 무시
+    if (isWorkingRef.current || isDisconnecting) return;
+    
     if (messenger.id === 'whatsapp') {
       openModal('WhatsApp 연결', <WhatsAppModal />);
     } else if (messenger.id === 'slack') {
@@ -674,14 +746,20 @@ export default function MessengerSettings({
 
   const handleDisconnect = (messenger: typeof ALL_MESSENGERS[0], e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // 작업 중이면 무시
+    if (isWorkingRef.current || isDisconnecting) return;
+    
     setDisconnectTarget(messenger);
   };
 
   const confirmDisconnect = async () => {
-    if (!disconnectTarget) return;
+    if (!disconnectTarget || isDisconnecting) return;
+    
+    setIsDisconnecting(true);
+    isWorkingRef.current = true;
     
     try {
-      // 채널 설정 제거 (빈 값 전달)
       await invoke('update_messenger_config', {
         channel: disconnectTarget.id,
         token: '',
@@ -691,7 +769,6 @@ export default function MessengerSettings({
         requireMention: true,
       });
       
-      // 변경 트래킹용 commitConfig
       const newConfig = {
         ...config,
         messenger: {
@@ -702,12 +779,20 @@ export default function MessengerSettings({
         }
       };
       commitConfig(newConfig);
-      
       setDisconnectTarget(null);
+      
     } catch (err) {
       console.error('연결 해제 실패:', err);
       alert(`연결 해제 실패: ${err}`);
+    } finally {
+      setIsDisconnecting(false);
+      isWorkingRef.current = false;
     }
+  };
+
+  const cancelDisconnect = () => {
+    if (isDisconnecting) return; // 해제 중에는 취소 불가
+    setDisconnectTarget(null);
   };
 
   return (
@@ -717,10 +802,12 @@ export default function MessengerSettings({
         <p className="text-forge-muted text-sm">AI와 대화할 메신저를 설정합니다</p>
       </div>
 
-      {/* 메신저 그리드 - 3줄 레이아웃 */}
+      {/* 메신저 그리드 */}
       <div className="grid grid-cols-3 gap-3">
         {ALL_MESSENGERS.map((messenger) => {
           const configured = isConfigured(messenger.id);
+          const isWorking = isWorkingRef.current || isDisconnecting;
+          
           return (
             <div
               key={messenger.id}
@@ -729,6 +816,7 @@ export default function MessengerSettings({
                 ${configured 
                   ? 'border-forge-success/40 hover:border-forge-success/60' 
                   : 'border-[#2a2d3e] hover:border-[#3a3f52]'}
+                ${isWorking ? 'opacity-60 pointer-events-none' : ''}
               `}
             >
               {messenger.recommended && (
@@ -750,22 +838,16 @@ export default function MessengerSettings({
               {configured ? (
                 <button
                   onClick={(e) => handleDisconnect(messenger, e)}
-                  className="
-                    w-full text-xs px-3 py-2 rounded-lg
-                    bg-forge-error/10 text-forge-error border border-forge-error/30
-                    hover:bg-forge-error/20 transition-colors
-                  "
+                  disabled={isWorking}
+                  className="w-full text-xs px-3 py-2 rounded-lg bg-forge-error/10 text-forge-error border border-forge-error/30 hover:bg-forge-error/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   연결 해제
                 </button>
               ) : (
                 <button
                   onClick={(e) => handleConnect(messenger, e)}
-                  className="
-                    w-full text-xs px-3 py-2 rounded-lg
-                    bg-white text-[#1a1c24] font-medium
-                    hover:bg-gray-100 transition-colors
-                  "
+                  disabled={isWorking}
+                  className="w-full text-xs px-3 py-2 rounded-lg bg-white text-[#1a1c24] font-medium hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   연결
                 </button>
@@ -779,8 +861,8 @@ export default function MessengerSettings({
       {disconnectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="absolute inset-0 bg-[#0a0b0f]/70 backdrop-blur-md"
-            onClick={() => setDisconnectTarget(null)}
+            className={`absolute inset-0 bg-[#0a0b0f]/70 backdrop-blur-md ${isDisconnecting ? '' : 'cursor-pointer'}`}
+            onClick={cancelDisconnect}
           />
           <div className="relative z-10 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-2xl p-6 max-w-sm shadow-2xl">
             <h3 className="text-lg font-bold text-forge-text mb-2">연결 해제 확인</h3>
@@ -791,16 +873,25 @@ export default function MessengerSettings({
             </p>
             <div className="flex gap-3">
               <button
-                onClick={() => setDisconnectTarget(null)}
-                className="flex-1 px-4 py-2 rounded-lg bg-[#252836] text-forge-text hover:bg-[#2d3142] transition-colors"
+                onClick={cancelDisconnect}
+                disabled={isDisconnecting}
+                className="flex-1 px-4 py-2 rounded-lg bg-[#252836] text-forge-text hover:bg-[#2d3142] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 취소
               </button>
               <button
                 onClick={confirmDisconnect}
-                className="flex-1 px-4 py-2 rounded-lg bg-forge-error text-white hover:bg-forge-error/80 transition-colors"
+                disabled={isDisconnecting}
+                className="flex-1 px-4 py-2 rounded-lg bg-forge-error text-white hover:bg-forge-error/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                해제
+                {isDisconnecting ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                    해제 중...
+                  </>
+                ) : (
+                  '해제'
+                )}
               </button>
             </div>
           </div>
