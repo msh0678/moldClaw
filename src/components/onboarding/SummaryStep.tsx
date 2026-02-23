@@ -61,7 +61,7 @@ export default function SummaryStep({
       await invoke('add_model_to_config', {
         provider: modelConfig.provider,
         model: modelConfig.model,
-        apiKey: modelConfig.apiKey,
+        api_key: modelConfig.apiKey,
       });
 
       // Step 3: 메신저 채널 설정 추가
@@ -69,11 +69,11 @@ export default function SummaryStep({
       setProgress(50);
       await invoke('add_channel_to_config', {
         channel: messengerConfig.type,
-        botToken: messengerConfig.token || '',
-        dmPolicy: messengerConfig.dmPolicy,
-        allowFrom: messengerConfig.allowFrom,
-        groupPolicy: messengerConfig.groupPolicy,
-        requireMention: messengerConfig.requireMention,
+        bot_token: messengerConfig.token || '',
+        dm_policy: messengerConfig.dmPolicy,
+        allow_from: messengerConfig.allowFrom,
+        group_policy: messengerConfig.groupPolicy,
+        require_mention: messengerConfig.requireMention,
       });
 
       // Step 4: 보안 설정 적용
