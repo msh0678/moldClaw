@@ -1930,6 +1930,7 @@ pub async fn update_messenger_config(
     dm_policy: &str,
     allow_from: &[String],
     group_policy: &str,
+    group_allow_from: &[String],
     require_mention: bool,
 ) -> Result<(), String> {
     // 토큰이 비어있으면 삭제(비활성화) 모드
@@ -1987,6 +1988,9 @@ pub async fn update_messenger_config(
                 set_nested_value(&mut config, &["channels", "telegram", "allowFrom"], json!(allow_from));
             }
             set_nested_value(&mut config, &["channels", "telegram", "groupPolicy"], json!(group_policy));
+            if !group_allow_from.is_empty() {
+                set_nested_value(&mut config, &["channels", "telegram", "groupAllowFrom"], json!(group_allow_from));
+            }
             set_nested_value(&mut config, &["channels", "telegram", "groups", "*", "requireMention"], json!(require_mention));
         }
         "discord" => {
@@ -1998,6 +2002,11 @@ pub async fn update_messenger_config(
                 set_nested_value(&mut config, &["channels", "discord", "dm", "allowFrom"], json!(allow_from));
             }
             set_nested_value(&mut config, &["channels", "discord", "groupPolicy"], json!(group_policy));
+            // Discord는 guilds 설정으로 그룹 허용 목록 관리 (groupAllowFrom은 guilds.*.users로 매핑)
+            // 간단한 구현: 전역 guilds.* 설정에 users 추가
+            if !group_allow_from.is_empty() {
+                set_nested_value(&mut config, &["channels", "discord", "guilds", "*", "users"], json!(group_allow_from));
+            }
         }
         "whatsapp" => {
             // WhatsApp은 QR 인증 - 토큰 대신 enabled만 설정
@@ -2008,6 +2017,9 @@ pub async fn update_messenger_config(
             }
             set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "groups", "*", "requireMention"], json!(require_mention));
             set_nested_value(&mut config, &["channels", "whatsapp", "groupPolicy"], json!(group_policy));
+            if !group_allow_from.is_empty() {
+                set_nested_value(&mut config, &["channels", "whatsapp", "accounts", "default", "groupAllowFrom"], json!(group_allow_from));
+            }
         }
         "slack" => {
             set_nested_value(&mut config, &["channels", "slack", "enabled"], json!(true));
@@ -2016,6 +2028,13 @@ pub async fn update_messenger_config(
             set_nested_value(&mut config, &["channels", "slack", "dm", "policy"], json!(dm_policy));
             if !allow_from.is_empty() {
                 set_nested_value(&mut config, &["channels", "slack", "dm", "allowFrom"], json!(allow_from));
+            }
+            // Slack은 channels 설정으로 채널 허용 목록 관리
+            if !group_allow_from.is_empty() {
+                // 각 채널 ID를 channels 설정에 추가
+                for channel_id in group_allow_from {
+                    set_nested_value(&mut config, &["channels", "slack", "channels", channel_id, "enabled"], json!(true));
+                }
             }
             set_nested_value(&mut config, &["channels", "slack", "requireMention"], json!(require_mention));
         }
@@ -2027,6 +2046,9 @@ pub async fn update_messenger_config(
                 set_nested_value(&mut config, &["channels", "googlechat", "dm", "allowFrom"], json!(allow_from));
             }
             set_nested_value(&mut config, &["channels", "googlechat", "groupPolicy"], json!(group_policy));
+            if !group_allow_from.is_empty() {
+                set_nested_value(&mut config, &["channels", "googlechat", "groupAllowFrom"], json!(group_allow_from));
+            }
             set_nested_value(&mut config, &["channels", "googlechat", "requireMention"], json!(require_mention));
         }
         "mattermost" => {
@@ -2037,6 +2059,9 @@ pub async fn update_messenger_config(
                 set_nested_value(&mut config, &["channels", "mattermost", "allowFrom"], json!(allow_from));
             }
             set_nested_value(&mut config, &["channels", "mattermost", "groupPolicy"], json!(group_policy));
+            if !group_allow_from.is_empty() {
+                set_nested_value(&mut config, &["channels", "mattermost", "groupAllowFrom"], json!(group_allow_from));
+            }
         }
         _ => return Err(format!("지원하지 않는 채널: {}", channel)),
     }

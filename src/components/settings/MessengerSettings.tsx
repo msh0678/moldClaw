@@ -212,6 +212,7 @@ export default function MessengerSettings({
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
     const [groupPolicy, setGroupPolicy] = useState<'open' | 'allowlist' | 'disabled'>('allowlist');
     const [allowListInput, setAllowListInput] = useState('');
+    const [groupAllowListInput, setGroupAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -222,7 +223,11 @@ export default function MessengerSettings({
         return;
       }
       if (dmPolicy === 'allowlist' && !allowListInput.trim()) {
-        setError('허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        setError('DM 허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        return;
+      }
+      if (groupPolicy === 'allowlist' && !groupAllowListInput.trim()) {
+        setError('그룹 허용 목록에 최소 1개의 채널을 입력해주세요.');
         return;
       }
 
@@ -232,6 +237,9 @@ export default function MessengerSettings({
 
       try {
         const allowFrom = computeAllowFrom(dmPolicy, allowListInput);
+        const groupAllowFrom = groupPolicy === 'allowlist' 
+          ? groupAllowListInput.split('\n').map(s => s.trim()).filter(Boolean)
+          : [];
         
         // 두 invoke를 동시에 실행하지 않고 순차적으로, 하나라도 실패하면 중단
         await invoke('update_messenger_config', {
@@ -240,6 +248,7 @@ export default function MessengerSettings({
           dmPolicy: dmPolicy,
           allowFrom: allowFrom,
           groupPolicy: groupPolicy,
+          groupAllowFrom: groupAllowFrom,
           requireMention: true,
         });
         
@@ -376,6 +385,23 @@ export default function MessengerSettings({
           </select>
         </div>
 
+        {groupPolicy === 'allowlist' && (
+          <div>
+            <label className="block text-sm font-medium text-forge-muted mb-2">
+              허용 채널 (한 줄에 하나씩)
+            </label>
+            <textarea
+              value={groupAllowListInput}
+              onChange={(e) => setGroupAllowListInput(e.target.value)}
+              placeholder="C1234567890&#10;C0987654321"
+              disabled={saving}
+              rows={3}
+              className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50 resize-none"
+            />
+            <p className="text-xs text-forge-muted mt-1">Slack 채널 ID (C로 시작)</p>
+          </div>
+        )}
+
         {groupPolicy === 'open' && (
           <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
             <p className="text-forge-amber font-medium mb-1">⚠️ 그룹 보안 경고</p>
@@ -392,7 +418,7 @@ export default function MessengerSettings({
 
         <button
           onClick={handleSlackConnect}
-          disabled={!botToken || !appToken || saving || (dmPolicy === 'allowlist' && !allowListInput.trim())}
+          disabled={!botToken || !appToken || saving || (dmPolicy === 'allowlist' && !allowListInput.trim()) || (groupPolicy === 'allowlist' && !groupAllowListInput.trim())}
           className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {saving ? (
@@ -414,6 +440,7 @@ export default function MessengerSettings({
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
     const [groupPolicy, setGroupPolicy] = useState<'open' | 'allowlist' | 'disabled'>('allowlist');
     const [allowListInput, setAllowListInput] = useState('');
+    const [groupAllowListInput, setGroupAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -441,7 +468,11 @@ export default function MessengerSettings({
         return;
       }
       if (dmPolicy === 'allowlist' && !allowListInput.trim()) {
-        setError('허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        setError('DM 허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        return;
+      }
+      if (groupPolicy === 'allowlist' && !groupAllowListInput.trim()) {
+        setError('Space 허용 목록에 최소 1개를 입력해주세요.');
         return;
       }
 
@@ -451,6 +482,9 @@ export default function MessengerSettings({
 
       try {
         const allowFrom = computeAllowFrom(dmPolicy, allowListInput);
+        const groupAllowFrom = groupPolicy === 'allowlist' 
+          ? groupAllowListInput.split('\n').map(s => s.trim()).filter(Boolean)
+          : [];
         
         await invoke('set_googlechat_service_account', { filePath: serviceAccountPath });
         
@@ -460,6 +494,7 @@ export default function MessengerSettings({
           dmPolicy: dmPolicy,
           allowFrom: allowFrom,
           groupPolicy: groupPolicy,
+          groupAllowFrom: groupAllowFrom,
           requireMention: true,
         });
         
@@ -587,6 +622,23 @@ export default function MessengerSettings({
           </select>
         </div>
 
+        {groupPolicy === 'allowlist' && (
+          <div>
+            <label className="block text-sm font-medium text-forge-muted mb-2">
+              허용 Space (한 줄에 하나씩)
+            </label>
+            <textarea
+              value={groupAllowListInput}
+              onChange={(e) => setGroupAllowListInput(e.target.value)}
+              placeholder="spaces/AAAA...&#10;spaces/BBBB..."
+              disabled={saving}
+              rows={3}
+              className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50 resize-none"
+            />
+            <p className="text-xs text-forge-muted mt-1">Google Chat Space ID</p>
+          </div>
+        )}
+
         {groupPolicy === 'open' && (
           <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
             <p className="text-forge-amber font-medium mb-1">⚠️ Space 보안 경고</p>
@@ -603,7 +655,7 @@ export default function MessengerSettings({
 
         <button
           onClick={handleGoogleChatConnect}
-          disabled={!serviceAccountPath || saving || (dmPolicy === 'allowlist' && !allowListInput.trim())}
+          disabled={!serviceAccountPath || saving || (dmPolicy === 'allowlist' && !allowListInput.trim()) || (groupPolicy === 'allowlist' && !groupAllowListInput.trim())}
           className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {saving ? (
@@ -626,6 +678,7 @@ export default function MessengerSettings({
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
     const [groupPolicy, setGroupPolicy] = useState<'open' | 'allowlist' | 'disabled'>('allowlist');
     const [allowListInput, setAllowListInput] = useState('');
+    const [groupAllowListInput, setGroupAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -636,7 +689,11 @@ export default function MessengerSettings({
         return;
       }
       if (dmPolicy === 'allowlist' && !allowListInput.trim()) {
-        setError('허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        setError('DM 허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        return;
+      }
+      if (groupPolicy === 'allowlist' && !groupAllowListInput.trim()) {
+        setError('채널 허용 목록에 최소 1개를 입력해주세요.');
         return;
       }
 
@@ -646,6 +703,9 @@ export default function MessengerSettings({
 
       try {
         const allowFrom = computeAllowFrom(dmPolicy, allowListInput);
+        const groupAllowFrom = groupPolicy === 'allowlist' 
+          ? groupAllowListInput.split('\n').map(s => s.trim()).filter(Boolean)
+          : [];
         
         await invoke('set_mattermost_url', { url: serverUrl });
         
@@ -655,6 +715,7 @@ export default function MessengerSettings({
           dmPolicy: dmPolicy,
           allowFrom: allowFrom,
           groupPolicy: groupPolicy,
+          groupAllowFrom: groupAllowFrom,
           requireMention: true,
         });
         
@@ -787,6 +848,23 @@ export default function MessengerSettings({
           </select>
         </div>
 
+        {groupPolicy === 'allowlist' && (
+          <div>
+            <label className="block text-sm font-medium text-forge-muted mb-2">
+              허용 채널 (한 줄에 하나씩)
+            </label>
+            <textarea
+              value={groupAllowListInput}
+              onChange={(e) => setGroupAllowListInput(e.target.value)}
+              placeholder="channel-name&#10;another-channel"
+              disabled={saving}
+              rows={3}
+              className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50 resize-none"
+            />
+            <p className="text-xs text-forge-muted mt-1">Mattermost 채널 이름</p>
+          </div>
+        )}
+
         {groupPolicy === 'open' && (
           <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
             <p className="text-forge-amber font-medium mb-1">⚠️ 채널 보안 경고</p>
@@ -803,7 +881,7 @@ export default function MessengerSettings({
 
         <button
           onClick={handleMattermostConnect}
-          disabled={!botToken || !serverUrl || saving || (dmPolicy === 'allowlist' && !allowListInput.trim())}
+          disabled={!botToken || !serverUrl || saving || (dmPolicy === 'allowlist' && !allowListInput.trim()) || (groupPolicy === 'allowlist' && !groupAllowListInput.trim())}
           className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {saving ? (
@@ -844,12 +922,38 @@ export default function MessengerSettings({
     }
   };
 
+  // 그룹 허용 목록 플레이스홀더
+  const getGroupAllowListPlaceholder = (messengerId: Messenger) => {
+    switch (messengerId) {
+      case 'telegram': return '-1001234567890\n그룹ID';
+      case 'discord': return 'guild:123456789\nguild:987654321';
+      case 'whatsapp': return '그룹JID@g.us';
+      case 'slack': return 'C1234567890\nC0987654321';
+      case 'mattermost': return 'channel-name\nanother-channel';
+      case 'googlechat': return 'spaces/AAAA...\nspaces/BBBB...';
+      default: return 'group_id_1\ngroup_id_2';
+    }
+  };
+
+  const getGroupAllowListHint = (messengerId: Messenger) => {
+    switch (messengerId) {
+      case 'telegram': return '그룹 ID (음수)';
+      case 'discord': return 'guild:서버ID 형식';
+      case 'whatsapp': return '그룹 JID';
+      case 'slack': return 'Slack 채널 ID (C로 시작)';
+      case 'mattermost': return 'Mattermost 채널 이름';
+      case 'googlechat': return 'Google Chat Space ID';
+      default: return '그룹/채널 ID';
+    }
+  };
+
   // 기본 메신저 모달
   const DefaultMessengerModal = ({ messenger }: { messenger: typeof ALL_MESSENGERS[0] }) => {
     const [token, setToken] = useState('');
     const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
     const [groupPolicy, setGroupPolicy] = useState<'open' | 'allowlist' | 'disabled'>('allowlist');
     const [allowListInput, setAllowListInput] = useState('');
+    const [groupAllowListInput, setGroupAllowListInput] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -860,7 +964,11 @@ export default function MessengerSettings({
         return;
       }
       if (dmPolicy === 'allowlist' && !allowListInput.trim()) {
-        setError('허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        setError('DM 허용 목록에 최소 1명의 사용자를 입력해주세요.');
+        return;
+      }
+      if (groupPolicy === 'allowlist' && !groupAllowListInput.trim()) {
+        setError('그룹 허용 목록에 최소 1개를 입력해주세요.');
         return;
       }
 
@@ -870,6 +978,9 @@ export default function MessengerSettings({
 
       try {
         const allowFrom = computeAllowFrom(dmPolicy, allowListInput);
+        const groupAllowFrom = groupPolicy === 'allowlist' 
+          ? groupAllowListInput.split('\n').map(s => s.trim()).filter(Boolean)
+          : [];
         
         await invoke('update_messenger_config', {
           channel: messenger.id,
@@ -877,6 +988,7 @@ export default function MessengerSettings({
           dmPolicy: dmPolicy,
           allowFrom: allowFrom,
           groupPolicy: groupPolicy,
+          groupAllowFrom: groupAllowFrom,
           requireMention: true,
         });
         
@@ -991,6 +1103,23 @@ export default function MessengerSettings({
           </select>
         </div>
 
+        {groupPolicy === 'allowlist' && (
+          <div>
+            <label className="block text-sm font-medium text-forge-muted mb-2">
+              허용 그룹/채널 (한 줄에 하나씩)
+            </label>
+            <textarea
+              value={groupAllowListInput}
+              onChange={(e) => setGroupAllowListInput(e.target.value)}
+              placeholder={getGroupAllowListPlaceholder(messenger.id)}
+              disabled={saving}
+              rows={3}
+              className="w-full px-4 py-3 bg-forge-night border-2 border-forge-surface rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono text-forge-text disabled:opacity-50 resize-none"
+            />
+            <p className="text-xs text-forge-muted mt-1">{getGroupAllowListHint(messenger.id)}</p>
+          </div>
+        )}
+
         {groupPolicy === 'open' && (
           <div className="text-xs bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
             <p className="text-forge-amber font-medium mb-1">⚠️ 그룹 보안 경고</p>
@@ -1018,7 +1147,7 @@ export default function MessengerSettings({
 
         <button
           onClick={handleConnect}
-          disabled={(messenger.needsToken && !token) || saving || (dmPolicy === 'allowlist' && !allowListInput.trim())}
+          disabled={(messenger.needsToken && !token) || saving || (dmPolicy === 'allowlist' && !allowListInput.trim()) || (groupPolicy === 'allowlist' && !groupAllowListInput.trim())}
           className="w-full py-3 rounded-xl btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {saving ? (

@@ -765,9 +765,10 @@ async fn update_messenger_config(
     dm_policy: String,
     allow_from: Vec<String>,
     group_policy: String,
+    group_allow_from: Vec<String>,
     require_mention: bool,
 ) -> Result<(), String> {
-    openclaw::update_messenger_config(&channel, &token, &dm_policy, &allow_from, &group_policy, require_mention).await
+    openclaw::update_messenger_config(&channel, &token, &dm_policy, &allow_from, &group_policy, &group_allow_from, require_mention).await
 }
 
 #[tauri::command]
