@@ -1923,11 +1923,16 @@ pub async fn update_messenger_config(
     group_policy: &str,
     require_mention: bool,
 ) -> Result<(), String> {
-    // 플러그인 활성화 (Discord 제외 - 기본 활성화)
-    enable_channel_plugin(channel)?;
+    // 토큰이 비어있으면 삭제 모드 - 플러그인 활성화/채널 추가 스킵
+    let is_delete_mode = token.is_empty();
     
-    // 채널 추가 (이미 있으면 무시됨)
-    let _ = add_channel(channel); // 이미 있으면 에러 발생할 수 있어서 무시
+    if !is_delete_mode {
+        // 플러그인 활성화 (Discord/WhatsApp 제외)
+        let _ = enable_channel_plugin(channel); // 실패해도 계속 진행
+        
+        // 채널 추가 (이미 있으면 무시됨)
+        let _ = add_channel(channel);
+    }
     
     let mut config = read_existing_config();
     
