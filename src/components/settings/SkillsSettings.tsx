@@ -242,7 +242,6 @@ export default function SkillsSettings({
 }: SkillsSettingsProps) {
   const [disconnectTarget, setDisconnectTarget] = useState<Skill | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
-  const [confirmChecked, setConfirmChecked] = useState(false);
   const isWorkingRef = useRef(false);
 
   const isConfigured = (skill: Skill) => {
@@ -402,7 +401,6 @@ export default function SkillsSettings({
   const handleDisconnect = (skill: Skill, e: React.MouseEvent) => {
     e.stopPropagation();
     if (isWorkingRef.current || isDisconnecting) return;
-    setConfirmChecked(false);
     setDisconnectTarget(skill);
   };
 
@@ -524,24 +522,11 @@ export default function SkillsSettings({
           />
           <div className="relative z-10 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-2xl p-6 max-w-sm shadow-2xl">
             <h3 className="text-lg font-bold text-forge-text mb-2">연결 해제 확인</h3>
-            <p className="text-sm text-forge-muted mb-3">
+            <p className="text-sm text-forge-muted mb-4">
               <span className="text-forge-copper">{disconnectTarget.name}</span> 연동을 해제하시겠습니까?
               <br />
               저장된 API 키가 삭제됩니다.
             </p>
-            
-            {/* 안전장치: 체크박스 확인 */}
-            <label className="flex items-center gap-2 p-3 bg-forge-error/10 border border-forge-error/30 rounded-lg mb-4 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={confirmChecked}
-                onChange={(e) => setConfirmChecked(e.target.checked)}
-                disabled={isDisconnecting}
-                className="w-4 h-4 rounded border-forge-error/50 text-forge-error focus:ring-forge-error"
-              />
-              <span className="text-sm text-forge-error">해제하겠습니다</span>
-            </label>
-            
             <div className="flex gap-3">
               <button
                 onClick={cancelDisconnect}
@@ -552,7 +537,7 @@ export default function SkillsSettings({
               </button>
               <button
                 onClick={confirmDisconnect}
-                disabled={isDisconnecting || !confirmChecked}
+                disabled={isDisconnecting}
                 className="flex-1 px-4 py-2 rounded-lg bg-forge-error text-white hover:bg-forge-error/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isDisconnecting ? (
