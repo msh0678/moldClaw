@@ -82,7 +82,13 @@ export default function ModelStep({ initialConfig, onComplete }: ModelStepProps)
                   }
                 `}
               >
-                <div className="text-2xl mb-2">{p.icon}</div>
+                <div className="h-8 w-8 mx-auto mb-2 flex items-center justify-center">
+                  {p.logo ? (
+                    <img src={p.logo} alt={p.name} className="h-6 w-6 object-contain" />
+                  ) : (
+                    <span className="text-2xl">{p.icon}</span>
+                  )}
+                </div>
                 <div className="text-sm font-medium text-forge-text">{p.name}</div>
               </button>
             ))}
