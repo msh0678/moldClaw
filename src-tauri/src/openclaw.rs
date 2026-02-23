@@ -53,12 +53,14 @@ pub fn get_openclaw_version_sync() -> Option<String> {
     run_openclaw_command(&["--version"]).ok()
 }
 
-/// 채널 플러그인 활성화 (Discord 제외 - 기본 활성화)
-/// Telegram, WhatsApp, Signal 등은 먼저 plugins enable 필요
+/// 채널 플러그인 활성화
+/// Discord: 기본 활성화 → 스킵
+/// WhatsApp: multi-account 구조라 `plugins enable`이 잘못된 필드 설정 → 스킵
+///           (accounts.default.enabled만 직접 설정)
 pub fn enable_channel_plugin(channel: &str) -> Result<(), String> {
-    // Discord만 기본 활성화되어 있어 skip
-    // WhatsApp은 plugins enable 필요 (multi-account 구조지만 플러그인 자체는 활성화 필요)
-    if channel == "discord" {
+    // Discord: 기본 활성화
+    // WhatsApp: channels.whatsapp.enabled 필드가 스키마에 없음 (accounts.*.enabled만 존재)
+    if channel == "discord" || channel == "whatsapp" {
         return Ok(());
     }
     
