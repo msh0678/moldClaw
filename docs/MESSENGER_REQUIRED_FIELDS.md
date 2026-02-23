@@ -1,7 +1,8 @@
 # moldClaw 메신저 필수 설정 가이드
 
-> OpenClaw 공식 스키마 + 온보딩 워크플로우 기반 분석
+> OpenClaw 공식 스키마 + moldClaw UI 기반 분석
 > 작성: 2026-02-23
+> **최종 업데이트: 2026-02-24 (groupAllowFrom 추가, 보안 기본값 변경)**
 
 ## 공통 필수 개념
 
@@ -20,9 +21,11 @@ type DmPolicy = "pairing" | "allowlist" | "open" | "disabled";
 type GroupPolicy = "open" | "disabled" | "allowlist";
 // ⚠️ "pairing"은 DmPolicy 전용! GroupPolicy에서 사용 불가
 ```
-- `open`: 모든 그룹 메시지 허용 (멘션 게이팅만 적용)
+- `allowlist` (**moldClaw 기본값 ✅**): 등록된 그룹/채널만 허용
+- `open`: 모든 그룹 메시지 허용 (멘션 게이팅만 적용) — ⚠️ 비용 위험
 - `disabled`: 그룹 메시지 완전 차단
-- `allowlist`: 등록된 그룹/채널만 허용
+
+> ⚠️ **보안 변경 (2026-02-23)**: moldClaw v0.5.3+에서 groupPolicy 기본값이 `"open"` → `"allowlist"`로 변경됨
 
 ### allowFrom 스키마 규칙
 ```typescript
@@ -30,6 +33,20 @@ type GroupPolicy = "open" | "disabled" | "allowlist";
 if (dmPolicy === "open") {
   allowFrom = ["*"];  // 필수!
 }
+```
+
+### groupAllowFrom 스키마 규칙 (신규)
+```typescript
+// groupPolicy="allowlist" 일 때만 사용
+type GroupAllowFrom = Array<string | number>;
+
+// 메신저별 형식:
+// - Telegram: 그룹 ID (음수, 예: -1001234567890)
+// - Discord: guild:서버ID (예: guild:123456789) 또는 서버 ID
+// - WhatsApp: 그룹 JID (예: 123456789@g.us)
+// - Slack: 채널 ID (예: C1234567890)
+// - Google Chat: Space ID (예: spaces/AAAA...)
+// - Mattermost: 채널 이름 (예: general)
 ```
 
 ---
@@ -54,8 +71,8 @@ BotFather에서 봇 생성 → 토큰 입력
 ### 그룹 정책 설정
 | 필드 | 타입 | 설명 | 기본값 |
 |------|------|------|--------|
-| `groupPolicy` | GroupPolicy | 그룹 메시지 정책 | "open" |
-| `groupAllowFrom` | `(string\|number)[]` | 허용 그룹 발신자 목록 | [] |
+| `groupPolicy` | GroupPolicy | 그룹 메시지 정책 | "allowlist" |
+| `groupAllowFrom` | `(string\|number)[]` | 허용 그룹 ID 목록 | [] |
 | `requireMention` | boolean | 멘션 필수 여부 | (그룹별 설정) |
 
 ### Config 경로
@@ -65,8 +82,16 @@ channels:
     botToken: "123456:ABC-DEF..."
     dmPolicy: "pairing"
     allowFrom: []
-    groupPolicy: "open"
+    groupPolicy: "allowlist"
+    groupAllowFrom: [-1001234567890]
 ```
+
+### groupAllowFrom 입력 예시
+```
+-1001234567890
+-1009876543210
+```
+> 그룹 ID는 음수. @RawDataBot에게 그룹에서 메시지 보내면 ID 확인 가능.
 
 ---
 
@@ -91,8 +116,9 @@ Discord Developer Portal에서 Bot 생성 → 토큰 입력
 ### 그룹 정책 설정
 | 필드 | 타입 | 설명 | 기본값 |
 |------|------|------|--------|
-| `groupPolicy` | GroupPolicy | 길드 채널 정책 | "open" |
+| `groupPolicy` | GroupPolicy | 길드 채널 정책 | "allowlist" |
 | `guilds` | Record | 길드별 설정 | {} |
+| `guilds.*.users` | `string[]` | 길드 허용 사용자 (groupAllowFrom 매핑) | [] |
 
 ### Config 경로
 ```yaml
@@ -103,8 +129,19 @@ channels:
       enabled: true
       policy: "pairing"
       allowFrom: []
-    groupPolicy: "open"
+    groupPolicy: "allowlist"
+    guilds:
+      "*":
+        users: ["guild:123456789"]
 ```
+
+### groupAllowFrom 입력 예시
+```
+guild:123456789012345678
+guild:987654321098765432
+```
+> 또는 서버 ID만: `123456789012345678`
+> Discord Developer Mode 켜고 서버 우클릭 → Copy ID
 
 ---
 
@@ -138,8 +175,8 @@ channels.whatsapp.accounts.default.enabled: true
 ### 그룹 정책 설정
 | 필드 | 타입 | 설명 | 기본값 |
 |------|------|------|--------|
-| `groupPolicy` | GroupPolicy | 그룹 메시지 정책 | "open" |
-| `groupAllowFrom` | `string[]` | 허용 그룹 발신자 (E.164) | [] |
+| `groupPolicy` | GroupPolicy | 그룹 메시지 정책 | "allowlist" |
+| `groupAllowFrom` | `string[]` | 허용 그룹 JID 목록 | [] |
 
 ### Config 경로
 ```yaml
@@ -150,8 +187,16 @@ channels:
         enabled: true
         dmPolicy: "pairing"
         allowFrom: []
-        groupPolicy: "open"
+        groupPolicy: "allowlist"
+        groupAllowFrom: ["123456789@g.us"]
 ```
+
+### groupAllowFrom 입력 예시
+```
+123456789012345678@g.us
+987654321098765432@g.us
+```
+> 그룹 JID는 WhatsApp 내부 ID + `@g.us` 접미사
 
 ---
 
@@ -177,7 +222,8 @@ Slack App 생성 → Bot Token + App Token 입력
 ### 그룹 정책 설정
 | 필드 | 타입 | 설명 | 기본값 |
 |------|------|------|--------|
-| `groupPolicy` | GroupPolicy | 채널 메시지 정책 | "open" |
+| `groupPolicy` | GroupPolicy | 채널 메시지 정책 | "allowlist" |
+| `groupAllowFrom` | `string[]` | 허용 채널 ID 목록 | [] |
 | `requireMention` | boolean | 멘션 필수 여부 | true |
 | `channels` | Record | 채널별 설정 | {} |
 
@@ -191,9 +237,19 @@ channels:
       enabled: true
       policy: "pairing"
       allowFrom: []
-    groupPolicy: "open"
+    groupPolicy: "allowlist"
+    channels:
+      C1234567890:
+        enabled: true
     requireMention: true
 ```
+
+### groupAllowFrom 입력 예시
+```
+C1234567890
+C0987654321
+```
+> Slack 채널 ID는 C로 시작. 채널 → 우클릭 → Copy Link에서 마지막 부분.
 
 ---
 
@@ -219,8 +275,8 @@ GCP 서비스 계정 JSON 파일 업로드
 ### 그룹 정책 설정
 | 필드 | 타입 | 설명 | 기본값 |
 |------|------|------|--------|
-| `groupPolicy` | GroupPolicy | Space 메시지 정책 | "open" |
-| `groupAllowFrom` | `(string\|number)[]` | 허용 발신자 목록 | [] |
+| `groupPolicy` | GroupPolicy | Space 메시지 정책 | "allowlist" |
+| `groupAllowFrom` | `(string\|number)[]` | 허용 Space ID 목록 | [] |
 | `requireMention` | boolean | 멘션 필수 여부 | true |
 
 ### Config 경로
@@ -232,9 +288,65 @@ channels:
       enabled: true
       policy: "pairing"
       allowFrom: []
-    groupPolicy: "open"
+    groupPolicy: "allowlist"
+    groupAllowFrom: ["spaces/AAAAabcd1234"]
     requireMention: true
 ```
+
+### groupAllowFrom 입력 예시
+```
+spaces/AAAAabcd1234
+spaces/BBBBefgh5678
+```
+> Google Chat Space ID는 Chat API 또는 Space URL에서 확인
+
+---
+
+## 6. Mattermost
+
+### 연결 방식
+서버 관리자 → Bot Account 생성 → 토큰 + URL 입력
+
+### 필수 설정
+| 필드 | 타입 | 설명 | 필수 여부 |
+|------|------|------|----------|
+| `token` | string | Bot 토큰 | ✅ 필수 |
+| `baseUrl` | string | 서버 URL | ✅ 필수 |
+| `enabled` | boolean | 활성화 여부 | 기본값: true |
+
+### DM 정책 설정
+| 필드 | 타입 | 설명 | 기본값 |
+|------|------|------|--------|
+| `dmPolicy` | DmPolicy | DM 접근 정책 | "pairing" |
+| `allowFrom` | `string[]` | 허용 사용자명 목록 | [] |
+
+### 그룹 정책 설정
+| 필드 | 타입 | 설명 | 기본값 |
+|------|------|------|--------|
+| `groupPolicy` | GroupPolicy | 채널 메시지 정책 | "allowlist" |
+| `groupAllowFrom` | `string[]` | 허용 채널 이름 목록 | [] |
+| `requireMention` | boolean | 멘션 필수 여부 | true |
+
+### Config 경로
+```yaml
+channels:
+  mattermost:
+    baseUrl: "https://mattermost.example.com"
+    token: "..."
+    dmPolicy: "pairing"
+    allowFrom: []
+    groupPolicy: "allowlist"
+    groupAllowFrom: ["general", "team-announcements"]
+    requireMention: true
+```
+
+### groupAllowFrom 입력 예시
+```
+general
+team-chat
+announcements
+```
+> Mattermost 채널 이름 (URL slug)
 
 ---
 
@@ -242,13 +354,14 @@ channels:
 
 ### 각 메신저 설정 모달에서 보여야 할 필드
 
-| 메신저 | 인증 필드 | DM Policy 경로 | allowFrom 경로 | Group Policy 경로 |
-|--------|----------|----------------|----------------|-------------------|
-| Telegram | `botToken` | `dmPolicy` | `allowFrom` | `groupPolicy` |
-| Discord | `token` | `dm.policy` | `dm.allowFrom` | `groupPolicy` |
-| WhatsApp | (QR) | `dmPolicy` | `allowFrom` | `groupPolicy` |
-| Slack | `botToken`, `appToken` | `dm.policy` | `dm.allowFrom` | `groupPolicy` |
-| Google Chat | `serviceAccountFile` | `dm.policy` | `dm.allowFrom` | `groupPolicy` |
+| 메신저 | 인증 필드 | DM Policy 경로 | allowFrom 경로 | Group Policy 경로 | groupAllowFrom 경로 |
+|--------|----------|----------------|----------------|-------------------|---------------------|
+| Telegram | `botToken` | `dmPolicy` | `allowFrom` | `groupPolicy` | `groupAllowFrom` |
+| Discord | `token` | `dm.policy` | `dm.allowFrom` | `groupPolicy` | `guilds.*.users` |
+| WhatsApp | (QR) | `dmPolicy` | `allowFrom` | `groupPolicy` | `groupAllowFrom` |
+| Slack | `botToken`, `appToken` | `dm.policy` | `dm.allowFrom` | `groupPolicy` | `channels.*` |
+| Google Chat | `serviceAccountFile` | `dm.policy` | `dm.allowFrom` | `groupPolicy` | `groupAllowFrom` |
+| Mattermost | `token`, `baseUrl` | `dmPolicy` | `allowFrom` | `groupPolicy` | `groupAllowFrom` |
 
 ### allowFrom 계산 함수 (권장)
 ```typescript
@@ -266,7 +379,18 @@ function computeAllowFrom(
 }
 ```
 
----
+### groupAllowFrom 계산 함수 (권장)
+```typescript
+function computeGroupAllowFrom(
+  policy: GroupPolicy,
+  userInput: string[]
+): string[] {
+  if (policy === "allowlist") {
+    return userInput.filter(Boolean);
+  }
+  return [];  // open, disabled
+}
+```
 
 ---
 
@@ -275,10 +399,10 @@ function computeAllowFrom(
 ### 데이터 흐름
 ```
 Frontend (camelCase)
-   ↓ invoke('update_messenger_config', { dmPolicy, allowFrom, ... })
+   ↓ invoke('update_messenger_config', { dmPolicy, allowFrom, groupAllowFrom, ... })
    ↓ (Tauri 2.0 auto-converts: camelCase → snake_case)
 Rust lib.rs (snake_case params)
-   ↓ dm_policy, allow_from
+   ↓ dm_policy, allow_from, group_allow_from
 Rust openclaw.rs
    ↓ (채널별 스키마에 맞게 매핑)
 OpenClaw config (channels.*.dm.policy 등)
@@ -288,12 +412,13 @@ OpenClaw config (channels.*.dm.policy 등)
 ```typescript
 // Frontend에서 호출 시 (camelCase)
 await invoke('update_messenger_config', {
-  channel: 'discord',      // 채널 ID
-  token: 'xxxxx',          // 봇 토큰 (WhatsApp은 빈 문자열)
-  dmPolicy: 'pairing',     // DM 정책
-  allowFrom: ['user1'],    // 허용 목록
-  groupPolicy: 'open',     // 그룹 정책
-  requireMention: true,    // 멘션 필수 여부
+  channel: 'discord',        // 채널 ID
+  token: 'xxxxx',            // 봇 토큰 (WhatsApp은 빈 문자열)
+  dmPolicy: 'pairing',       // DM 정책
+  allowFrom: ['user1'],      // DM 허용 목록
+  groupPolicy: 'allowlist',  // 그룹 정책 (기본값: allowlist)
+  groupAllowFrom: ['guild:123'],  // 그룹 허용 목록 ✨ 신규
+  requireMention: true,      // 멘션 필수 여부
 });
 ```
 
@@ -303,18 +428,27 @@ await invoke('update_messenger_config', {
 | **Telegram** | `dmPolicy` | `channels.telegram.dmPolicy` |
 | | `allowFrom` | `channels.telegram.allowFrom` |
 | | `groupPolicy` | `channels.telegram.groupPolicy` |
+| | `groupAllowFrom` | `channels.telegram.groupAllowFrom` |
 | **Discord** | `dmPolicy` | `channels.discord.dm.policy` |
 | | `allowFrom` | `channels.discord.dm.allowFrom` |
 | | `groupPolicy` | `channels.discord.groupPolicy` |
+| | `groupAllowFrom` | `channels.discord.guilds.*.users` |
 | **WhatsApp** | `dmPolicy` | `channels.whatsapp.accounts.default.dmPolicy` |
 | | `allowFrom` | `channels.whatsapp.accounts.default.allowFrom` |
 | | `groupPolicy` | `channels.whatsapp.groupPolicy` |
+| | `groupAllowFrom` | `channels.whatsapp.accounts.default.groupAllowFrom` |
 | **Slack** | `dmPolicy` | `channels.slack.dm.policy` |
 | | `allowFrom` | `channels.slack.dm.allowFrom` |
 | | `groupPolicy` | `channels.slack.groupPolicy` |
+| | `groupAllowFrom` | `channels.slack.channels.<id>.enabled` (각 채널) |
 | **Google Chat** | `dmPolicy` | `channels.googlechat.dm.policy` |
 | | `allowFrom` | `channels.googlechat.dm.allowFrom` |
 | | `groupPolicy` | `channels.googlechat.groupPolicy` |
+| | `groupAllowFrom` | `channels.googlechat.groupAllowFrom` |
+| **Mattermost** | `dmPolicy` | `channels.mattermost.dmPolicy` |
+| | `allowFrom` | `channels.mattermost.allowFrom` |
+| | `groupPolicy` | `channels.mattermost.groupPolicy` |
+| | `groupAllowFrom` | `channels.mattermost.groupAllowFrom` |
 
 ### 추가 설정 invoke 명령
 
@@ -327,9 +461,24 @@ await invoke('update_messenger_config', {
 
 ---
 
+## 보안 권장 사항
+
+### ✅ 권장 설정
+1. **dmPolicy: "pairing"** — 신규 사용자 인증 코드 필요
+2. **groupPolicy: "allowlist"** — 등록된 그룹/채널만 허용
+3. **requireMention: true** — 그룹에서 멘션 필수
+
+### ⚠️ 위험 설정
+1. **dmPolicy: "open"** — 누구나 DM 가능 → API 비용 폭증 위험
+2. **groupPolicy: "open"** — 모든 그룹 메시지 처리 → 비용/개인정보 위험
+3. **requireMention: false** — 모든 메시지에 응답 → 토큰 낭비
+
+---
+
 ## 참고 문서
 
 - OpenClaw 소스: `/home/sanghyuck/openclaw/src/config/types.*.ts`
 - 온보딩 워크플로우: `/home/sanghyuck/openclaw/src/wizard/onboarding.ts`
 - Zod 스키마: `/home/sanghyuck/openclaw/src/config/zod-schema.*.ts`
 - moldClaw Rust 백엔드: `/home/sanghyuck/workspace/moldClaw/src-tauri/src/openclaw.rs`
+- 보안 감사 보고서: `/home/sanghyuck/workspace/moldClaw/docs/SECURITY_AUDIT_2026-02-23.md`
