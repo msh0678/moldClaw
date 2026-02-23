@@ -1546,8 +1546,9 @@ pub async fn login_whatsapp() -> Result<String, String> {
         const CREATE_NEW_CONSOLE: u32 = 0x00000010;
         
         // 새 콘솔 창에서 실행 (QR 코드 표시용)
+        // 에러 시 pause로 메시지 확인 가능
         let mut child = Command::new("cmd")
-            .args(["/C", "openclaw channels login --channel whatsapp"])
+            .args(["/C", "openclaw channels login --channel whatsapp || (echo. && echo [오류 발생] 위 메시지를 확인하세요 && pause)"])
             .creation_flags(CREATE_NEW_CONSOLE)
             .spawn()
             .map_err(|e| format!("WhatsApp 로그인 실행 실패: {}", e))?;
@@ -1559,7 +1560,7 @@ pub async fn login_whatsapp() -> Result<String, String> {
         if status.success() {
             Ok("WhatsApp 인증 완료!".to_string())
         } else {
-            Err("WhatsApp 인증이 취소되었거나 실패했습니다.".to_string())
+            Err("WhatsApp 인증이 취소되었거나 실패했습니다. 콘솔 창의 오류 메시지를 확인하세요.".to_string())
         }
     }
     
