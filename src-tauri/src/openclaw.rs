@@ -1658,6 +1658,20 @@ pub fn check_whatsapp_linked() -> bool {
     creds_path.exists() && creds_path.is_file()
 }
 
+/// WhatsApp 세션 파일 삭제 (연결 해제 시 호출)
+pub fn delete_whatsapp_session() -> Result<(), String> {
+    let session_dir = dirs::home_dir()
+        .map(|h| h.join(".openclaw").join("credentials").join("whatsapp").join("default"))
+        .ok_or("홈 디렉토리를 찾을 수 없습니다")?;
+    
+    if session_dir.exists() {
+        fs::remove_dir_all(&session_dir)
+            .map_err(|e| format!("WhatsApp 세션 삭제 실패: {}", e))?;
+    }
+    
+    Ok(())
+}
+
 /// 전체 onboard 실행 (non-interactive)
 pub async fn run_full_onboard(
     provider: &str,
@@ -2089,10 +2103,12 @@ pub async fn update_messenger_config(
                 set_nested_value(&mut config, &["channels", "discord", "enabled"], json!(false));
             }
             "whatsapp" => {
-                // WhatsApp은 enabled 키가 없음 - 섹션 자체를 삭제하여 비활성화
+                // WhatsApp은 enabled 키가 없음 - 섹션 삭제 + 세션 파일 삭제
                 if let Some(channels) = config.get_mut("channels").and_then(|c| c.as_object_mut()) {
                     channels.remove("whatsapp");
                 }
+                // 세션 파일도 삭제 (남아있으면 자동 재연결됨)
+                let _ = delete_whatsapp_session();
             }
             "slack" => {
                 set_nested_value(&mut config, &["channels", "slack", "enabled"], json!(false));
