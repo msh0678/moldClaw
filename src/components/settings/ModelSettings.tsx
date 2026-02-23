@@ -53,7 +53,7 @@ export default function ModelSettings({
       await invoke('update_model_config', {
         provider: selectedProvider,
         model: selectedModel,
-        api_key: apiKey || '',  // 빈 문자열이면 기존 키 유지
+        apiKey: apiKey || '',  // 빈 문자열이면 기존 키 유지
       });
       
       // 새 설정 객체 생성

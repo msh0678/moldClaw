@@ -90,12 +90,12 @@ export default function MessengerConnectStep({
     try {
       // Slack App Token 저장
       if (messengerConfig.type === 'slack' && slackAppToken) {
-        await invoke('set_slack_app_token', { app_token: slackAppToken });
+        await invoke('set_slack_app_token', { appToken: slackAppToken });
       }
 
       // Google Chat Service Account 저장
       if (messengerConfig.type === 'googlechat' && serviceAccountPath) {
-        await invoke('set_googlechat_service_account', { file_path: serviceAccountPath });
+        await invoke('set_googlechat_service_account', { filePath: serviceAccountPath });
       }
 
       // Mattermost URL 저장

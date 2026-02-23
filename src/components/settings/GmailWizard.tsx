@@ -102,7 +102,7 @@ export default function GmailWizard({ onComplete, onCancel }: GmailWizardProps) 
     try {
       // 번들된 credentials.json 경로
       const credPath = await resolveResource('resources/gog_credentials.json');
-      await invoke('register_gog_credentials', { credentials_path: credPath });
+      await invoke('register_gog_credentials', { credentialsPath: credPath });
     } catch (err) {
       console.error('Credentials 등록 실패:', err);
       // credentials 등록 실패해도 계속 진행 시도

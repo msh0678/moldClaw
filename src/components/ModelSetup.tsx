@@ -115,7 +115,7 @@ export default function ModelSetup({ initialConfig, onComplete, onBack, onGoToDa
         await invoke('update_model_config', {
           provider: selectedProvider,
           model: selectedModel,
-          api_key: keyToSave,
+          apiKey: keyToSave,
         })
         onComplete({ provider: selectedProvider as any, model: selectedModel, apiKey: keyToSave })
       } catch (err) {
