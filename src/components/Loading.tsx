@@ -44,8 +44,9 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
       const status = await invoke<PrerequisiteStatus>('check_prerequisites')
       setPrereqStatus(status)
       
-      // 2. 백신 감지 시 경고 (Windows만)
-      if (isWindows && status.antivirus_detected) {
+      // 2. 백신 감지 시 경고 (Windows만, 첫 실행 시에만)
+      const antivirusWarningShown = localStorage.getItem('moldclaw_antivirus_warning_shown');
+      if (isWindows && status.antivirus_detected && !antivirusWarningShown) {
         setAntivirusName(status.antivirus_detected)
         setStep('antivirus-warning')
         return  // 사용자가 "설치 계속하기" 누를 때까지 대기
@@ -179,6 +180,9 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
 
   // 백신 경고 후 설치 계속하기
   const handleContinueWithAntivirus = async () => {
+    // 다음부터 백신 경고 안 뜨게 저장
+    localStorage.setItem('moldclaw_antivirus_warning_shown', 'true');
+    
     const osType = await invoke<string>('get_os_type')
     const isWindows = osType === 'windows'
     
