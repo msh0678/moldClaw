@@ -1,6 +1,6 @@
 [package]
 name = "moldclaw"
-version = "0.6.5"
+version = "0.6.6"
 description = "Simple OpenClaw wrapper for easy messenger AI setup"
 authors = ["sanghyuck"]
 edition = "2021"

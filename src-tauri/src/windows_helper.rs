@@ -279,8 +279,53 @@ pub fn install_nodejs_22() -> Result<String, String> {
 }
 
 /// winget으로 Node.js LTS 설치 (UAC 프롬프트 표시)
+/// Node.js 설치 시도 횟수 파일 경로
+fn get_install_attempts_path() -> std::path::PathBuf {
+    dirs::data_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("moldclaw")
+        .join("install_attempts.txt")
+}
+
+/// 설치 시도 횟수 읽기
+fn get_install_attempts() -> u32 {
+    let path = get_install_attempts_path();
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// 설치 시도 횟수 증가
+fn increment_install_attempts() {
+    let path = get_install_attempts_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let count = get_install_attempts() + 1;
+    let _ = std::fs::write(&path, count.to_string());
+}
+
+/// 설치 시도 횟수 리셋 (성공 시)
+fn reset_install_attempts() {
+    let path = get_install_attempts_path();
+    let _ = std::fs::remove_file(&path);
+}
+
 pub fn install_nodejs_with_winget_visible() -> Result<String, String> {
     eprintln!("Node.js LTS 설치 시작 (winget 사용)...");
+    
+    // 무한 재시작 루프 방지: 3회 초과 시 수동 설치 안내
+    let attempts = get_install_attempts();
+    if attempts >= 3 {
+        return Err(
+            "Node.js 자동 설치가 반복 실패했습니다.\n\n\
+            IT 관리자에게 Node.js 설치를 요청하거나,\n\
+            https://nodejs.org 에서 직접 다운로드하세요.\n\n\
+            설치 후 moldClaw를 다시 실행해주세요.".to_string()
+        );
+    }
+    increment_install_attempts();
     
     // winget 사용 가능한지 확인
     use std::os::windows::process::CommandExt;
@@ -309,15 +354,36 @@ pub fn install_nodejs_with_winget_visible() -> Result<String, String> {
         .output()
         .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
     
+    // UAC 거부 감지: stderr + exit code 확인
+    let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
+    eprintln!("PowerShell exit code: {:?}", output.status.code());
+    eprintln!("PowerShell stderr: {}", stderr);
+    
+    if !output.status.success() 
+        || stderr.contains("canceled") 
+        || stderr.contains("cancelled")
+        || stderr.contains("denied") 
+        || stderr.contains("elevation")
+        || stderr.contains("administrator") {
+        return Err(
+            "관리자 권한이 거부되었습니다.\n\n\
+            UAC 창에서 '예'를 선택하거나,\n\
+            IT 관리자에게 Node.js 설치를 요청하세요.\n\n\
+            또는 https://nodejs.org 에서 직접 다운로드하세요.".to_string()
+        );
+    }
+    
     // 설치 확인
     refresh_environment_variables();
     std::thread::sleep(std::time::Duration::from_secs(2));
     
     if let Some(version) = get_node_version() {
         eprintln!("✓ Node.js 설치 확인됨: {}", version);
+        reset_install_attempts();  // 성공 시 시도 횟수 리셋
         Ok(format!("Node.js {}가 설치되었습니다!", version))
     } else {
         eprintln!("Node.js 설치 완료 (앱 재시작 필요)");
+        // 재시작 필요한 경우도 일단 성공으로 처리 (시도 횟수는 유지)
         Ok("Node.js 설치 완료. 앱을 재시작하면 인식됩니다.".to_string())
     }
 }
