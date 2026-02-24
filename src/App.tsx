@@ -83,6 +83,13 @@ function App() {
     setCurrentView('dashboard');
   }, []);
 
+  // 대시보드 준비 완료 (settingsJustClosed 플래그 리셋)
+  // ⚠️ CRITICAL: 이 hook은 반드시 컴포넌트 최상위에 있어야 함!
+  // 조건문 뒤에 두면 React Hooks 규칙 위반으로 빈 화면 발생
+  const handleDashboardReady = useCallback(() => {
+    setSettingsJustClosed(false);
+  }, []);
+
   // 삭제 시작
   const handleStartUninstall = async () => {
     const confirmed = window.confirm(
@@ -274,11 +281,6 @@ function App() {
   }
 
   // 대시보드 (기본)
-  // settingsJustClosed 플래그 처리: 대시보드에서 초기 상태를 'checking'으로 시작
-  const handleDashboardReady = useCallback(() => {
-    setSettingsJustClosed(false);
-  }, []);
-
   return (
     <DashboardPlanetary
       onNavigate={handleNavigate}

@@ -675,6 +675,10 @@ pub async fn add_channel_to_config(
     group_allow_from: &[String],
     require_mention: bool,
 ) -> Result<(), String> {
+    // ⚠️ CRITICAL: 플러그인 활성화 먼저! (안 하면 "Unsupported channel" 에러)
+    // OPENCLAW_SCHEMA_REFERENCE.md 섹션 12.0 참고
+    enable_channel_plugin(channel)?;
+    
     let mut config = read_existing_config();
     
     // 기존 config가 없으면 에러
