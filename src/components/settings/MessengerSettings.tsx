@@ -83,7 +83,7 @@ export default function MessengerSettings({
   );
 
   // 활성화된 채널인지 확인 (여러 채널 동시 지원)
-  const isConfigured = (messengerId: Messenger) => enabledChannels.includes(messengerId);
+  const isConfigured = (messengerId: Messenger) => messengerId !== null && enabledChannels.includes(messengerId);
 
   // WhatsApp 전용 모달
   const WhatsAppModal = () => {
