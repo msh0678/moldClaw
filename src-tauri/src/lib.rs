@@ -1,5 +1,10 @@
 mod openclaw;
 
+// Platform abstraction layer (new architecture for cross-platform support)
+// Use platform::get_platform() for new code
+// Existing windows_helper is kept for backward compatibility during migration
+mod platform;
+
 #[cfg(windows)]
 mod windows_helper;
 
