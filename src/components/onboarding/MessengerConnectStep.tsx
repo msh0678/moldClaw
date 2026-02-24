@@ -63,18 +63,40 @@ export default function MessengerConnectStep({
     }
   };
 
-  // WhatsApp QR 로그인
+  // WhatsApp QR 로그인 (비동기 + 폴링)
   const handleWhatsappQr = async () => {
     setQrLoading(true);
     setQrError(null);
 
     try {
-      await invoke<string>('login_whatsapp');
-      setWhatsappLinked(true);
+      // 1. 터미널 열기 (즉시 리턴, 대기 안 함)
+      await invoke('open_whatsapp_login_terminal');
+
+      // 2. 폴링 시작 (500ms 간격으로 creds.json 확인)
+      const pollInterval = setInterval(async () => {
+        try {
+          const linked = await invoke<boolean>('check_whatsapp_linked');
+          if (linked) {
+            clearInterval(pollInterval);
+            setWhatsappLinked(true);
+            setQrLoading(false);
+          }
+        } catch {
+          // 폴링 중 에러는 무시
+        }
+      }, 500);
+
+      // 3. 타임아웃 (5분 후 폴링 중지)
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (!whatsappLinked) {
+          setQrLoading(false);
+          setQrError('QR 스캔 시간이 초과되었습니다. 다시 시도해주세요.');
+        }
+      }, 300000);
+
     } catch (err) {
       setQrError(String(err));
-      await checkWhatsappStatus();
-    } finally {
       setQrLoading(false);
     }
   };

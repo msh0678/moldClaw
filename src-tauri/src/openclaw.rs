@@ -1720,6 +1720,54 @@ pub async fn login_whatsapp() -> Result<String, String> {
     }
 }
 
+/// WhatsApp 로그인 터미널 열기 (비동기, 대기 안 함)
+/// 프론트엔드에서 폴링으로 creds.json 확인
+pub fn open_whatsapp_login_terminal() -> Result<(), String> {
+    // 1. 플러그인 활성화
+    enable_channel_plugin("whatsapp")?;
+    
+    // 2. 채널 추가 (이미 있으면 무시)
+    let _ = add_channel("whatsapp");
+    
+    // 3. credentials 디렉토리 미리 생성
+    if let Some(creds_dir) = dirs::home_dir()
+        .map(|h| h.join(".openclaw").join("credentials").join("whatsapp").join("default"))
+    {
+        let _ = fs::create_dir_all(&creds_dir);
+    }
+    
+    // 4. 터미널 열기 (대기 없이 바로 리턴)
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+        
+        Command::new("cmd")
+            .args(["/C", "openclaw channels login --channel whatsapp || pause"])
+            .creation_flags(CREATE_NEW_CONSOLE)
+            .spawn()
+            .map_err(|e| format!("터미널 열기 실패: {}", e))?;
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let terminals = [
+            ("gnome-terminal", vec!["--", "openclaw", "channels", "login", "--channel", "whatsapp"]),
+            ("konsole", vec!["-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
+            ("xfce4-terminal", vec!["-e", "openclaw channels login --channel whatsapp"]),
+            ("xterm", vec!["-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
+        ];
+        
+        for (term, args) in terminals {
+            if Command::new(term).args(&args).spawn().is_ok() {
+                break;
+            }
+        }
+    }
+    
+    Ok(())
+}
+
 /// WhatsApp 인증 상태 확인 (creds.json 존재 여부)
 pub fn check_whatsapp_linked() -> bool {
     let creds_path = dirs::home_dir()
