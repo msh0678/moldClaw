@@ -844,6 +844,16 @@ fn save_browser_config() -> Result<(), String> {
     openclaw::save_browser_config()
 }
 
+#[tauri::command]
+fn get_browser_config() -> serde_json::Value {
+    openclaw::get_browser_config()
+}
+
+#[tauri::command]
+fn disable_browser_config() -> Result<(), String> {
+    openclaw::disable_browser_config()
+}
+
 /// Dashboard URL 가져오기 (토큰 포함)
 #[tauri::command]
 fn get_dashboard_url() -> String {
@@ -1642,6 +1652,8 @@ pub fn run() {
             get_install_path,
             install_browser_control,
             save_browser_config,
+            get_browser_config,
+            disable_browser_config,
             get_dashboard_url,
             // Windows 전용
             check_prerequisites,

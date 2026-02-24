@@ -65,14 +65,13 @@ export interface OnboardingState {
   currentStep: OnboardingStep;
   model: ModelConfig | null;
   messenger: MessengerConfig;
-  browserRelayInstalled: boolean;
   isComplete: boolean;
 }
 
-export type OnboardingStep = 'model' | 'messenger' | 'messenger-connect' | 'browser' | 'summary';
+export type OnboardingStep = 'model' | 'messenger' | 'messenger-connect' | 'summary';
 
 // Settings page state
-export type SettingsSection = 'model' | 'messenger' | 'skills' | 'tools' | 'tts' | 'gmail';
+export type SettingsSection = 'model' | 'messenger' | 'skills' | 'tools' | 'tts' | 'gmail' | 'browser';
 
 export type SettingsMode = 'normal' | 'advanced';
 
@@ -156,6 +155,5 @@ export const defaultOnboardingState: OnboardingState = {
   currentStep: 'model',
   model: null,
   messenger: defaultMessengerConfig,
-  browserRelayInstalled: false,
   isComplete: false,
 };

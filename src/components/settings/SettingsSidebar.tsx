@@ -26,6 +26,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: 'skills', icon: '🎯', label: '스킬', description: '추가 기능' },
   { id: 'tts', icon: '🔊', label: 'TTS', description: '음성 합성' },
   { id: 'gmail', icon: '📧', label: 'Gmail', description: '이메일 연동' },
+  { id: 'browser', icon: '🌐', label: '브라우저', description: 'Chrome 자동 제어' },
 ];
 
 export default function SettingsSidebar({

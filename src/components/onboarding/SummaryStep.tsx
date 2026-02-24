@@ -11,7 +11,6 @@ import { ALL_MESSENGERS } from '../../data/messengers';
 interface SummaryStepProps {
   modelConfig: ModelConfig | null;
   messengerConfig: MessengerConfig;
-  browserInstalled: boolean;
   onInstall: () => void;
   onBack: () => void;
 }
@@ -26,7 +25,6 @@ const POLICY_NAMES: Record<string, string> = {
 export default function SummaryStep({
   modelConfig,
   messengerConfig,
-  browserInstalled,
   onInstall,
   onBack,
 }: SummaryStepProps) {
@@ -77,24 +75,17 @@ export default function SummaryStep({
         requireMention: messengerConfig.requireMention,
       });
 
-      // Step 4: 브라우저 설정 저장 (설치했으면)
-      if (browserInstalled) {
-        setStatus('브라우저 설정 저장 중...');
-        setProgress(60);
-        await invoke('save_browser_config');
-      }
-
-      // Step 5: 보안 설정 적용
+      // Step 4: 보안 설정 적용
       setStatus('보안 설정 적용 중...');
-      setProgress(70);
+      setProgress(65);
       await invoke('apply_default_security_settings');
 
-      // Step 6: 설정 검증
+      // Step 5: 설정 검증
       setStatus('설정 검증 중...');
-      setProgress(85);
+      setProgress(80);
       await invoke<boolean>('validate_config');
 
-      // Step 7: Gateway 시작
+      // Step 6: Gateway 시작
       setStatus('Gateway 시작 중...');
       setProgress(95);
       try {
@@ -216,21 +207,6 @@ export default function SummaryStep({
             )}
           </div>
 
-          {/* 브라우저 릴레이 */}
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-forge-muted">브라우저 릴레이</span>
-              <span className="text-sm">🌐</span>
-            </div>
-            <p className="text-forge-text font-medium">
-              {browserInstalled ? '설치됨' : '설치 안 함'}
-            </p>
-            <p className="text-sm text-forge-muted">
-              {browserInstalled 
-                ? 'Chrome 브라우저 자동 제어 가능' 
-                : '나중에 설정에서 활성화 가능'}
-            </p>
-          </div>
         </div>
 
         {/* 에러 */}

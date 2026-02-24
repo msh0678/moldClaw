@@ -14,6 +14,7 @@ import SkillsSettings from './SkillsSettings';
 import ToolsSettings from './ToolsSettings';
 import TTSSettings from './TTSSettings';
 import GmailSettings from './GmailSettings';
+import BrowserSettings from './BrowserSettings';
 import SettingsModal from './SettingsModal';
 
 interface SettingsPanelProps {
@@ -139,6 +140,8 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
         return <TTSSettings {...sectionProps} />;
       case 'gmail':
         return <GmailSettings {...sectionProps} />;
+      case 'browser':
+        return <BrowserSettings {...sectionProps} />;
       default:
         return <ModelSettings {...sectionProps} />;
     }

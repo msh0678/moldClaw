@@ -2764,6 +2764,46 @@ pub fn save_browser_config() -> Result<(), String> {
     Ok(())
 }
 
+/// 브라우저 설정 조회
+pub fn get_browser_config() -> Value {
+    let config = read_existing_config();
+    
+    let enabled = config.get("browser")
+        .and_then(|b| b.get("enabled"))
+        .and_then(|e| e.as_bool())
+        .unwrap_or(false);
+    
+    let default_profile = config.get("browser")
+        .and_then(|b| b.get("defaultProfile"))
+        .and_then(|p| p.as_str())
+        .unwrap_or("chrome");
+    
+    // 프로필 디렉토리 존재 여부로 설치 여부 판단
+    let browser_dir = dirs::home_dir()
+        .map(|h| h.join(".openclaw").join("browser"))
+        .unwrap_or_default();
+    let is_installed = browser_dir.exists();
+    
+    json!({
+        "enabled": enabled,
+        "defaultProfile": default_profile,
+        "isInstalled": is_installed
+    })
+}
+
+/// 브라우저 설정 비활성화
+pub fn disable_browser_config() -> Result<(), String> {
+    let mut config = read_existing_config();
+    
+    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        return Ok(());
+    }
+    
+    set_nested_value(&mut config, &["browser", "enabled"], json!(false));
+    write_config(&config)?;
+    Ok(())
+}
+
 /// Slack App Token 설정 (Socket Mode용)
 pub async fn set_slack_app_token(app_token: &str) -> Result<(), String> {
     if app_token.is_empty() {
