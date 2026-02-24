@@ -333,14 +333,14 @@ fn create_base_config(
         
         // Gateway 설정 (필수!)
         "gateway": {
-            "mode": "local",              // 필수: 로컬 실행 모드
+            "mode": "local",
             "port": gateway_port,
             "bind": gateway_bind,
             "auth": {
                 "mode": "token",
                 "token": gateway_token
             },
-            // 위험한 노드 명령어 거부 목록 (OpenClaw 기본값)
+            // 위험한 노드 명령어 거부 목록
             "nodes": {
                 "denyCommands": [
                     "camera.snap",
@@ -350,6 +350,25 @@ fn create_base_config(
                     "contacts.add",
                     "reminders.add"
                 ]
+            }
+        },
+        
+        // ⚠️ SAFE DEFAULTS - 보안 우선!
+        // 참조: OPENCLAW_SCHEMA_REFERENCE.md
+        "tools": {
+            "exec": {
+                "security": "deny",       // 모든 명령어 실행 차단
+                "ask": "on-miss"          // 허용 안 된 것은 물어봄
+            },
+            "elevated": {
+                "enabled": false          // 관리자 권한 실행 차단
+            }
+        },
+        
+        // 채널 기본 설정 (그룹은 allowlist만)
+        "channels": {
+            "defaults": {
+                "groupPolicy": "allowlist"
             }
         },
         
@@ -375,7 +394,14 @@ pub async fn create_official_config(
     
     // 2. 기존 config 읽기
     let mut config = read_existing_config();
-    let is_new_config = config.as_object().map(|o| o.is_empty()).unwrap_or(true);
+    
+    // ⚠️ Config Pollution 버그 수정!
+    // 이전: is_empty()만 체크 → browser config만 있으면 false
+    // 수정: 필수 키(gateway, agents, tools)가 있는지 확인
+    let has_required_keys = config.get("gateway").is_some() 
+        && config.get("agents").is_some()
+        && config.get("tools").is_some();
+    let is_new_config = !has_required_keys;
     
     // 3. Gateway 토큰 생성 또는 기존 값 사용
     let gateway_token = config
@@ -1112,16 +1138,26 @@ pub async fn configure_model(provider: &str, model: &str, api_key: &str) -> Resu
         );
     }
 
-    // tools.exec 설정 추가 (명령어 자동 실행)
+    // tools.exec 설정 추가 (⚠️ SAFE DEFAULTS!)
+    // "deny" = 모든 명령어 실행 차단 (가장 안전)
+    // "allowlist" = 허용된 명령어만 실행
+    // "full" = 모든 명령어 허용 (위험!)
     set_nested_value(
         &mut config,
         &["tools", "exec", "security"],
-        json!("full"),
+        json!("deny"),  // SAFE DEFAULT
     );
     set_nested_value(
         &mut config,
         &["tools", "exec", "ask"],
-        json!("off"),
+        json!("on-miss"),  // SAFE: 허용 안 된 것은 물어봄
+    );
+    
+    // tools.elevated 설정 (⚠️ SAFE DEFAULT!)
+    set_nested_value(
+        &mut config,
+        &["tools", "elevated", "enabled"],
+        json!(false),  // SAFE: 관리자 권한 실행 차단
     );
 
     // auth.profiles 추가 (토큰 형식에 따라 mode 자동 결정)
@@ -2635,16 +2671,33 @@ pub async fn get_configured_integrations() -> Result<Vec<String>, String> {
 pub async fn apply_default_security_settings() -> Result<(), String> {
     let mut config = read_existing_config();
 
-    // tools.exec 설정 (명령어 자동 실행)
+    // ⚠️ SAFE DEFAULTS - 보안 우선!
+    // 문서: OPENCLAW_SCHEMA_REFERENCE.md 참조
+    
+    // tools.exec.security: "deny" (모든 명령어 실행 차단)
     set_nested_value(
         &mut config,
         &["tools", "exec", "security"],
-        json!("full"),
+        json!("deny"),
     );
     set_nested_value(
         &mut config,
         &["tools", "exec", "ask"],
-        json!("off"),
+        json!("on-miss"),
+    );
+    
+    // tools.elevated.enabled: false (관리자 권한 실행 차단)
+    set_nested_value(
+        &mut config,
+        &["tools", "elevated", "enabled"],
+        json!(false),
+    );
+    
+    // channels defaults (그룹은 allowlist만)
+    set_nested_value(
+        &mut config,
+        &["channels", "defaults", "groupPolicy"],
+        json!("allowlist"),
     );
 
     write_config(&config)?;
