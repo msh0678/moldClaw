@@ -1749,8 +1749,23 @@ pub fn open_whatsapp_login_terminal() -> Result<(), String> {
             .map_err(|e| format!("터미널 열기 실패: {}", e))?;
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
+        // macOS: AppleScript로 Terminal.app 열기
+        let script = r#"tell application "Terminal"
+            activate
+            do script "openclaw channels login --channel whatsapp"
+        end tell"#;
+        
+        Command::new("osascript")
+            .args(["-e", script])
+            .spawn()
+            .map_err(|e| format!("Terminal 열기 실패: {}", e))?;
+    }
+    
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        // Linux: 여러 터미널 시도
         let terminals = [
             ("gnome-terminal", vec!["--", "openclaw", "channels", "login", "--channel", "whatsapp"]),
             ("konsole", vec!["-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
@@ -1758,10 +1773,16 @@ pub fn open_whatsapp_login_terminal() -> Result<(), String> {
             ("xterm", vec!["-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
         ];
         
+        let mut opened = false;
         for (term, args) in terminals {
             if Command::new(term).args(&args).spawn().is_ok() {
+                opened = true;
                 break;
             }
+        }
+        
+        if !opened {
+            return Err("터미널을 찾을 수 없습니다. 수동으로 'openclaw channels login --channel whatsapp'을 실행하세요.".to_string());
         }
     }
     

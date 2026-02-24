@@ -1,7 +1,7 @@
 // MessengerConnectStep - 메신저 연결 단계
 // 토큰 입력 또는 QR 코드 스캔
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { MessengerConfig, ModelConfig } from '../../types/config';
 import { ALL_MESSENGERS } from '../../data/messengers';
@@ -34,6 +34,10 @@ export default function MessengerConnectStep({
   const [whatsappLinked, setWhatsappLinked] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
+  
+  // 폴링 ref (클로저 문제 해결 + 언마운트 정리)
+  const pollIntervalRef = useRef<number | null>(null);
+  const timeoutRef = useRef<number | null>(null);
 
   // Slack 전용 상태
   const [slackAppToken, setSlackAppToken] = useState('');
@@ -54,6 +58,14 @@ export default function MessengerConnectStep({
     }
   }, [messengerConfig.type]);
 
+  // 컴포넌트 언마운트 시 폴링 정리
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
   const checkWhatsappStatus = async () => {
     try {
       const linked = await invoke<boolean>('check_whatsapp_linked');
@@ -65,6 +77,10 @@ export default function MessengerConnectStep({
 
   // WhatsApp QR 로그인 (비동기 + 폴링)
   const handleWhatsappQr = async () => {
+    // 기존 폴링 정리 (중복 클릭 방지)
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    
     setQrLoading(true);
     setQrError(null);
 
@@ -73,11 +89,15 @@ export default function MessengerConnectStep({
       await invoke('open_whatsapp_login_terminal');
 
       // 2. 폴링 시작 (500ms 간격으로 creds.json 확인)
-      const pollInterval = setInterval(async () => {
+      pollIntervalRef.current = setInterval(async () => {
         try {
           const linked = await invoke<boolean>('check_whatsapp_linked');
           if (linked) {
-            clearInterval(pollInterval);
+            // 성공 시 둘 다 정리
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            pollIntervalRef.current = null;
+            timeoutRef.current = null;
             setWhatsappLinked(true);
             setQrLoading(false);
           }
@@ -87,9 +107,12 @@ export default function MessengerConnectStep({
       }, 500);
 
       // 3. 타임아웃 (5분 후 폴링 중지)
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        if (!whatsappLinked) {
+      timeoutRef.current = setTimeout(() => {
+        // pollIntervalRef가 null이면 이미 성공한 것
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+          timeoutRef.current = null;
           setQrLoading(false);
           setQrError('QR 스캔 시간이 초과되었습니다. 다시 시도해주세요.');
         }
