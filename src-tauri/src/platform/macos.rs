@@ -42,6 +42,13 @@ impl PlatformOps for MacOSPlatform {
         
         let disk_space_gb = self.get_available_disk_space_gb();
         
+        // Homebrew 상태 체크
+        let homebrew_status = if self.is_homebrew_installed() {
+            None
+        } else {
+            Some("Homebrew 미설치".to_string())
+        };
+        
         PrerequisiteStatus {
             node_installed: node_version.is_some(),
             node_version,
@@ -51,7 +58,7 @@ impl PlatformOps for MacOSPlatform {
             platform_deps_ok: self.is_xcode_cli_installed(),
             disk_space_gb,
             disk_space_ok: disk_space_gb >= 2.0,
-            additional_info: None,
+            additional_info: homebrew_status,
         }
     }
     
@@ -186,8 +193,9 @@ impl PlatformOps for MacOSPlatform {
     
     fn stop_gateway(&self, port: u16) -> Result<(), String> {
         // Find and kill process using the port
+        // Note: macOS xargs doesn't support -r, use different approach
         let kill_cmd = format!(
-            "lsof -ti :{} | xargs -r kill -9 2>/dev/null || true",
+            "pids=$(lsof -ti :{}); if [ -n \"$pids\" ]; then echo \"$pids\" | xargs kill -9 2>/dev/null; fi",
             port
         );
         
@@ -287,8 +295,15 @@ impl PlatformOps for MacOSPlatform {
             let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
             Ok(PathBuf::from(prefix).join("lib").join("node_modules").join("openclaw"))
         } else {
-            // Fallback to common locations
-            Ok(PathBuf::from("/usr/local/lib/node_modules/openclaw"))
+            // Fallback based on architecture
+            // ARM (Apple Silicon): /opt/homebrew/lib/node_modules/
+            // Intel: /usr/local/lib/node_modules/
+            let fallback = if Self::is_arm_mac() {
+                "/opt/homebrew/lib/node_modules/openclaw"
+            } else {
+                "/usr/local/lib/node_modules/openclaw"
+            };
+            Ok(PathBuf::from(fallback))
         }
     }
     
@@ -382,7 +397,9 @@ impl PlatformOps for MacOSPlatform {
 // ============================================================================
 
 impl MacOSPlatform {
-    fn is_homebrew_installed(&self) -> bool {
+    // =========== Environment Helpers ===========
+    
+    pub fn is_homebrew_installed(&self) -> bool {
         Command::new("brew")
             .arg("--version")
             .output()
@@ -399,7 +416,6 @@ impl MacOSPlatform {
     }
     
     fn get_available_disk_space_gb(&self) -> f64 {
-        // Use df to get available space
         let output = Command::new("df")
             .args(["-g", "/"])
             .output()
@@ -408,7 +424,6 @@ impl MacOSPlatform {
         if let Some(o) = output {
             if o.status.success() {
                 let stdout = String::from_utf8_lossy(&o.stdout);
-                // Parse df output: Filesystem ... Available ...
                 for line in stdout.lines().skip(1) {
                     let parts: Vec<&str> = line.split_whitespace().collect();
                     if parts.len() >= 4 {
@@ -422,14 +437,141 @@ impl MacOSPlatform {
         
         0.0
     }
+    
+    /// Check if running on ARM Mac (Apple Silicon)
+    fn is_arm_mac() -> bool {
+        std::env::consts::ARCH == "aarch64"
+    }
+    
+    // =========== launchd Service Management ===========
+    
+    /// Get current user ID for launchd commands
+    fn get_uid() -> u32 {
+        // Use id -u command
+        Command::new("id")
+            .arg("-u")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse().ok())
+            .unwrap_or(501)  // Default to 501 (first user)
+    }
+    
+    /// Get launchd service label
+    fn get_launchd_label(profile: Option<&str>) -> String {
+        match profile {
+            Some(p) => format!("bot.molt.{}", p),
+            None => "bot.molt.gateway".to_string(),
+        }
+    }
+    
+    /// Check if launchd service is installed
+    pub fn is_launchd_service_installed(&self, profile: Option<&str>) -> bool {
+        let label = Self::get_launchd_label(profile);
+        let plist_path = dirs::home_dir()
+            .unwrap_or_default()
+            .join("Library/LaunchAgents")
+            .join(format!("{}.plist", label));
+        plist_path.exists()
+    }
+    
+    /// Get launchd service status
+    pub fn get_launchd_service_status(&self, profile: Option<&str>) -> Result<String, String> {
+        let label = Self::get_launchd_label(profile);
+        
+        let output = Command::new("launchctl")
+            .args(["list"])
+            .output()
+            .map_err(|e| format!("launchctl 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if stdout.contains(&label) {
+                Ok("running".to_string())
+            } else {
+                Ok("stopped".to_string())
+            }
+        } else {
+            Ok("unknown".to_string())
+        }
+    }
+    
+    /// Kickstart (restart) launchd service
+    pub fn kickstart_launchd_service(&self, profile: Option<&str>) -> Result<(), String> {
+        let uid = Self::get_uid();
+        let label = Self::get_launchd_label(profile);
+        
+        let output = Command::new("launchctl")
+            .args(["kickstart", "-k", &format!("gui/{}/{}", uid, label)])
+            .output()
+            .map_err(|e| format!("launchctl kickstart 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(format!("서비스 재시작 실패: {}", String::from_utf8_lossy(&output.stderr)))
+        }
+    }
+    
+    /// Bootout (stop and unload) launchd service
+    pub fn bootout_launchd_service(&self, profile: Option<&str>) -> Result<(), String> {
+        let uid = Self::get_uid();
+        let label = Self::get_launchd_label(profile);
+        
+        let output = Command::new("launchctl")
+            .args(["bootout", &format!("gui/{}/{}", uid, label)])
+            .output()
+            .map_err(|e| format!("launchctl bootout 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok(())
+        } else {
+            // bootout can fail if service not loaded, which is fine
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("Could not find") || stderr.contains("No such process") {
+                Ok(())
+            } else {
+                Err(format!("서비스 중지 실패: {}", stderr))
+            }
+        }
+    }
+    
+    /// Bootstrap (load) launchd service
+    pub fn bootstrap_launchd_service(&self, profile: Option<&str>) -> Result<(), String> {
+        let uid = Self::get_uid();
+        let label = Self::get_launchd_label(profile);
+        let plist_path = dirs::home_dir()
+            .unwrap_or_default()
+            .join("Library/LaunchAgents")
+            .join(format!("{}.plist", label));
+        
+        let output = Command::new("launchctl")
+            .args(["bootstrap", &format!("gui/{}", uid), &plist_path.to_string_lossy()])
+            .output()
+            .map_err(|e| format!("launchctl bootstrap 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // Already loaded is fine
+            if stderr.contains("already loaded") || stderr.contains("service already loaded") {
+                Ok(())
+            } else {
+                Err(format!("서비스 로드 실패: {}", stderr))
+            }
+        }
+    }
 }
 
 // ============================================================================
-// TCC Permission Helpers (TODO: Implement for full macOS support)
+// TCC Permission Helpers
 // ============================================================================
 
-/// TCC Permission status
-#[derive(Debug, Clone)]
+use serde::{Serialize, Deserialize};
+
+/// TCC Permission status (for JS interop)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TccPermissionStatus {
     pub notifications: bool,
     pub accessibility: bool,
@@ -439,12 +581,9 @@ pub struct TccPermissionStatus {
     pub automation: bool,
 }
 
-impl MacOSPlatform {
-    /// Check TCC permission status (requires macOS APIs)
-    /// TODO: Implement using objc/swift bridge or system_profiler
-    pub fn check_tcc_permissions(&self) -> TccPermissionStatus {
-        // Placeholder - actual implementation needs macOS APIs
-        TccPermissionStatus {
+impl Default for TccPermissionStatus {
+    fn default() -> Self {
+        Self {
             notifications: false,
             accessibility: false,
             screen_recording: false,
@@ -453,9 +592,71 @@ impl MacOSPlatform {
             automation: false,
         }
     }
+}
+
+impl MacOSPlatform {
+    /// Check TCC permission status
+    /// Note: Full implementation requires Swift/ObjC APIs
+    /// This provides partial detection using shell commands
+    pub fn check_tcc_permissions(&self) -> TccPermissionStatus {
+        TccPermissionStatus {
+            notifications: self.check_notification_permission(),
+            accessibility: self.check_accessibility_permission(),
+            screen_recording: self.check_screen_recording_permission(),
+            microphone: self.check_microphone_permission(),
+            camera: self.check_camera_permission(),
+            automation: true,  // Cannot reliably check without AppleScript test
+        }
+    }
     
-    /// Open System Preferences to a specific pane
+    /// Check notification permission (assumed true if not explicitly denied)
+    fn check_notification_permission(&self) -> bool {
+        // Notifications are generally allowed by default for new apps
+        // Full check requires UNUserNotificationCenter API
+        true
+    }
+    
+    /// Check accessibility permission using AppleScript test
+    fn check_accessibility_permission(&self) -> bool {
+        // Try a simple accessibility action
+        let script = r#"tell application "System Events" to get name of first process"#;
+        Command::new("osascript")
+            .args(["-e", script])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+    
+    /// Check screen recording permission
+    fn check_screen_recording_permission(&self) -> bool {
+        // screencapture with -x flag returns error if no permission
+        let output = Command::new("screencapture")
+            .args(["-x", "-t", "png", "/dev/null"])
+            .output();
+        
+        // If command runs without error, permission likely granted
+        // (This is a heuristic, not 100% reliable)
+        output.map(|o| o.status.success()).unwrap_or(false)
+    }
+    
+    /// Check microphone permission
+    fn check_microphone_permission(&self) -> bool {
+        // Check using system_profiler or assume based on TCC database
+        // Full check requires AVCaptureDevice API
+        // For now, return false to prompt user
+        false
+    }
+    
+    /// Check camera permission
+    fn check_camera_permission(&self) -> bool {
+        // Similar to microphone
+        false
+    }
+    
+    /// Open System Preferences/Settings to a specific pane
     pub fn open_system_preferences(&self, pane: &str) -> Result<(), String> {
+        // macOS 13+ uses System Settings with different URLs
+        // macOS 12 and below use System Preferences
         let url = match pane {
             "notifications" => "x-apple.systempreferences:com.apple.preference.notifications",
             "accessibility" => "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
@@ -463,14 +664,44 @@ impl MacOSPlatform {
             "microphone" => "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
             "camera" => "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera",
             "automation" => "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+            "full_disk" => "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
             _ => return Err(format!("Unknown pane: {}", pane)),
         };
         
-        Command::new("open")
+        let output = Command::new("open")
             .arg(url)
             .output()
             .map_err(|e| format!("시스템 설정 열기 실패: {}", e))?;
         
-        Ok(())
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err("시스템 설정을 열 수 없습니다.".to_string())
+        }
+    }
+    
+    /// Request a specific TCC permission by triggering the system prompt
+    pub fn request_permission(&self, permission: &str) -> Result<(), String> {
+        match permission {
+            "accessibility" => {
+                // Trigger accessibility prompt by attempting an action
+                let script = r#"tell application "System Events" to get name of first process"#;
+                let _ = Command::new("osascript").args(["-e", script]).output();
+                Ok(())
+            }
+            "screen_recording" => {
+                // Trigger screen recording prompt
+                let _ = Command::new("screencapture")
+                    .args(["-x", "-t", "png", "/tmp/tcc_test.png"])
+                    .output();
+                let _ = std::fs::remove_file("/tmp/tcc_test.png");
+                Ok(())
+            }
+            "microphone" | "camera" => {
+                // These require AVFoundation - can't trigger from CLI easily
+                self.open_system_preferences(permission)
+            }
+            _ => self.open_system_preferences(permission),
+        }
     }
 }
