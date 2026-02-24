@@ -77,17 +77,24 @@ export default function SummaryStep({
         requireMention: messengerConfig.requireMention,
       });
 
-      // Step 4: 보안 설정 적용
+      // Step 4: 브라우저 설정 저장 (설치했으면)
+      if (browserInstalled) {
+        setStatus('브라우저 설정 저장 중...');
+        setProgress(60);
+        await invoke('save_browser_config');
+      }
+
+      // Step 5: 보안 설정 적용
       setStatus('보안 설정 적용 중...');
-      setProgress(65);
+      setProgress(70);
       await invoke('apply_default_security_settings');
 
-      // Step 5: 설정 검증
+      // Step 6: 설정 검증
       setStatus('설정 검증 중...');
-      setProgress(80);
+      setProgress(85);
       await invoke<boolean>('validate_config');
 
-      // Step 6: Gateway 시작
+      // Step 7: Gateway 시작
       setStatus('Gateway 시작 중...');
       setProgress(95);
       try {

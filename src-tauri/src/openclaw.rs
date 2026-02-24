@@ -2697,12 +2697,13 @@ pub async fn get_install_path() -> Result<String, String> {
     }
 }
 
-/// 브라우저 컨트롤 설치
+/// 브라우저 컨트롤 설치 (온보딩용 - config 저장 안 함)
+/// 프로필 생성 + 확장 프로그램 설치만 수행
+/// config 저장은 save_browser_config()에서 별도로 수행
 pub async fn install_browser_control() -> Result<String, String> {
     eprintln!("브라우저 컨트롤 설정 시작...");
     
     // OpenClaw CLI로 프로필 생성 (cdpPort 자동 할당)
-    // 직접 config 수정하지 않고 CLI 사용이 가장 안전
     
     // 1. chrome 프로필 생성 시도 (extension 드라이버)
     let chrome_result = run_openclaw_command(&[
@@ -2737,16 +2738,10 @@ pub async fn install_browser_control() -> Result<String, String> {
         }
     }
     
-    // 3. browser.enabled, defaultProfile 설정
-    let mut config = read_existing_config();
-    set_nested_value(&mut config, &["browser", "enabled"], json!(true));
-    set_nested_value(&mut config, &["browser", "defaultProfile"], json!("chrome"));
-    write_config(&config)?;
-    
-    // 4. Chrome 확장 프로그램 설치
+    // 3. Chrome 확장 프로그램 설치 (config 저장 안 함!)
     let _ = run_openclaw_command(&["browser", "extension", "install"]);
     
-    // 5. 확장 프로그램 경로 확인
+    // 4. 확장 프로그램 경로 확인
     match run_openclaw_command(&["browser", "extension", "path"]) {
         Ok(path) => {
             Ok(format!(
@@ -2758,6 +2753,15 @@ pub async fn install_browser_control() -> Result<String, String> {
             Ok("브라우저 설정 완료! Chrome 확장 프로그램은 'openclaw browser extension install' 명령으로 설치할 수 있습니다.".to_string())
         }
     }
+}
+
+/// 브라우저 설정을 config에 저장 (SummaryStep에서 호출)
+pub fn save_browser_config() -> Result<(), String> {
+    let mut config = read_existing_config();
+    set_nested_value(&mut config, &["browser", "enabled"], json!(true));
+    set_nested_value(&mut config, &["browser", "defaultProfile"], json!("chrome"));
+    write_config(&config)?;
+    Ok(())
 }
 
 /// Slack App Token 설정 (Socket Mode용)

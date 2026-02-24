@@ -839,6 +839,11 @@ async fn install_browser_control() -> Result<String, String> {
     openclaw::install_browser_control().await
 }
 
+#[tauri::command]
+fn save_browser_config() -> Result<(), String> {
+    openclaw::save_browser_config()
+}
+
 /// Dashboard URL 가져오기 (토큰 포함)
 #[tauri::command]
 fn get_dashboard_url() -> String {
@@ -1636,6 +1641,7 @@ pub fn run() {
             apply_default_security_settings,
             get_install_path,
             install_browser_control,
+            save_browser_config,
             get_dashboard_url,
             // Windows 전용
             check_prerequisites,
