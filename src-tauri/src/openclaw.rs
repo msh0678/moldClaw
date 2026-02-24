@@ -682,6 +682,30 @@ pub async fn add_channel_to_config(
         return Err("Config가 없습니다. 먼저 create_official_config를 호출하세요.".to_string());
     }
     
+    // ⚠️ Policy 검증 및 자동 수정 (OPENCLAW_SCHEMA_REFERENCE.md 기준)
+    
+    // 1. groupPolicy에 "pairing" 불가 → "allowlist"로 변환
+    // groupPolicy 유효값: "open" | "disabled" | "allowlist" (pairing 없음!)
+    let group_policy = if group_policy == "pairing" {
+        "allowlist"
+    } else {
+        group_policy
+    };
+    
+    // 2. dmPolicy: "open"일 때 allowFrom에 "*" 필수
+    // 문서: "When dmPolicy: 'open', allowFrom MUST include '*'"
+    let allow_from: Vec<String> = if dm_policy == "open" {
+        if !allow_from.iter().any(|s| s == "*") {
+            let mut new_allow = allow_from.to_vec();
+            new_allow.push("*".to_string());
+            new_allow
+        } else {
+            allow_from.to_vec()
+        }
+    } else {
+        allow_from.to_vec()
+    };
+    
     // meta.lastTouchedAt 업데이트
     let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
@@ -2131,6 +2155,25 @@ pub async fn update_messenger_config(
     if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
         return Err("Config가 없습니다.".to_string());
     }
+    
+    // ⚠️ Policy 검증 및 자동 수정 (삭제 모드가 아닐 때만)
+    let (group_policy, allow_from) = if !is_delete_mode {
+        // 1. groupPolicy에 "pairing" 불가 → "allowlist"로 변환
+        let gp = if group_policy == "pairing" { "allowlist" } else { group_policy };
+        
+        // 2. dmPolicy: "open"일 때 allowFrom에 "*" 필수
+        let af: Vec<String> = if dm_policy == "open" && !allow_from.iter().any(|s| s == "*") {
+            let mut new_allow = allow_from.to_vec();
+            new_allow.push("*".to_string());
+            new_allow
+        } else {
+            allow_from.to_vec()
+        };
+        
+        (gp, af)
+    } else {
+        (group_policy, allow_from.to_vec())
+    };
     
     // meta.lastTouchedAt 업데이트
     let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
