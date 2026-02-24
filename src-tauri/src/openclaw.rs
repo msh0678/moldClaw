@@ -57,12 +57,12 @@ pub fn get_openclaw_version_sync() -> Option<String> {
 /// Discord: 기본 활성화 → 스킵
 /// WhatsApp: enabled 키가 스키마에 없음 (세션 기반 자동 시작) → 스킵
 pub fn enable_channel_plugin(channel: &str) -> Result<(), String> {
-    // Discord: 기본 활성화
-    // WhatsApp: enabled 키가 스키마에 없음 - 세션 존재 시 자동 시작
-    if channel == "discord" || channel == "whatsapp" {
-        return Ok(());
-    }
-    
+    // ⚠️ 중요: "enabled 키가 config에 없다"와 "플러그인 활성화"는 별개!
+    // WhatsApp/Discord도 반드시 `openclaw plugins enable` 실행해야 함.
+    // 안 하면 "Unsupported channel" 에러 발생.
+    // 
+    // - 플러그인 활성화: `openclaw plugins enable <channel>` (필수!)
+    // - Config enabled 키: WhatsApp은 없음 (세션 기반), Discord는 있음
     run_openclaw_command(&["plugins", "enable", channel])
         .map(|_| ())
         .map_err(|e| format!("플러그인 활성화 실패 ({}): {}", channel, e))
