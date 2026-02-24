@@ -222,7 +222,6 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
           </button>
           
           <p className="text-xs text-gray-500 mt-4">
-            moldClaw는 forgeClaw의 테스트 버전으로, 불완전한 프로그램입니다.<br />
             문제 발생 시: <span className="text-blue-400">hexagon0678@gmail.com</span>
           </p>
         </div>
@@ -359,9 +358,6 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
           <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-left">
             <p className="text-red-400 text-sm font-semibold mb-2">
               ⚠️ 도움이 필요하신가요?
-            </p>
-            <p className="text-gray-300 text-xs mb-2">
-              moldClaw는 forgeClaw의 테스트 버전으로, 불완전한 프로그램입니다.
             </p>
             <p className="text-gray-300 text-xs">
               문제가 발생한 경우, 다음 이메일로 연락 주시면 도움을 드리겠습니다:

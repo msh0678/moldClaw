@@ -4,13 +4,11 @@ interface ExpiredScreenProps {
 }
 
 export default function ExpiredScreen({ message, onContinue }: ExpiredScreenProps) {
-  const defaultMessage = `moldClaw 테스트가 종료되었습니다.
-
-공식 배포 버전인 forgeClaw를 기대해 주세요.
+  const defaultMessage = `moldClaw 테스트 기간이 종료되었습니다.
 
 관리자가 배포한 토큰 및 봇은 만료됩니다.
 
-moldClaw를 삭제하고, 관리자에게 피드백을 전달해 주시면 감사하겠습니다.`;
+피드백이 있으시면 hexagon0678@gmail.com으로 전달해 주시면 감사하겠습니다.`;
 
   return (
     <div className="gradient-bg min-h-screen flex flex-col items-center justify-center p-6">
@@ -52,17 +50,14 @@ moldClaw를 삭제하고, 관리자에게 피드백을 전달해 주시면 감�
             </button>
           )}
           
-          {/* forgeClaw 안내 */}
+          {/* 문의 안내 */}
           <div className="pt-3 border-t border-[#2a2d3e]">
-            <p className="text-xs text-forge-muted mb-2">공식 버전 출시 시 알림 받기</p>
+            <p className="text-xs text-forge-muted mb-2">문의 및 피드백</p>
             <a
-              href="https://forgeclaw.com"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="mailto:hexagon0678@gmail.com"
               className="inline-flex items-center gap-2 text-forge-copper hover:text-forge-amber transition-colors text-sm"
             >
-              <span>forgeClaw 사이트 방문</span>
-              <span>→</span>
+              <span>hexagon0678@gmail.com</span>
             </a>
           </div>
         </div>

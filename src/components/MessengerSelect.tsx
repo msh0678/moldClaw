@@ -264,7 +264,7 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
             </p>
           </div>
 
-          {/* forgeClaw 릴레이 방식 (준비 중) */}
+          {/* 릴레이 방식 (준비 중) */}
           <div className="mb-6">
             <button
               disabled
@@ -276,7 +276,7 @@ export default function MessengerSelect({ initialConfig, onComplete, onBack, edi
               <div className="flex items-center gap-4">
                 <div className="text-3xl">🔗</div>
                 <div>
-                  <div className="font-semibold">Discord URL 방식 (forgeClaw 릴레이)</div>
+                  <div className="font-semibold">Discord URL 방식 (릴레이)</div>
                   <p className="text-sm text-gray-500">
                     토큰 없이 URL만으로 연결 · 가장 쉬운 방법
                   </p>
