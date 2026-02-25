@@ -181,11 +181,11 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             description: "로컬 장소 검색 서버".into(),
             emoji: "🗺️".into(),
             category: "productivity".into(),
-            install_method: InstallMethod::Uv,
-            install_command: Some("uv tool install local-places".into()),
+            install_method: InstallMethod::Builtin, // OpenClaw 내장 스킬
+            install_command: None,
             windows_install_method: None,
             windows_install_command: None,
-            binary_name: Some("local-places".into()),
+            binary_name: Some("uv".into()), // uv만 있으면 실행 가능
             platform: PlatformSupport { windows: true, macos: true, linux: true },
             setup: SetupRequirement::ApiKey { vars: vec!["GOOGLE_PLACES_API_KEY".into()] },
             disconnect: DisconnectConfig {
@@ -220,18 +220,18 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             hidden: false,
         },
 
-        // nano-banana-pro: uv (전 플랫폼)
+        // nano-banana-pro: OpenClaw 내장 스크립트 (uv run 실행)
         SkillDefinition {
             id: "nano-banana-pro".into(),
             name: "Nano Banana Pro".into(),
             description: "Gemini 비전 이미지 생성".into(),
             emoji: "🍌".into(),
             category: "media".into(),
-            install_method: InstallMethod::Uv,
-            install_command: Some("uv tool install nano-banana-pro".into()),
+            install_method: InstallMethod::Builtin, // OpenClaw 내장 스킬
+            install_command: None,
             windows_install_method: None,
             windows_install_command: None,
-            binary_name: Some("nano-banana-pro".into()),
+            binary_name: Some("uv".into()), // uv만 있으면 실행 가능
             platform: PlatformSupport { windows: true, macos: true, linux: true },
             setup: SetupRequirement::ApiKey { vars: vec!["GEMINI_API_KEY".into()] },
             disconnect: DisconnectConfig {
