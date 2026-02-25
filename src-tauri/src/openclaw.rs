@@ -3945,6 +3945,7 @@ fn generate_tools_md_section(connected_vars: &[String]) -> String {
     let mut section = String::new();
     section.push_str(TOOLS_MD_START_MARKER);
     section.push('\n');
+    section.push_str("<!-- ⚠️ 이 섹션은 moldClaw가 자동 관리합니다. 직접 수정하지 마세요! -->\n\n");
     
     // 템플릿이 있는 도구만 필터링
     let tools_with_templates: Vec<&String> = connected_vars
