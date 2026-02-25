@@ -26,6 +26,77 @@ impl MacOSPlatform {
     pub fn new() -> Self {
         Self
     }
+    
+    /// macOS GUI 앱은 터미널과 다른 PATH를 가짐
+    /// Homebrew, nvm 등의 경로를 명시적으로 추가
+    fn get_extended_path() -> String {
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/Users".to_string());
+        
+        // 추가할 경로들 (우선순위 순)
+        let extra_paths = [
+            "/opt/homebrew/bin",           // Apple Silicon Homebrew
+            "/opt/homebrew/sbin",
+            "/usr/local/bin",              // Intel Homebrew / 일반
+            "/usr/local/sbin",
+            &format!("{}/.nvm/versions/node/*/bin", home),  // nvm
+            &format!("{}/n/bin", home),    // n (node version manager)
+            &format!("{}/.volta/bin", home), // volta
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin",
+        ];
+        
+        let mut paths: Vec<&str> = extra_paths.to_vec();
+        
+        // 기존 PATH도 추가
+        for p in current_path.split(':') {
+            if !p.is_empty() && !paths.contains(&p) {
+                paths.push(p);
+            }
+        }
+        
+        paths.join(":")
+    }
+    
+    /// PATH가 확장된 Command 생성
+    fn command_with_path(program: &str) -> Command {
+        let mut cmd = Command::new(program);
+        cmd.env("PATH", Self::get_extended_path());
+        cmd
+    }
+    
+    /// 특정 바이너리의 전체 경로 찾기
+    fn find_binary(name: &str) -> Option<String> {
+        let paths = [
+            format!("/opt/homebrew/bin/{}", name),      // Apple Silicon
+            format!("/usr/local/bin/{}", name),         // Intel
+            format!("/usr/bin/{}", name),               // System
+        ];
+        
+        for path in &paths {
+            if std::path::Path::new(path).exists() {
+                return Some(path.clone());
+            }
+        }
+        
+        // which 명령으로 찾기
+        let output = Command::new("/usr/bin/which")
+            .arg(name)
+            .env("PATH", Self::get_extended_path())
+            .output()
+            .ok()?;
+        
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Some(path);
+            }
+        }
+        
+        None
+    }
 }
 
 impl PlatformOps for MacOSPlatform {
@@ -63,7 +134,7 @@ impl PlatformOps for MacOSPlatform {
     }
     
     fn get_node_version(&self) -> Option<String> {
-        Command::new("node")
+        Self::command_with_path("node")
             .arg("--version")
             .output()
             .ok()
@@ -72,7 +143,7 @@ impl PlatformOps for MacOSPlatform {
     }
     
     fn is_npm_installed(&self) -> bool {
-        Command::new("npm")
+        Self::command_with_path("npm")
             .arg("--version")
             .output()
             .map(|o| o.status.success())
@@ -94,14 +165,14 @@ impl PlatformOps for MacOSPlatform {
         }
         
         // Install Node.js 22 via Homebrew
-        let output = Command::new("brew")
+        let output = Self::command_with_path("brew")
             .args(["install", "node@22"])
             .output()
             .map_err(|e| format!("brew 실행 실패: {}", e))?;
         
         if output.status.success() {
             // Link node@22 to make it default
-            let _ = Command::new("brew")
+            let _ = Self::command_with_path("brew")
                 .args(["link", "--overwrite", "node@22"])
                 .output();
             
@@ -112,7 +183,7 @@ impl PlatformOps for MacOSPlatform {
     }
     
     fn install_openclaw(&self) -> Result<String, String> {
-        let output = Command::new("npm")
+        let output = Self::command_with_path("npm")
             .args(["install", "-g", "openclaw", "--ignore-scripts"])
             .output()
             .map_err(|e| format!("npm 실행 실패: {}", e))?;
@@ -144,7 +215,7 @@ impl PlatformOps for MacOSPlatform {
     }
     
     fn is_openclaw_installed(&self) -> bool {
-        Command::new("openclaw")
+        Self::command_with_path("openclaw")
             .arg("--version")
             .output()
             .map(|o| o.status.success())
@@ -152,7 +223,7 @@ impl PlatformOps for MacOSPlatform {
     }
     
     fn get_openclaw_version(&self) -> Option<String> {
-        Command::new("openclaw")
+        Self::command_with_path("openclaw")
             .arg("--version")
             .output()
             .ok()
@@ -178,9 +249,15 @@ impl PlatformOps for MacOSPlatform {
     // =========== Gateway Control ===========
     
     fn start_gateway(&self) -> Result<(), String> {
-        // Start gateway in background using nohup
+        // Start gateway in background using nohup with extended PATH
+        let extended_path = Self::get_extended_path();
+        let cmd = format!(
+            "export PATH='{}'; nohup openclaw gateway > /dev/null 2>&1 &",
+            extended_path
+        );
+        
         let output = Command::new("sh")
-            .args(["-c", "nohup openclaw gateway > /dev/null 2>&1 &"])
+            .args(["-c", &cmd])
             .output()
             .map_err(|e| format!("Gateway 시작 실패: {}", e))?;
         
@@ -214,7 +291,7 @@ impl PlatformOps for MacOSPlatform {
     
     fn install_gateway_service(&self) -> Result<String, String> {
         // Install as launchd service
-        let output = Command::new("openclaw")
+        let output = Self::command_with_path("openclaw")
             .args(["gateway", "install"])
             .output()
             .map_err(|e| format!("Gateway 서비스 설치 실패: {}", e))?;
@@ -251,7 +328,7 @@ impl PlatformOps for MacOSPlatform {
     }
     
     fn run_command_silent(&self, command: &str, args: &[&str]) -> Result<String, String> {
-        let output = Command::new(command)
+        let output = Self::command_with_path(command)
             .args(args)
             .output()
             .map_err(|e| format!("명령 실행 실패: {}", e))?;
@@ -286,7 +363,7 @@ impl PlatformOps for MacOSPlatform {
     // =========== Paths ===========
     
     fn get_npm_global_path(&self) -> Result<PathBuf, String> {
-        let output = Command::new("npm")
+        let output = Self::command_with_path("npm")
             .args(["config", "get", "prefix"])
             .output()
             .map_err(|e| format!("npm prefix 확인 실패: {}", e))?;
@@ -400,7 +477,8 @@ impl MacOSPlatform {
     // =========== Environment Helpers ===========
     
     pub fn is_homebrew_installed(&self) -> bool {
-        Command::new("brew")
+        // brew는 /opt/homebrew/bin (Apple Silicon) 또는 /usr/local/bin (Intel)에 있음
+        Self::command_with_path("brew")
             .arg("--version")
             .output()
             .map(|o| o.status.success())
@@ -408,6 +486,7 @@ impl MacOSPlatform {
     }
     
     fn is_xcode_cli_installed(&self) -> bool {
+        // xcode-select은 시스템 경로에 있으므로 PATH 확장 불필요
         Command::new("xcode-select")
             .args(["-p"])
             .output()
