@@ -7,6 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { FullConfig, SettingsMode, Messenger } from '../../types/config';
 import { ALL_MESSENGERS } from '../../data/messengers';
+import { BrandIcon } from '../common/BrandIcon';
 
 interface MessengerSettingsProps {
   config: FullConfig;
@@ -1342,11 +1343,14 @@ export default function MessengerSettings({
               )}
               
               <div className="flex items-center gap-3 mb-2">
-                {messenger.logo ? (
-                  <img src={messenger.logo} alt={messenger.name} className="w-6 h-6 object-contain" />
-                ) : (
-                  <span className="text-2xl">{messenger.icon}</span>
-                )}
+                <BrandIcon 
+                  iconSlug={messenger.iconSlug}
+                  iconColor={messenger.iconColor}
+                  logo={messenger.logo}
+                  icon={messenger.icon}
+                  name={messenger.name}
+                  size={24}
+                />
                 <span className="font-medium text-forge-text text-sm">{messenger.name}</span>
               </div>
               <p className="text-xs text-forge-muted mb-3 line-clamp-2">{messenger.desc}</p>

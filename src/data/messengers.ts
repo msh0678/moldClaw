@@ -3,12 +3,25 @@
 
 import type { MessengerInfo, Messenger } from '../types/config';
 
+// Simple Icons 이름 (for @iconify/react)
+// 사용: <Icon icon={`simple-icons:${iconSlug}`} />
+export const MESSENGER_ICONS: Record<string, string> = {
+  telegram: 'telegram',
+  whatsapp: 'whatsapp',
+  discord: 'discord',
+  slack: 'slack',
+  mattermost: 'mattermost',
+  googlechat: 'googlechat',
+};
+
 // 기본 표시 (온보딩 기본 보기)
 export const BASIC_MESSENGERS: MessengerInfo[] = [
   {
     id: 'telegram' as Messenger,
     name: 'Telegram',
     icon: '✈️',
+    iconSlug: 'telegram',
+    iconColor: '#26A5E4',
     logo: 'https://cdn.simpleicons.org/telegram/26A5E4',
     desc: '가장 쉬운 설정',
     difficulty: 1,
@@ -33,6 +46,8 @@ export const BASIC_MESSENGERS: MessengerInfo[] = [
     id: 'whatsapp' as Messenger,
     name: 'WhatsApp',
     icon: '💚',
+    iconSlug: 'whatsapp',
+    iconColor: '#25D366',
     logo: 'https://cdn.simpleicons.org/whatsapp/25D366',
     desc: 'QR 코드 스캔만',
     difficulty: 1,
@@ -54,6 +69,8 @@ export const BASIC_MESSENGERS: MessengerInfo[] = [
     id: 'discord' as Messenger,
     name: 'Discord',
     icon: '🎮',
+    iconSlug: 'discord',
+    iconColor: '#5865F2',
     logo: 'https://cdn.simpleicons.org/discord/5865F2',
     desc: '개발자 포털 설정 필요',
     difficulty: 3,
@@ -84,6 +101,8 @@ export const ADDITIONAL_MESSENGERS: MessengerInfo[] = [
     id: 'slack' as Messenger,
     name: 'Slack',
     icon: '💼',
+    iconSlug: 'slack',
+    iconColor: '#4A154B',
     logo: '/icons/slack.svg',
     desc: '워크스페이스 연동',
     difficulty: 2,
@@ -107,6 +126,8 @@ export const ADDITIONAL_MESSENGERS: MessengerInfo[] = [
     id: 'mattermost' as Messenger,
     name: 'Mattermost',
     icon: '💬',
+    iconSlug: 'mattermost',
+    iconColor: '#0058CC',
     logo: 'https://cdn.simpleicons.org/mattermost/0058CC',
     desc: '오픈소스 팀 메신저',
     difficulty: 2,
@@ -129,6 +150,8 @@ export const ADDITIONAL_MESSENGERS: MessengerInfo[] = [
     id: 'googlechat' as Messenger,
     name: 'Google Chat',
     icon: '💚',
+    iconSlug: 'googlechat',
+    iconColor: '#00AC47',
     logo: 'https://cdn.simpleicons.org/googlechat/00AC47',
     desc: 'Google Workspace 연동',
     difficulty: 3,

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { FullConfig, SettingsMode, ModelConfig, AIProvider } from '../../types/config';
 import { ALL_PROVIDERS } from '../../data/providers';
+import { BrandIcon } from '../common/BrandIcon';
 
 interface ModelSettingsProps {
   config: FullConfig;
@@ -133,11 +134,14 @@ export default function ModelSettings({
               `}
             >
               <div className="h-8 flex items-center justify-center mb-2">
-                {p.logo ? (
-                  <img src={p.logo} alt={p.name} className="h-6 w-6 object-contain" />
-                ) : (
-                  <span className="text-2xl">{p.icon}</span>
-                )}
+                <BrandIcon 
+                  iconSlug={p.iconSlug}
+                  iconColor={p.iconColor}
+                  logo={p.logo}
+                  icon={p.icon}
+                  name={p.name}
+                  size={24}
+                />
               </div>
               <div className="text-sm font-medium text-forge-text">{p.name}</div>
             </button>

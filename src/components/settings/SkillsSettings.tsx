@@ -12,6 +12,7 @@ import type {
   PrerequisiteStatus 
 } from '../../types/skills';
 import { SKILL_CATEGORIES, getEffectiveInstallMethod, needsPrerequisite } from '../../types/skills';
+import { BrandIcon } from '../common/BrandIcon';
 
 interface SkillsSettingsProps {
   config: FullConfig;
@@ -27,6 +28,8 @@ interface ApiSkill {
   id: string;
   name: string;
   icon: string;
+  iconSlug?: string;    // Simple Icons slug
+  iconColor?: string;   // Brand color
   logo?: string;
   description: string;
   detailedDesc: string;
@@ -39,6 +42,7 @@ interface ApiSkill {
 const API_SKILLS: ApiSkill[] = [
   {
     id: 'notion', name: 'Notion', icon: '📝',
+    iconSlug: 'notion', iconColor: '#000000',
     logo: 'https://cdn.simpleicons.org/notion/FFFFFF',
     description: '노트/문서 관리',
     detailedDesc: 'Notion 워크스페이스에 접근하여 페이지 읽기, 생성, 수정을 할 수 있습니다.',
@@ -48,6 +52,7 @@ const API_SKILLS: ApiSkill[] = [
   },
   {
     id: 'github', name: 'GitHub', icon: '🐱',
+    iconSlug: 'github', iconColor: '#181717',
     logo: 'https://cdn.simpleicons.org/github/FFFFFF',
     description: '코드 저장소',
     detailedDesc: 'GitHub 저장소의 코드를 읽고, 이슈/PR을 관리합니다.',
@@ -57,6 +62,7 @@ const API_SKILLS: ApiSkill[] = [
   },
   {
     id: 'todoist', name: 'Todoist', icon: '✅',
+    iconSlug: 'todoist', iconColor: '#E44332',
     logo: 'https://cdn.simpleicons.org/todoist/E44332',
     description: '할 일 관리',
     detailedDesc: 'Todoist에 할 일을 추가하거나 완료 처리합니다.',
@@ -66,6 +72,7 @@ const API_SKILLS: ApiSkill[] = [
   },
   {
     id: 'linear', name: 'Linear', icon: '📊',
+    iconSlug: 'linear', iconColor: '#5E6AD2',
     logo: 'https://cdn.simpleicons.org/linear/5E6AD2',
     description: '이슈 트래킹',
     detailedDesc: 'Linear에서 이슈를 생성하고 관리합니다.',
@@ -75,6 +82,7 @@ const API_SKILLS: ApiSkill[] = [
   },
   {
     id: 'trello', name: 'Trello', icon: '📋',
+    iconSlug: 'trello', iconColor: '#0052CC',
     logo: 'https://cdn.simpleicons.org/trello/0052CC',
     description: '칸반 보드',
     detailedDesc: 'Trello 보드에서 카드를 관리합니다.',
@@ -84,6 +92,7 @@ const API_SKILLS: ApiSkill[] = [
   },
   {
     id: 'figma', name: 'Figma', icon: '🎨',
+    iconSlug: 'figma', iconColor: '#F24E1E',
     logo: 'https://cdn.simpleicons.org/figma/F24E1E',
     description: '디자인 파일',
     detailedDesc: 'Figma 파일 정보를 읽어옵니다.',
@@ -93,6 +102,7 @@ const API_SKILLS: ApiSkill[] = [
   },
   {
     id: 'jira', name: 'Jira', icon: '📊',
+    iconSlug: 'jira', iconColor: '#0052CC',
     logo: 'https://cdn.simpleicons.org/jira/0052CC',
     description: '프로젝트 관리',
     detailedDesc: 'Jira에서 이슈를 관리합니다.',
@@ -102,6 +112,7 @@ const API_SKILLS: ApiSkill[] = [
   },
   {
     id: 'asana', name: 'Asana', icon: '✅',
+    iconSlug: 'asana', iconColor: '#F06A6A',
     logo: 'https://cdn.simpleicons.org/asana/F06A6A',
     description: '작업 관리',
     detailedDesc: 'Asana에서 작업을 관리합니다.',
@@ -111,6 +122,7 @@ const API_SKILLS: ApiSkill[] = [
   },
   {
     id: 'airtable', name: 'Airtable', icon: '📊',
+    iconSlug: 'airtable', iconColor: '#18BFFF',
     logo: 'https://cdn.simpleicons.org/airtable/18BFFF',
     description: '스프레드시트 DB',
     detailedDesc: 'Airtable 베이스 데이터를 관리합니다.',
@@ -120,6 +132,7 @@ const API_SKILLS: ApiSkill[] = [
   },
   {
     id: 'dropbox', name: 'Dropbox', icon: '📦',
+    iconSlug: 'dropbox', iconColor: '#0061FF',
     logo: 'https://cdn.simpleicons.org/dropbox/0061FF',
     description: '클라우드 파일',
     detailedDesc: 'Dropbox 파일을 관리합니다.',
@@ -129,6 +142,7 @@ const API_SKILLS: ApiSkill[] = [
   },
   {
     id: 'gitlab', name: 'GitLab', icon: '🦊',
+    iconSlug: 'gitlab', iconColor: '#FC6D26',
     logo: 'https://cdn.simpleicons.org/gitlab/FC6D26',
     description: '코드 저장소',
     detailedDesc: 'GitLab 저장소를 관리합니다.',
@@ -605,7 +619,7 @@ export default function SkillsSettings({
                 className={`bg-[#1e2030] border-2 rounded-xl p-4 transition-all ${configured ? 'border-forge-success/40 hover:border-forge-success/60' : 'border-[#2a2d3e] hover:border-[#3a3f52]'} ${isWorking ? 'opacity-60 pointer-events-none' : ''}`}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  {skill.logo ? <img src={skill.logo} alt={skill.name} className="w-6 h-6 object-contain" /> : <span className="text-2xl">{skill.icon}</span>}
+                  <BrandIcon iconSlug={skill.iconSlug} iconColor={skill.iconColor} logo={skill.logo} icon={skill.icon} name={skill.name} size={24} />
                   <span className="font-medium text-forge-text text-sm">{skill.name}</span>
                 </div>
                 <p className="text-xs text-forge-muted mb-3 line-clamp-1">{skill.description}</p>

@@ -4,6 +4,7 @@
 import { useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { FullConfig, SettingsMode } from '../../types/config';
+import { BrandIcon } from '../common/BrandIcon';
 
 interface ToolsSettingsProps {
   config: FullConfig;
@@ -18,7 +19,9 @@ interface Tool {
   id: string;
   name: string;
   icon: string;
-  logo?: string;
+  iconSlug?: string;         // Simple Icons slug for @iconify/react
+  iconColor?: string;        // Brand color
+  logo?: string;             // Fallback logo URL
   description: string;       // 카드에 표시되는 짧은 설명
   detailedDesc: string;      // 모달에 표시되는 상세 설명
   envVar: string;
@@ -34,6 +37,8 @@ const TOOLS: Tool[] = [
     id: 'brave-search',
     name: 'Brave Search',
     icon: '🔍',
+    iconSlug: 'brave',
+    iconColor: '#FB542B',
     logo: 'https://cdn.simpleicons.org/brave/FB542B',
     description: '인터넷 검색',
     detailedDesc: 'AI가 인터넷에서 정보를 검색할 수 있게 해줍니다. "최신 뉴스 알려줘", "○○ 맛집 추천해줘" 같은 질문에 답할 수 있습니다.',
@@ -71,6 +76,8 @@ const TOOLS: Tool[] = [
     id: 'jina',
     name: 'Jina Reader',
     icon: '📖',
+    iconSlug: 'jina',
+    iconColor: '#F57C00',
     logo: 'https://cdn.simpleicons.org/jina/F57C00',
     description: '웹페이지 읽기',
     detailedDesc: '웹페이지를 AI가 이해하기 쉬운 형태로 변환합니다. 광고, 메뉴 등을 제외한 본문만 추출합니다.',
@@ -450,11 +457,14 @@ export default function ToolsSettings({
               `}
             >
               <div className="flex items-center gap-3 mb-2">
-                {tool.logo ? (
-                  <img src={tool.logo} alt={tool.name} className="w-6 h-6 object-contain" />
-                ) : (
-                  <span className="text-2xl">{tool.icon}</span>
-                )}
+                <BrandIcon 
+                  iconSlug={tool.iconSlug}
+                  iconColor={tool.iconColor}
+                  logo={tool.logo}
+                  icon={tool.icon}
+                  name={tool.name}
+                  size={24}
+                />
                 <span className="font-medium text-forge-text text-sm">{tool.name}</span>
               </div>
               <p className="text-xs text-forge-muted mb-3 line-clamp-1">{tool.description}</p>

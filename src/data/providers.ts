@@ -9,6 +9,8 @@ export const BASIC_PROVIDERS: ProviderInfo[] = [
     id: 'anthropic',
     name: 'Anthropic',
     icon: '🟣',
+    iconSlug: 'anthropic',
+    iconColor: '#D4A27D',
     logo: 'https://cdn.simpleicons.org/anthropic/D4A27D',
     color: '#D4A27D',
     models: [
@@ -23,6 +25,8 @@ export const BASIC_PROVIDERS: ProviderInfo[] = [
     id: 'openai',
     name: 'OpenAI',
     icon: '🟢',
+    iconSlug: 'openai',
+    iconColor: '#412991',
     logo: '/icons/openai.svg',
     color: '#10A37F',
     models: [
@@ -38,6 +42,8 @@ export const BASIC_PROVIDERS: ProviderInfo[] = [
     id: 'google',
     name: 'Google',
     icon: '🔵',
+    iconSlug: 'googlegemini',
+    iconColor: '#8E75B2',
     logo: 'https://cdn.simpleicons.org/google/4285F4',
     color: '#4285F4',
     models: [
@@ -56,6 +62,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'openrouter',
     name: 'OpenRouter',
     icon: '🌐',
+    iconSlug: 'openrouter',
+    iconColor: '#6366F1',
     logo: 'https://cdn.simpleicons.org/openrouter/6366F1',
     color: '#6366F1',
     models: [
@@ -70,6 +78,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'groq',
     name: 'Groq',
     icon: '⚡',
+    iconSlug: 'groq',
+    iconColor: '#F55036',
     logo: '/icons/groq.svg',
     color: '#F97316',
     models: [
@@ -84,6 +94,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'mistral',
     name: 'Mistral',
     icon: '🔷',
+    iconSlug: 'mistral',
+    iconColor: '#FF7000',
     logo: '/icons/mistral.svg',
     color: '#FF7000',
     models: [
@@ -98,6 +110,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'together',
     name: 'Together AI',
     icon: '🤝',
+    iconSlug: 'togetherai',
+    iconColor: '#0EA5E9',
     logo: '/icons/together.svg',
     color: '#0EA5E9',
     models: [
@@ -112,6 +126,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'cerebras',
     name: 'Cerebras',
     icon: '🧠',
+    iconSlug: 'cerebras',
+    iconColor: '#00D4AA',
     logo: '/icons/cerebras.svg',
     color: '#00D4AA',
     models: [
@@ -125,6 +141,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'xai',
     name: 'xAI (Grok)',
     icon: '✖️',
+    iconSlug: 'x',
+    iconColor: '#000000',
     logo: 'https://cdn.simpleicons.org/x/FFFFFF',
     color: '#000000',
     models: [
@@ -138,6 +156,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'perplexity',
     name: 'Perplexity',
     icon: '🔍',
+    iconSlug: 'perplexity',
+    iconColor: '#20B2AA',
     logo: 'https://cdn.simpleicons.org/perplexity/20B2AA',
     color: '#20B2AA',
     models: [
@@ -151,6 +171,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'deepgram',
     name: 'Deepgram',
     icon: '🎤',
+    iconSlug: 'deepgram',
+    iconColor: '#13EF93',
     logo: 'https://cdn.simpleicons.org/deepgram/13EF93',
     color: '#13EF93',
     models: [
@@ -163,6 +185,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'voyage',
     name: 'Voyage',
     icon: '🚀',
+    iconSlug: 'v',
+    iconColor: '#7C3AED',
     logo: '/icons/voyage.svg',
     color: '#7C3AED',
     models: [
@@ -176,6 +200,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'minimax',
     name: 'MiniMax',
     icon: '🤖',
+    iconSlug: 'minimax',
+    iconColor: '#8B5CF6',
     logo: '/icons/minimax.svg',
     color: '#8B5CF6',
     models: [
@@ -189,6 +215,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'moonshot',
     name: 'Moonshot',
     icon: '🌙',
+    iconSlug: 'moonrepo',
+    iconColor: '#1E40AF',
     logo: 'https://cdn.simpleicons.org/moonrepo/1E40AF',
     color: '#1E40AF',
     models: [
@@ -202,6 +230,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'qwen',
     name: 'Qwen (Alibaba)',
     icon: '☁️',
+    iconSlug: 'alibabacloud',
+    iconColor: '#FF6A00',
     logo: 'https://cdn.simpleicons.org/alibabacloud/FF6A00',
     color: '#FF6A00',
     models: [
@@ -216,6 +246,8 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'venice',
     name: 'Venice AI',
     icon: '🏛️',
+    iconSlug: 'v',
+    iconColor: '#DC2626',
     logo: 'https://cdn.simpleicons.org/v/DC2626',
     color: '#DC2626',
     models: [

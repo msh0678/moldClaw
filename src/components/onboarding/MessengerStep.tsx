@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { MessengerConfig, Messenger } from '../../types/config';
 import { BASIC_MESSENGERS, ADDITIONAL_MESSENGERS, ALL_MESSENGERS } from '../../data/messengers';
 import { defaultMessengerConfig } from '../../types/config';
+import { BrandIcon } from '../common/BrandIcon';
 
 interface MessengerStepProps {
   initialConfig: MessengerConfig;
@@ -82,11 +83,14 @@ export default function MessengerStep({ initialConfig, onComplete, onBack }: Mes
 
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 flex items-center justify-center">
-                  {m.logo ? (
-                    <img src={m.logo} alt={m.name} className="w-8 h-8 object-contain" />
-                  ) : (
-                    <span className="text-3xl">{m.icon}</span>
-                  )}
+                  <BrandIcon 
+                    iconSlug={m.iconSlug}
+                    iconColor={m.iconColor}
+                    logo={m.logo}
+                    icon={m.icon}
+                    name={m.name}
+                    size={32}
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
