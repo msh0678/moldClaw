@@ -299,7 +299,13 @@ export default function MessengerConnectStep({
 
             {qrError && (
               <div className="p-3 bg-forge-error/10 border border-forge-error/30 rounded-lg">
-                <p className="text-sm text-forge-error">{qrError}</p>
+                <p className="text-sm text-forge-error mb-2">{qrError}</p>
+                <button
+                  onClick={startWhatsAppLink}
+                  className="px-4 py-2 bg-forge-copper text-white rounded-lg text-sm font-medium hover:bg-forge-copper/80"
+                >
+                  다시 시도
+                </button>
               </div>
             )}
           </div>

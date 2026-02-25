@@ -5,10 +5,10 @@ use serde_json::{json, Value};
 use chrono::Utc;
 
 // ===== macOS PATH 해결 (openclaw 모듈 전용) =====
-// lib.rs의 get_macos_path()와 동일한 로직을 독립적으로 유지합니다.
+// macOS PATH 헬퍼 (lib.rs에서도 사용)
 
 #[cfg(target_os = "macos")]
-fn get_macos_path() -> String {
+pub fn get_macos_path() -> String {
     use std::sync::OnceLock;
     static CACHED_PATH: OnceLock<String> = OnceLock::new();
 
@@ -235,6 +235,14 @@ fn get_openclaw_dir() -> PathBuf {
 /// OpenClaw 설정 파일 경로
 fn get_config_path() -> PathBuf {
     get_openclaw_dir().join("openclaw.json")
+}
+
+/// Config에 필수 키(gateway, agents, tools)가 있는지 확인
+/// Schema Pollution 버그 방지: is_empty()만 체크하면 browser config만 있어도 통과
+fn has_required_config_keys(config: &serde_json::Value) -> bool {
+    config.get("gateway").is_some() 
+        && config.get("agents").is_some()
+        && config.get("tools").is_some()
 }
 
 /// Workspace 디렉토리 경로
@@ -607,9 +615,11 @@ pub async fn add_model_to_config(
 ) -> Result<(), String> {
     let mut config = read_existing_config();
     
-    // 기존 config가 없으면 기본 config 먼저 생성
-    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
-        return Err("Config가 없습니다. 먼저 create_official_config를 호출하세요.".to_string());
+    // ⚠️ Schema Pollution 버그 수정!
+    // 이전: is_empty()만 체크 → browser config만 있으면 통과
+    // 수정: 필수 키(gateway, agents, tools)가 있는지 확인
+    if !has_required_config_keys(&config) {
+        return Err("Config에 필수 설정이 없습니다. 먼저 create_official_config를 호출하세요.".to_string());
     }
     
     // meta.lastTouchedAt 업데이트
@@ -778,9 +788,11 @@ pub async fn add_channel_to_config(
     
     let mut config = read_existing_config();
     
-    // 기존 config가 없으면 에러
-    if config.as_object().map(|o| o.is_empty()).unwrap_or(true) {
-        return Err("Config가 없습니다. 먼저 create_official_config를 호출하세요.".to_string());
+    // ⚠️ Schema Pollution 버그 수정!
+    // 이전: is_empty()만 체크 → browser config만 있으면 통과
+    // 수정: 필수 키(gateway, agents, tools)가 있는지 확인
+    if !has_required_config_keys(&config) {
+        return Err("Config에 필수 설정이 없습니다. 먼저 create_official_config를 호출하세요.".to_string());
     }
     
     // ⚠️ Policy 검증 및 자동 수정 (OPENCLAW_SCHEMA_REFERENCE.md 기준)

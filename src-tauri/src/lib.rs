@@ -16,59 +16,10 @@ use tauri::Emitter;
 // macOS DMG/App으로 실행 시 shell profile(~/.zshrc 등)이 sourced 되지 않아
 // node, npm, openclaw 등 CLI 도구를 찾지 못하는 문제를 해결합니다.
 
+// macOS PATH 헬퍼 - openclaw 모듈에서 가져옴
 #[cfg(target_os = "macos")]
 fn get_macos_path() -> String {
-    use std::sync::OnceLock;
-    static CACHED_PATH: OnceLock<String> = OnceLock::new();
-
-    CACHED_PATH.get_or_init(|| {
-        // 1. Login shell로 실제 사용자 PATH 가져오기
-        let shells = ["/bin/zsh", "/bin/bash", "/bin/sh"];
-        for shell in &shells {
-            if let Ok(output) = std::process::Command::new(shell)
-                .args(["-l", "-c", "echo $PATH"])
-                .output()
-            {
-                if output.status.success() {
-                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    if !path.is_empty() && path.contains('/') {
-                        eprintln!("[macOS PATH] shell에서 가져온 PATH: {}", &path[..path.len().min(200)]);
-                        return path;
-                    }
-                }
-            }
-        }
-
-        // 2. Fallback: macOS 주요 경로 수동 구성
-        let home = std::env::var("HOME").unwrap_or_default();
-        let known_paths = vec![
-            "/opt/homebrew/bin".to_string(),        // Apple Silicon Homebrew
-            "/opt/homebrew/sbin".to_string(),
-            "/usr/local/bin".to_string(),            // Intel Homebrew / 기본 경로
-            "/usr/local/sbin".to_string(),
-            format!("{}/Library/npm/bin", home),    // npm global (macOS)
-            format!("{}/.npm-global/bin", home),
-            format!("{}/.local/bin", home),
-            "/usr/bin".to_string(),
-            "/bin".to_string(),
-            "/usr/sbin".to_string(),
-            "/sbin".to_string(),
-        ];
-
-        // 현재 환경 PATH와 합치기 (중복 제거)
-        let current = std::env::var("PATH").unwrap_or_default();
-        let mut all: Vec<String> = known_paths;
-        for p in current.split(':') {
-            if !p.is_empty() {
-                all.push(p.to_string());
-            }
-        }
-        let mut seen = std::collections::HashSet::new();
-        let deduped: Vec<String> = all.into_iter().filter(|p| seen.insert(p.clone())).collect();
-        let result = deduped.join(":");
-        eprintln!("[macOS PATH] fallback PATH 사용");
-        result
-    }).clone()
+    openclaw::get_macos_path()
 }
 
 /// macOS에서 PATH가 적용된 Command 빌더 반환
