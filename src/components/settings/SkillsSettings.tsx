@@ -568,50 +568,63 @@ export default function SkillsSettings({
         <p className="text-forge-muted text-sm">외부 서비스와 CLI 도구를 연동하여 AI 기능을 확장합니다</p>
       </div>
 
-      {/* 탭 */}
-      <div className="flex gap-2 mb-6">
-        <button
-          onClick={() => setActiveTab('api')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'api' ? 'bg-forge-copper text-white' : 'bg-[#252836] text-forge-muted hover:bg-[#2d3142]'}`}
-        >
-          🔑 API 연동 ({API_SKILLS.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('cli')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'cli' ? 'bg-forge-copper text-white' : 'bg-[#252836] text-forge-muted hover:bg-[#2d3142]'}`}
-        >
-          🛠️ CLI 도구 ({cliSkills.length || 38})
-        </button>
-      </div>
+      {/* 폴더형 탭 컨테이너 */}
+      <div className="relative">
+        {/* 탭 버튼들 (폴더 탭 형태) */}
+        <div className="flex">
+          <button
+            onClick={() => setActiveTab('api')}
+            className={`px-5 py-2.5 text-sm font-medium transition-colors relative
+              ${activeTab === 'api' 
+                ? 'bg-[#1a1c24] text-forge-copper border-2 border-[#2a2d3e] border-b-[#1a1c24] rounded-t-xl z-10' 
+                : 'bg-[#252836] text-forge-muted hover:text-forge-text border-2 border-transparent rounded-t-xl -mb-[2px]'
+              }`}
+          >
+            🔑 API 연동 ({API_SKILLS.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('cli')}
+            className={`px-5 py-2.5 text-sm font-medium transition-colors relative ml-1
+              ${activeTab === 'cli' 
+                ? 'bg-[#1a1c24] text-forge-copper border-2 border-[#2a2d3e] border-b-[#1a1c24] rounded-t-xl z-10' 
+                : 'bg-[#252836] text-forge-muted hover:text-forge-text border-2 border-transparent rounded-t-xl -mb-[2px]'
+              }`}
+          >
+            🛠️ CLI 도구 ({cliSkills.length || 38})
+          </button>
+        </div>
 
-      {/* Prerequisite 경고 (CLI 탭에서만) */}
-      {activeTab === 'cli' && missingPrereqs.length > 0 && (
-        <div className="mb-4 bg-forge-amber/10 border border-forge-amber/30 p-4 rounded-xl">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">⚠️</span>
-            <div className="flex-1">
-              <p className="font-medium text-forge-amber mb-3">일부 스킬에 필요한 도구가 설치되어 있지 않습니다</p>
-              <div className="flex flex-wrap gap-3">
-                {missingPrereqs.map(name => (
-                  <button
-                    key={name}
-                    onClick={() => installPrerequisite(name.toLowerCase())}
-                    disabled={!!installingPrereq}
-                    className="px-4 py-2 bg-forge-copper hover:bg-forge-copper/80 text-white rounded-lg text-sm font-semibold shadow-md border border-forge-copper/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    {installingPrereq === name.toLowerCase() ? '⏳ 설치 중...' : `📦 ${name} 설치`}
-                  </button>
-                ))}
+        {/* 폴더 본체 (컨텐츠 영역) */}
+        <div className="border-2 border-[#2a2d3e] rounded-b-xl rounded-tr-xl bg-[#1a1c24] p-4 -mt-[2px]">
+          
+          {/* Prerequisite 경고 (CLI 탭에서만) */}
+          {activeTab === 'cli' && missingPrereqs.length > 0 && (
+            <div className="mb-4 bg-forge-amber/10 border border-forge-amber/30 p-4 rounded-xl">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">⚠️</span>
+                <div className="flex-1">
+                  <p className="font-medium text-forge-amber mb-3">일부 스킬에 필요한 도구가 설치되어 있지 않습니다</p>
+                  <div className="flex flex-wrap gap-3">
+                    {missingPrereqs.map(name => (
+                      <button
+                        key={name}
+                        onClick={() => installPrerequisite(name.toLowerCase())}
+                        disabled={!!installingPrereq}
+                        className="px-4 py-2 bg-forge-copper hover:bg-forge-copper/80 text-white rounded-lg text-sm font-semibold shadow-md border border-forge-copper/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      >
+                        {installingPrereq === name.toLowerCase() ? '⏳ 설치 중...' : `📦 ${name} 설치`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* API 스킬 탭 */}
-      {activeTab === 'api' && (
-        <div className="border-2 border-[#2a2d3e] rounded-xl p-4 bg-[#1a1c24]/50">
-        <p className="text-xs text-forge-muted mb-4">💡 API 키를 저장하면 AI가 curl/exec로 해당 서비스를 사용할 수 있습니다</p>
+          {/* API 스킬 탭 */}
+          {activeTab === 'api' && (
+            <>
+            <p className="text-xs text-forge-muted mb-4">💡 API 키를 저장하면 AI가 curl/exec로 해당 서비스를 사용할 수 있습니다</p>
         <div className="grid grid-cols-3 gap-3">
           {API_SKILLS.map((skill) => {
             const configured = isApiConfigured(skill);
@@ -638,14 +651,14 @@ export default function SkillsSettings({
               </div>
             );
           })}
-        </div>
-        </div>
-      )}
+          </div>
+          </>
+          )}
 
-      {/* CLI 스킬 탭 */}
-      {activeTab === 'cli' && (
-        <div className="border-2 border-[#2a2d3e] rounded-xl p-4 bg-[#1a1c24]/50">
-          {/* 필터 */}
+          {/* CLI 스킬 탭 */}
+          {activeTab === 'cli' && (
+          <>
+            {/* 필터 */}
           <div className="flex gap-3 mb-4">
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="bg-[#252836] text-forge-text border border-[#2a2d3e] rounded-lg px-3 py-2 text-sm">
               <option value="all">전체</option>
@@ -725,8 +738,11 @@ export default function SkillsSettings({
               )}
             </div>
           )}
+          </>
+          )}
+
         </div>
-      )}
+      </div>
 
       {/* API 연결 해제 확인 모달 */}
       {disconnectTarget && (
