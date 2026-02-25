@@ -175,15 +175,43 @@ fn check_prerequisites() -> PrerequisiteStatus {
     }
 }
 
-/// 환경변수 설정 확인
-fn check_env_var_configured(config: &serde_json::Value, var_name: &str) -> bool {
-    config
-        .get("env")
-        .and_then(|e| e.get("vars"))
-        .and_then(|v| v.get(var_name))
+/// 환경변수/API키 설정 확인
+/// OpenClaw는 여러 경로에 API 키를 저장할 수 있음:
+/// 1. skills.entries.{skill_id}.apiKey (스킬별 API 키)
+/// 2. skills.entries.{skill_id}.env.{var_name} (스킬별 환경변수)
+/// 3. 실제 환경 변수
+fn check_env_var_configured(config: &serde_json::Value, skill_id: &str, var_name: &str) -> bool {
+    // 1. skills.entries.{skill_id}.apiKey 확인
+    let has_skill_api_key = config
+        .get("skills")
+        .and_then(|s| s.get("entries"))
+        .and_then(|e| e.get(skill_id))
+        .and_then(|s| s.get("apiKey"))
         .and_then(|v| v.as_str())
         .map(|s| !s.is_empty())
-        .unwrap_or(false)
+        .unwrap_or(false);
+    
+    if has_skill_api_key {
+        return true;
+    }
+    
+    // 2. skills.entries.{skill_id}.env.{var_name} 확인
+    let has_skill_env = config
+        .get("skills")
+        .and_then(|s| s.get("entries"))
+        .and_then(|e| e.get(skill_id))
+        .and_then(|s| s.get("env"))
+        .and_then(|e| e.get(var_name))
+        .and_then(|v| v.as_str())
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    
+    if has_skill_env {
+        return true;
+    }
+    
+    // 3. 실제 환경 변수 확인
+    std::env::var(var_name).map(|s| !s.is_empty()).unwrap_or(false)
 }
 
 /// Config 파일/폴더 존재 확인
@@ -262,7 +290,7 @@ fn get_skill_status(skill: &SkillDefinition, config: &serde_json::Value, prereqs
     let configured = match &skill.setup {
         SetupRequirement::None => true,
         SetupRequirement::ApiKey { vars } => {
-            vars.iter().all(|v| check_env_var_configured(config, v))
+            vars.iter().all(|v| check_env_var_configured(config, &skill.id, v))
         }
         SetupRequirement::Login { .. } => {
             skill
