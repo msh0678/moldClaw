@@ -590,7 +590,7 @@ export default function SkillsSettings({
                 : 'bg-[#252836] text-forge-muted hover:text-forge-text border-2 border-transparent rounded-t-xl -mb-[2px]'
               }`}
           >
-            🛠️ CLI 도구 ({cliSkills.length || 38})
+            🛠️ CLI 도구 ({cliSkills.length})
           </button>
         </div>
 
