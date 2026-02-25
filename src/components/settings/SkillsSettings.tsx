@@ -1,11 +1,17 @@
 // SkillsSettings - 통합 스킬 관리 (moldClaw API 스킬 + OpenClaw CLI 스킬)
-// v2.0: 45개 OpenClaw CLI 스킬 + 11개 moldClaw API 스킬 통합
+// v3.0: Prerequisite 체크 + 플랫폼별 비활성화
 
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { FullConfig, SettingsMode } from '../../types/config';
-import type { SkillDefinition, SkillStatus, SkillsStatusResponse, SetupRequirement } from '../../types/skills';
-import { SKILL_CATEGORIES } from '../../types/skills';
+import type { 
+  SkillDefinition, 
+  SkillStatus, 
+  SkillsStatusResponse, 
+  SetupRequirement,
+  PrerequisiteStatus 
+} from '../../types/skills';
+import { SKILL_CATEGORIES, getEffectiveInstallMethod, needsPrerequisite } from '../../types/skills';
 
 interface SkillsSettingsProps {
   config: FullConfig;
@@ -32,9 +38,7 @@ interface ApiSkill {
 
 const API_SKILLS: ApiSkill[] = [
   {
-    id: 'notion',
-    name: 'Notion',
-    icon: '📝',
+    id: 'notion', name: 'Notion', icon: '📝',
     logo: 'https://cdn.simpleicons.org/notion/FFFFFF',
     description: '노트/문서 관리',
     detailedDesc: 'Notion 워크스페이스에 접근하여 페이지 읽기, 생성, 수정을 할 수 있습니다.',
@@ -43,20 +47,16 @@ const API_SKILLS: ApiSkill[] = [
     guideUrl: 'https://www.notion.so/my-integrations',
   },
   {
-    id: 'github',
-    name: 'GitHub',
-    icon: '🐱',
+    id: 'github', name: 'GitHub', icon: '🐱',
     logo: 'https://cdn.simpleicons.org/github/FFFFFF',
     description: '코드 저장소',
     detailedDesc: 'GitHub 저장소의 코드를 읽고, 이슈/PR을 관리합니다.',
     envVar: 'GITHUB_TOKEN',
-    guideSteps: ['GitHub Settings → Developer settings', 'Personal access tokens → Tokens (classic)', 'Generate new token', '필요한 권한 선택 후 복사'],
+    guideSteps: ['GitHub Settings → Developer settings', 'Personal access tokens → Tokens (classic)', 'Generate new token'],
     guideUrl: 'https://github.com/settings/tokens',
   },
   {
-    id: 'todoist',
-    name: 'Todoist',
-    icon: '✅',
+    id: 'todoist', name: 'Todoist', icon: '✅',
     logo: 'https://cdn.simpleicons.org/todoist/E44332',
     description: '할 일 관리',
     detailedDesc: 'Todoist에 할 일을 추가하거나 완료 처리합니다.',
@@ -65,9 +65,7 @@ const API_SKILLS: ApiSkill[] = [
     guideUrl: 'https://todoist.com/app/settings/integrations/developer',
   },
   {
-    id: 'linear',
-    name: 'Linear',
-    icon: '📊',
+    id: 'linear', name: 'Linear', icon: '📊',
     logo: 'https://cdn.simpleicons.org/linear/5E6AD2',
     description: '이슈 트래킹',
     detailedDesc: 'Linear에서 이슈를 생성하고 관리합니다.',
@@ -76,9 +74,7 @@ const API_SKILLS: ApiSkill[] = [
     guideUrl: 'https://linear.app/settings/api',
   },
   {
-    id: 'trello',
-    name: 'Trello',
-    icon: '📋',
+    id: 'trello', name: 'Trello', icon: '📋',
     logo: 'https://cdn.simpleicons.org/trello/0052CC',
     description: '칸반 보드',
     detailedDesc: 'Trello 보드에서 카드를 관리합니다.',
@@ -87,9 +83,7 @@ const API_SKILLS: ApiSkill[] = [
     guideUrl: 'https://trello.com/power-ups/admin',
   },
   {
-    id: 'figma',
-    name: 'Figma',
-    icon: '🎨',
+    id: 'figma', name: 'Figma', icon: '🎨',
     logo: 'https://cdn.simpleicons.org/figma/F24E1E',
     description: '디자인 파일',
     detailedDesc: 'Figma 파일 정보를 읽어옵니다.',
@@ -98,9 +92,7 @@ const API_SKILLS: ApiSkill[] = [
     guideUrl: 'https://www.figma.com/developers/api#access-tokens',
   },
   {
-    id: 'jira',
-    name: 'Jira',
-    icon: '📊',
+    id: 'jira', name: 'Jira', icon: '📊',
     logo: 'https://cdn.simpleicons.org/jira/0052CC',
     description: '프로젝트 관리',
     detailedDesc: 'Jira에서 이슈를 관리합니다.',
@@ -109,9 +101,7 @@ const API_SKILLS: ApiSkill[] = [
     guideUrl: 'https://id.atlassian.com/manage-profile/security/api-tokens',
   },
   {
-    id: 'asana',
-    name: 'Asana',
-    icon: '✅',
+    id: 'asana', name: 'Asana', icon: '✅',
     logo: 'https://cdn.simpleicons.org/asana/F06A6A',
     description: '작업 관리',
     detailedDesc: 'Asana에서 작업을 관리합니다.',
@@ -120,9 +110,7 @@ const API_SKILLS: ApiSkill[] = [
     guideUrl: 'https://app.asana.com/0/developer-console',
   },
   {
-    id: 'airtable',
-    name: 'Airtable',
-    icon: '📊',
+    id: 'airtable', name: 'Airtable', icon: '📊',
     logo: 'https://cdn.simpleicons.org/airtable/18BFFF',
     description: '스프레드시트 DB',
     detailedDesc: 'Airtable 베이스 데이터를 관리합니다.',
@@ -131,9 +119,7 @@ const API_SKILLS: ApiSkill[] = [
     guideUrl: 'https://airtable.com/account',
   },
   {
-    id: 'dropbox',
-    name: 'Dropbox',
-    icon: '📦',
+    id: 'dropbox', name: 'Dropbox', icon: '📦',
     logo: 'https://cdn.simpleicons.org/dropbox/0061FF',
     description: '클라우드 파일',
     detailedDesc: 'Dropbox 파일을 관리합니다.',
@@ -142,9 +128,7 @@ const API_SKILLS: ApiSkill[] = [
     guideUrl: 'https://www.dropbox.com/developers/apps',
   },
   {
-    id: 'gitlab',
-    name: 'GitLab',
-    icon: '🦊',
+    id: 'gitlab', name: 'GitLab', icon: '🦊',
     logo: 'https://cdn.simpleicons.org/gitlab/FC6D26',
     description: '코드 저장소',
     detailedDesc: 'GitLab 저장소를 관리합니다.',
@@ -154,7 +138,6 @@ const API_SKILLS: ApiSkill[] = [
   },
 ];
 
-// ===== 탭 타입 =====
 type TabType = 'api' | 'cli';
 
 export default function SkillsSettings({
@@ -169,13 +152,15 @@ export default function SkillsSettings({
   const [activeTab, setActiveTab] = useState<TabType>('api');
   const [cliSkills, setCliSkills] = useState<SkillDefinition[]>([]);
   const [cliStatuses, setCliStatuses] = useState<Record<string, SkillStatus>>({});
-  const [platform, setPlatform] = useState<string>('');
+  const [prerequisites, setPrerequisites] = useState<PrerequisiteStatus | null>(null);
+  const [platform, setPlatform] = useState<'windows' | 'macos' | 'linux'>('macos');
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'installed' | 'available'>('all');
   
   const [disconnectTarget, setDisconnectTarget] = useState<ApiSkill | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [installingPrereq, setInstallingPrereq] = useState<string | null>(null);
   const isWorkingRef = useRef(false);
 
   // CLI 스킬 데이터 로드
@@ -194,13 +179,35 @@ export default function SkillsSettings({
       ]);
       setCliSkills(defs);
       setCliStatuses(statusRes.skills);
-      setPlatform(statusRes.platform);
+      setPrerequisites(statusRes.prerequisites);
+      setPlatform(statusRes.platform as 'windows' | 'macos' | 'linux');
     } catch (err) {
       console.error('CLI 스킬 로드 실패:', err);
     } finally {
       setLoading(false);
     }
   };
+
+  // Prerequisite 설치
+  const installPrerequisite = async (name: string) => {
+    setInstallingPrereq(name);
+    try {
+      const result = await invoke<string>('install_prerequisite', { name });
+      alert(result);
+      await loadCliSkills();
+    } catch (err) {
+      alert(`설치 실패: ${err}`);
+    } finally {
+      setInstallingPrereq(null);
+    }
+  };
+
+  // 누락된 prerequisite 목록
+  const missingPrereqs = prerequisites ? [
+    !prerequisites.go_installed && 'Go',
+    !prerequisites.uv_installed && 'uv',
+    platform !== 'windows' && !prerequisites.brew_installed && 'Homebrew',
+  ].filter(Boolean) as string[] : [];
 
   // API 스킬: 설정 여부 확인
   const isApiConfigured = (skill: ApiSkill) => {
@@ -247,7 +254,6 @@ export default function SkillsSettings({
           <div className="bg-[#252836] p-3 rounded-lg">
             <p className="text-sm text-forge-text leading-relaxed">{skill.detailedDesc}</p>
           </div>
-          
           <ol className="space-y-1.5 text-sm text-forge-muted">
             {skill.guideSteps.map((step, i) => (
               <li key={i} className="flex gap-2">
@@ -256,7 +262,6 @@ export default function SkillsSettings({
               </li>
             ))}
           </ol>
-
           {skill.envVar && (
             <input
               type="password"
@@ -267,15 +272,12 @@ export default function SkillsSettings({
               className="w-full px-4 py-3 bg-[#1a1c24] border-2 border-[#2a2d3e] rounded-xl focus:outline-none focus:border-forge-copper text-sm font-mono disabled:opacity-50"
             />
           )}
-
           {skill.guideUrl && (
             <a href={skill.guideUrl} target="_blank" rel="noopener noreferrer" className="block text-center text-sm text-forge-copper hover:text-forge-amber">
               🔗 공식 사이트 →
             </a>
           )}
-          
           {error && <p className="text-sm text-forge-error bg-forge-error/10 p-3 rounded-lg">{error}</p>}
-          
           {skill.envVar && (
             <button onClick={handleSave} disabled={saving || !apiKey.trim()} className="w-full py-3 rounded-xl btn-primary disabled:opacity-50 flex items-center justify-center gap-2">
               {saving ? <><div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> 저장 중...</> : '저장'}
@@ -284,7 +286,6 @@ export default function SkillsSettings({
         </div>
       );
     };
-
     openModal(`${skill.name} 연동`, <ApiSkillModal />);
   };
 
@@ -317,11 +318,12 @@ export default function SkillsSettings({
   // CLI 스킬: 상세 모달
   const openCliSkillModal = (skill: SkillDefinition) => {
     const status = cliStatuses[skill.id];
+    const prereqCheck = prerequisites ? needsPrerequisite(skill, platform, prerequisites) : { needed: false, missing: null };
     
     const CliSkillModal = () => {
       const [installing, setInstalling] = useState(false);
       const [disconnecting, setDisconnecting] = useState(false);
-      const [apiKeyInput, setApiKeyInput] = useState('');
+      const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
       const [error, setError] = useState<string | null>(null);
 
       const handleInstall = async () => {
@@ -337,21 +339,21 @@ export default function SkillsSettings({
         }
       };
 
-      const handleSaveApiKey = async (envVar: string) => {
-        if (!apiKeyInput.trim()) return;
+      const handleSaveApiKey = async () => {
+        if (skill.setup.type !== 'api_key') return;
         setError(null);
         try {
-          await invoke('configure_skill_api_key', { skillId: skill.id, envVar, value: apiKeyInput.trim() });
-          setApiKeyInput('');
+          await invoke('configure_skill_api_key', { skillId: skill.id, apiKeys: apiKeyInputs });
           await loadCliSkills();
+          setApiKeyInputs({});
         } catch (err) {
           setError(String(err));
         }
       };
 
-      const handleOpenLogin = async (command: string) => {
+      const handleOpenLogin = async () => {
         try {
-          await invoke('open_skill_login_terminal', { skillId: skill.id, loginCommand: command });
+          await invoke('open_skill_login_terminal', { skillId: skill.id });
         } catch (err) {
           setError(String(err));
         }
@@ -375,7 +377,6 @@ export default function SkillsSettings({
 
       const renderSetupUI = () => {
         if (!status?.installed) return null;
-        
         const setup = skill.setup as SetupRequirement;
         
         if (setup.type === 'api_key') {
@@ -387,13 +388,13 @@ export default function SkillsSettings({
                   <input
                     type="password"
                     placeholder={varName}
-                    value={apiKeyInput}
-                    onChange={e => setApiKeyInput(e.target.value)}
+                    value={apiKeyInputs[varName] || ''}
+                    onChange={e => setApiKeyInputs(prev => ({ ...prev, [varName]: e.target.value }))}
                     className="flex-1 bg-[#1a1c24] border border-[#2a2d3e] rounded-lg px-3 py-2 text-sm"
                   />
-                  <button onClick={() => handleSaveApiKey(varName)} className="px-4 py-2 bg-forge-copper rounded-lg text-sm font-medium hover:bg-forge-copper/80">저장</button>
                 </div>
               ))}
+              <button onClick={handleSaveApiKey} className="px-4 py-2 bg-forge-copper rounded-lg text-sm font-medium hover:bg-forge-copper/80">저장</button>
             </div>
           );
         }
@@ -403,7 +404,8 @@ export default function SkillsSettings({
             <div className="space-y-3">
               <h4 className="font-medium text-forge-text">로그인 필요</h4>
               <p className="text-sm text-forge-muted">터미널에서 로그인을 완료해주세요.</p>
-              <button onClick={() => handleOpenLogin(setup.command)} className="px-4 py-2 bg-forge-copper rounded-lg text-sm font-medium hover:bg-forge-copper/80">
+              <code className="block text-xs bg-[#1a1c24] p-2 rounded font-mono text-forge-muted">{setup.command}</code>
+              <button onClick={handleOpenLogin} className="px-4 py-2 bg-forge-copper rounded-lg text-sm font-medium hover:bg-forge-copper/80">
                 로그인 터미널 열기
               </button>
             </div>
@@ -445,6 +447,11 @@ export default function SkillsSettings({
         return null;
       };
 
+      const effectiveMethod = getEffectiveInstallMethod(skill, platform);
+      const effectiveCommand = platform === 'windows' && skill.windows_install_command 
+        ? skill.windows_install_command 
+        : skill.install_command;
+
       return (
         <div className="space-y-4">
           {/* 상태 뱃지 */}
@@ -464,11 +471,25 @@ export default function SkillsSettings({
             <p className="text-sm text-forge-text">{skill.description}</p>
           </div>
 
+          {/* Prerequisite 경고 */}
+          {prereqCheck.missing && (
+            <div className="bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
+              <p className="text-sm text-forge-amber mb-2">⚠️ {prereqCheck.missing}가 설치되어 있지 않습니다</p>
+              <button 
+                onClick={() => installPrerequisite(prereqCheck.missing!.toLowerCase())} 
+                disabled={!!installingPrereq}
+                className="px-3 py-1.5 bg-forge-amber text-[#1a1c24] rounded text-xs font-medium hover:bg-forge-amber/80 disabled:opacity-50"
+              >
+                {installingPrereq === prereqCheck.missing?.toLowerCase() ? '설치 중...' : `${prereqCheck.missing} 설치`}
+              </button>
+            </div>
+          )}
+
           {/* 설치 */}
-          {!status?.installed && skill.install_command && (
+          {!status?.installed && effectiveCommand && !prereqCheck.missing && (
             <div className="space-y-3">
-              <h4 className="font-medium text-forge-text text-sm">설치 명령어</h4>
-              <code className="block p-3 bg-[#1a1c24] rounded-lg text-xs font-mono text-forge-muted overflow-x-auto">{skill.install_command}</code>
+              <h4 className="font-medium text-forge-text text-sm">설치 ({effectiveMethod})</h4>
+              <code className="block p-3 bg-[#1a1c24] rounded-lg text-xs font-mono text-forge-muted overflow-x-auto">{effectiveCommand}</code>
               <button onClick={handleInstall} disabled={installing} className="w-full px-4 py-2 bg-forge-copper rounded-lg text-sm font-medium hover:bg-forge-copper/80 disabled:opacity-50 flex items-center justify-center gap-2">
                 {installing ? <><div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> 설치 중...</> : '설치'}
               </button>
@@ -516,6 +537,16 @@ export default function SkillsSettings({
 
   const isWorking = isWorkingRef.current || isDisconnecting;
 
+  // 스킬 카드 비활성화 여부
+  const isSkillDisabled = (skill: SkillDefinition): { disabled: boolean; reason: string | null } => {
+    if (!prerequisites) return { disabled: false, reason: null };
+    const prereqCheck = needsPrerequisite(skill, platform, prerequisites);
+    if (prereqCheck.missing) {
+      return { disabled: true, reason: `${prereqCheck.missing} 필요` };
+    }
+    return { disabled: false, reason: null };
+  };
+
   return (
     <div className="w-full">
       <div className="mb-6">
@@ -538,6 +569,30 @@ export default function SkillsSettings({
           🛠️ CLI 도구 ({cliSkills.length})
         </button>
       </div>
+
+      {/* Prerequisite 경고 (CLI 탭에서만) */}
+      {activeTab === 'cli' && missingPrereqs.length > 0 && (
+        <div className="mb-4 bg-forge-amber/10 border border-forge-amber/30 p-4 rounded-xl">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div className="flex-1">
+              <p className="font-medium text-forge-amber mb-2">일부 스킬에 필요한 도구가 설치되어 있지 않습니다</p>
+              <div className="flex flex-wrap gap-2">
+                {missingPrereqs.map(name => (
+                  <button
+                    key={name}
+                    onClick={() => installPrerequisite(name.toLowerCase())}
+                    disabled={!!installingPrereq}
+                    className="px-3 py-1.5 bg-forge-amber text-[#1a1c24] rounded-lg text-sm font-medium hover:bg-forge-amber/80 disabled:opacity-50"
+                  >
+                    {installingPrereq === name.toLowerCase() ? '설치 중...' : `${name} 설치`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* API 스킬 탭 */}
       {activeTab === 'api' && (
@@ -592,7 +647,10 @@ export default function SkillsSettings({
           </div>
 
           {loading ? (
-            <div className="text-center py-12 text-forge-muted">로딩 중...</div>
+            <div className="text-center py-12 text-forge-muted">
+              <div className="animate-spin w-8 h-8 border-2 border-forge-copper/30 border-t-forge-copper rounded-full mx-auto mb-3" />
+              스킬 정보 로딩 중...
+            </div>
           ) : (
             <div className="space-y-6">
               {Object.entries(groupedCliSkills).map(([category, skills]) => (
@@ -603,25 +661,38 @@ export default function SkillsSettings({
                   <div className="grid grid-cols-3 gap-3">
                     {skills.map(skill => {
                       const status = cliStatuses[skill.id];
+                      const { disabled, reason } = isSkillDisabled(skill);
+                      
                       return (
                         <div
                           key={skill.id}
-                          onClick={() => openCliSkillModal(skill)}
-                          className={`bg-[#1e2030] border-2 rounded-xl p-4 cursor-pointer transition-all ${status?.installed ? 'border-forge-copper/40 hover:border-forge-copper' : 'border-[#2a2d3e] hover:border-[#3a3f52]'}`}
+                          onClick={() => !disabled && openCliSkillModal(skill)}
+                          className={`bg-[#1e2030] border-2 rounded-xl p-4 transition-all ${
+                            disabled 
+                              ? 'border-[#252836] opacity-50 cursor-not-allowed' 
+                              : status?.installed 
+                                ? 'border-forge-copper/40 hover:border-forge-copper cursor-pointer' 
+                                : 'border-[#2a2d3e] hover:border-[#3a3f52] cursor-pointer'
+                          }`}
                         >
                           <div className="flex items-center gap-3 mb-2">
                             <span className="text-2xl">{skill.emoji}</span>
                             <span className="font-medium text-forge-text text-sm">{skill.name}</span>
                           </div>
                           <p className="text-xs text-forge-muted mb-3 line-clamp-1">{skill.description}</p>
-                          <div className="flex gap-2">
-                            {status?.installed ? (
+                          <div className="flex flex-wrap gap-2">
+                            {disabled && reason ? (
+                              <span className="text-xs px-2 py-0.5 rounded bg-forge-amber/20 text-forge-amber">{reason}</span>
+                            ) : status?.installed ? (
                               <span className="text-xs px-2 py-0.5 rounded bg-forge-success/20 text-forge-success">설치됨</span>
                             ) : (
                               <span className="text-xs px-2 py-0.5 rounded bg-[#252836] text-forge-muted">미설치</span>
                             )}
-                            {status?.installed && !status?.configured && (
+                            {status?.installed && !status?.configured && !disabled && (
                               <span className="text-xs px-2 py-0.5 rounded bg-forge-amber/20 text-forge-amber">설정 필요</span>
+                            )}
+                            {status?.error && (
+                              <span className="text-xs px-2 py-0.5 rounded bg-forge-error/20 text-forge-error" title={status.error}>⚠️</span>
                             )}
                           </div>
                         </div>
@@ -630,6 +701,11 @@ export default function SkillsSettings({
                   </div>
                 </div>
               ))}
+              {Object.keys(groupedCliSkills).length === 0 && (
+                <div className="text-center py-12 text-forge-muted">
+                  조건에 맞는 스킬이 없습니다
+                </div>
+              )}
             </div>
           )}
         </>

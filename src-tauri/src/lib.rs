@@ -2048,8 +2048,10 @@ pub fn run() {
             register_gog_credentials,
             check_gog_credentials,
             // 스킬 관리
+            skills::get_prerequisites,
             skills::get_skills_status,
             skills::get_skill_definitions,
+            skills::install_prerequisite,
             skills::install_skill,
             skills::configure_skill_api_key,
             skills::open_skill_login_terminal,
