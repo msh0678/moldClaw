@@ -373,12 +373,13 @@ pub fn get_skill_definitions() -> Vec<SkillDefinition> {
     get_supported_skills().into_iter().cloned().collect()
 }
 
-/// Prerequisite 설치 (go, uv)
+/// Prerequisite 설치 (go, uv, homebrew)
 #[tauri::command]
 pub async fn install_prerequisite(name: String) -> Result<String, String> {
     match name.as_str() {
         "go" => install_go().await,
         "uv" => install_uv().await,
+        "homebrew" => install_homebrew().await,
         _ => Err(format!("알 수 없는 prerequisite: {}", name)),
     }
 }
@@ -445,6 +446,74 @@ async fn install_uv() -> Result<String, String> {
         } else {
             Err(String::from_utf8_lossy(&output.stderr).to_string())
         }
+    }
+}
+
+/// Homebrew 설치 (macOS/Linux)
+/// 주의: sudo 권한이 필요하므로 터미널에서 직접 실행해야 함
+async fn install_homebrew() -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        Err("Windows에서는 Homebrew를 지원하지 않습니다. winget을 사용합니다.".into())
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        // macOS: Terminal.app을 열어서 설치 스크립트 실행
+        // sudo 비밀번호 입력이 필요하므로 터미널에서 직접 실행
+        let install_script = r#"/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)""#;
+        
+        let apple_script = format!(
+            r#"tell application "Terminal"
+                activate
+                do script "{}"
+            end tell"#,
+            install_script.replace('"', r#"\""#)
+        );
+        
+        Command::new("osascript")
+            .args(["-e", &apple_script])
+            .spawn()
+            .map_err(|e| format!("Terminal 실행 실패: {}", e))?;
+        
+        Ok("Terminal에서 Homebrew 설치가 시작됩니다. 비밀번호를 입력해주세요.\n설치 완료 후 앱을 재시작해주세요.".into())
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        // Linux: 기본 터미널에서 설치 스크립트 실행
+        // Linuxbrew는 홈 디렉토리에 설치되어 sudo 불필요할 수 있음
+        let install_cmd = r#"/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)""#;
+        
+        // 다양한 터미널 시도 (gnome-terminal, konsole, xterm 등)
+        let xfce_cmd = format!("bash -c '{}'", install_cmd);
+        let terminals: [(&str, Vec<&str>); 4] = [
+            ("gnome-terminal", vec!["--", "bash", "-c", install_cmd]),
+            ("konsole", vec!["-e", "bash", "-c", install_cmd]),
+            ("xfce4-terminal", vec!["-e", &xfce_cmd]),
+            ("xterm", vec!["-e", "bash", "-c", install_cmd]),
+        ];
+        
+        for (term, args) in terminals {
+            if Command::new("which")
+                .arg(term)
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+            {
+                match Command::new(term).args(&args).spawn() {
+                    Ok(_) => return Ok(format!(
+                        "{}에서 Homebrew(Linuxbrew) 설치가 시작됩니다.\n\
+                        설치 완료 후 터미널에 표시되는 안내에 따라 PATH를 설정하고,\n\
+                        앱을 재시작해주세요.", term
+                    )),
+                    Err(_) => continue,
+                }
+            }
+        }
+        
+        Err("터미널을 찾을 수 없습니다. 수동으로 Homebrew를 설치해주세요:\n\
+            /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"".into())
     }
 }
 
