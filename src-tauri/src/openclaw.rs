@@ -4,6 +4,75 @@ use std::fs;
 use serde_json::{json, Value};
 use chrono::Utc;
 
+// ===== macOS PATH 해결 (openclaw 모듈 전용) =====
+// lib.rs의 get_macos_path()와 동일한 로직을 독립적으로 유지합니다.
+
+#[cfg(target_os = "macos")]
+fn get_macos_path() -> String {
+    use std::sync::OnceLock;
+    static CACHED_PATH: OnceLock<String> = OnceLock::new();
+
+    CACHED_PATH.get_or_init(|| {
+        let shells = ["/bin/zsh", "/bin/bash", "/bin/sh"];
+        for shell in &shells {
+            if let Ok(output) = std::process::Command::new(shell)
+                .args(["-l", "-c", "echo $PATH"])
+                .output()
+            {
+                if output.status.success() {
+                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !path.is_empty() && path.contains('/') {
+                        return path;
+                    }
+                }
+            }
+        }
+
+        let home = std::env::var("HOME").unwrap_or_default();
+        let known_paths = vec![
+            "/opt/homebrew/bin".to_string(),
+            "/opt/homebrew/sbin".to_string(),
+            "/usr/local/bin".to_string(),
+            "/usr/local/sbin".to_string(),
+            format!("{}/Library/npm/bin", home),
+            format!("{}/.npm-global/bin", home),
+            format!("{}/.local/bin", home),
+            "/usr/bin".to_string(),
+            "/bin".to_string(),
+            "/usr/sbin".to_string(),
+            "/sbin".to_string(),
+        ];
+
+        let current = std::env::var("PATH").unwrap_or_default();
+        let mut all: Vec<String> = known_paths;
+        for p in current.split(':') {
+            if !p.is_empty() {
+                all.push(p.to_string());
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        let deduped: Vec<String> = all.into_iter().filter(|p| seen.insert(p.clone())).collect();
+        deduped.join(":")
+    }).clone()
+}
+
+/// macOS PATH가 적용된 Command 반환
+#[cfg(target_os = "macos")]
+fn macos_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    cmd.env("PATH", get_macos_path());
+    cmd
+}
+
+/// macOS에서 sh -c 명령 실행 (PATH 포함)
+#[cfg(target_os = "macos")]
+fn macos_sh(script: &str) -> Command {
+    let full_script = format!("export PATH=\"{}\"; {}", get_macos_path(), script);
+    let mut cmd = Command::new("/bin/sh");
+    cmd.args(["-c", &full_script]);
+    cmd
+}
+
 // Device Identity 생성에 필요한 imports
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
@@ -33,13 +102,27 @@ fn run_openclaw_command(args: &[&str]) -> Result<String, String> {
         }
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        let output = macos_cmd("openclaw")
+            .args(args)
+            .output()
+            .map_err(|e| format!("openclaw 실행 실패: {}", e))?;
+
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            Err(format!("openclaw 오류: {}", String::from_utf8_lossy(&output.stderr)))
+        }
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         let output = Command::new("openclaw")
             .args(args)
             .output()
             .map_err(|e| format!("openclaw 실행 실패: {}", e))?;
-        
+
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
         } else {
@@ -113,13 +196,27 @@ pub async fn install_openclaw() -> Result<String, String> {
         }
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        let output = macos_cmd("npm")
+            .args(["install", "-g", "openclaw"])
+            .output()
+            .map_err(|e| format!("npm 실행 실패: {}", e))?;
+
+        if output.status.success() {
+            Ok("OpenClaw 설치 완료!".to_string())
+        } else {
+            Err(format!("설치 실패: {}", String::from_utf8_lossy(&output.stderr)))
+        }
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         let output = Command::new("npm")
             .args(["install", "-g", "openclaw"])
             .output()
             .map_err(|e| format!("npm 실행 실패: {}", e))?;
-        
+
         if output.status.success() {
             Ok("OpenClaw 설치 완료!".to_string())
         } else {
@@ -1565,18 +1662,32 @@ pub async fn start_gateway() -> Result<(), String> {
         Ok(())
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
-        // Unix: nohup으로 백그라운드 실행
+        // macOS: PATH를 명시적으로 포함하여 nohup 실행
+        let output = macos_sh("nohup openclaw gateway > /dev/null 2>&1 &")
+            .output()
+            .map_err(|e| format!("Gateway 시작 실패: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Gateway 시작 실패: {}", stderr));
+        }
+
+        Ok(())
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
         let output = Command::new("sh")
             .args(["-c", "nohup openclaw gateway > /dev/null 2>&1 &"])
             .output()
             .map_err(|e| format!("Gateway 시작 실패: {}", e))?;
-        
+
         if !output.status.success() {
             return Err("Gateway 시작 실패".to_string());
         }
-        
+
         Ok(())
     }
 }
@@ -1688,34 +1799,55 @@ pub async fn login_whatsapp() -> Result<String, String> {
         }
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
-        // Linux/Mac: 새 터미널 창에서 실행
-        // 각 터미널의 "명령 완료까지 대기" 옵션 사용
+        // macOS: AppleScript로 Terminal.app 열기 (PATH 포함)
+        let path_str = get_macos_path();
+        let script = format!(
+            r#"tell application "Terminal"
+    activate
+    do script "export PATH=\"{}\"; openclaw channels login --channel whatsapp; echo '완료. 창을 닫으세요.'; read"
+end tell"#,
+            path_str.replace('"', "\\\"")
+        );
+
+        let mut child = Command::new("osascript")
+            .args(["-e", &script])
+            .spawn()
+            .map_err(|e| format!("Terminal 열기 실패: {}", e))?;
+
+        let status = child.wait()
+            .map_err(|e| format!("프로세스 대기 실패: {}", e))?;
+
+        if status.success() {
+            Ok("WhatsApp 인증 완료!".to_string())
+        } else {
+            Err("WhatsApp 인증이 취소되었거나 실패했습니다.".to_string())
+        }
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        // Linux: 여러 터미널 시도
         let terminals = [
-            // gnome-terminal: --wait 옵션으로 명령 완료까지 대기
             ("gnome-terminal", vec!["--wait", "--", "openclaw", "channels", "login", "--channel", "whatsapp"]),
-            // konsole: --hold로 창 유지, -e로 명령 실행
             ("konsole", vec!["--hold", "-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
-            // xfce4-terminal: --hold로 창 유지
             ("xfce4-terminal", vec!["--hold", "-e", "openclaw channels login --channel whatsapp"]),
-            // xterm: -hold로 창 유지
             ("xterm", vec!["-hold", "-e", "openclaw", "channels", "login", "--channel", "whatsapp"]),
         ];
-        
+
         for (term, args) in terminals.iter() {
             if let Ok(mut child) = Command::new(term).args(args).spawn() {
                 let status = child.wait()
                     .map_err(|e| format!("프로세스 대기 실패: {}", e))?;
-                
                 if status.success() {
                     return Ok("WhatsApp 인증 완료!".to_string());
                 } else {
-                    return Err("WhatsApp 인증이 취소되었거나 실패했습니다. 터미널 창이 닫혔다면 다시 시도해주세요.".to_string());
+                    return Err("WhatsApp 인증이 취소되었거나 실패했습니다.".to_string());
                 }
             }
         }
-        
+
         Err("터미널을 찾을 수 없습니다. 수동으로 'openclaw channels login --channel whatsapp'을 실행하세요.".to_string())
     }
 }
@@ -1751,14 +1883,18 @@ pub fn open_whatsapp_login_terminal() -> Result<(), String> {
     
     #[cfg(target_os = "macos")]
     {
-        // macOS: AppleScript로 Terminal.app 열기
-        let script = r#"tell application "Terminal"
-            activate
-            do script "openclaw channels login --channel whatsapp"
-        end tell"#;
-        
+        // macOS: AppleScript로 Terminal.app 열기 (PATH 포함)
+        let path_str = get_macos_path();
+        let script = format!(
+            r#"tell application "Terminal"
+    activate
+    do script "export PATH=\"{}\"; openclaw channels login --channel whatsapp"
+end tell"#,
+            path_str.replace('"', "\\\"")
+        );
+
         Command::new("osascript")
-            .args(["-e", script])
+            .args(["-e", &script])
             .spawn()
             .map_err(|e| format!("Terminal 열기 실패: {}", e))?;
     }
@@ -2850,13 +2986,34 @@ pub async fn get_install_path() -> Result<String, String> {
         }
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        let output = macos_cmd("npm")
+            .args(["config", "get", "prefix"])
+            .output()
+            .map_err(|e| format!("npm 경로 확인 실패: {}", e))?;
+
+        if output.status.success() {
+            let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            Ok(format!("{}/lib/node_modules/openclaw", prefix))
+        } else {
+            // Apple Silicon: /opt/homebrew, Intel: /usr/local
+            let fallback = if std::env::consts::ARCH == "aarch64" {
+                "/opt/homebrew/lib/node_modules/openclaw"
+            } else {
+                "/usr/local/lib/node_modules/openclaw"
+            };
+            Ok(fallback.to_string())
+        }
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         let output = Command::new("npm")
             .args(["config", "get", "prefix"])
             .output()
             .map_err(|e| format!("npm 경로 확인 실패: {}", e))?;
-        
+
         if output.status.success() {
             let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
             Ok(format!("{}/lib/node_modules/openclaw", prefix))
@@ -3078,7 +3235,19 @@ fn gog_binary_path() -> PathBuf {
         PathBuf::from(local_app_data).join("moldClaw").join("gog.exe")
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        // macOS: moldClaw 앱 전용 디렉토리에 저장
+        // ~/.local/bin은 macOS에서 PATH에 없는 경우가 많으므로
+        // 앱 내부에서 절대경로로 직접 실행하는 방식 사용
+        let home = std::env::var("HOME").unwrap_or_default();
+        // Application Support에 저장 (macOS 표준)
+        let app_support = format!("{}/Library/Application Support/moldClaw", home);
+        let _ = std::fs::create_dir_all(&app_support);
+        PathBuf::from(app_support).join("gog")
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         let home = std::env::var("HOME").unwrap_or_default();
         PathBuf::from(home).join(".local").join("bin").join("gog")
@@ -3622,9 +3791,19 @@ pub fn check_gog_credentials() -> bool {
         cred_path.exists()
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
-        // XDG_CONFIG_HOME 또는 ~/.config/gogcli/credentials.json
+        let home = std::env::var("HOME").unwrap_or_default();
+        // macOS: ~/Library/Application Support/gogcli 또는 ~/.config/gogcli
+        let paths = [
+            format!("{}/Library/Application Support/gogcli/credentials.json", home),
+            format!("{}/.config/gogcli/credentials.json", home),
+        ];
+        paths.iter().any(|p| std::path::Path::new(p).exists())
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
         let config_home = std::env::var("XDG_CONFIG_HOME")
             .unwrap_or_else(|_| {
                 let home = std::env::var("HOME").unwrap_or_default();

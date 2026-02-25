@@ -10,6 +10,81 @@ mod windows_helper;
 
 use tauri::Emitter;
 
+// ===== macOS PATH 해결 =====
+// macOS DMG/App으로 실행 시 shell profile(~/.zshrc 등)이 sourced 되지 않아
+// node, npm, openclaw 등 CLI 도구를 찾지 못하는 문제를 해결합니다.
+
+#[cfg(target_os = "macos")]
+fn get_macos_path() -> String {
+    use std::sync::OnceLock;
+    static CACHED_PATH: OnceLock<String> = OnceLock::new();
+
+    CACHED_PATH.get_or_init(|| {
+        // 1. Login shell로 실제 사용자 PATH 가져오기
+        let shells = ["/bin/zsh", "/bin/bash", "/bin/sh"];
+        for shell in &shells {
+            if let Ok(output) = std::process::Command::new(shell)
+                .args(["-l", "-c", "echo $PATH"])
+                .output()
+            {
+                if output.status.success() {
+                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !path.is_empty() && path.contains('/') {
+                        eprintln!("[macOS PATH] shell에서 가져온 PATH: {}", &path[..path.len().min(200)]);
+                        return path;
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback: macOS 주요 경로 수동 구성
+        let home = std::env::var("HOME").unwrap_or_default();
+        let known_paths = vec![
+            "/opt/homebrew/bin".to_string(),        // Apple Silicon Homebrew
+            "/opt/homebrew/sbin".to_string(),
+            "/usr/local/bin".to_string(),            // Intel Homebrew / 기본 경로
+            "/usr/local/sbin".to_string(),
+            format!("{}/Library/npm/bin", home),    // npm global (macOS)
+            format!("{}/.npm-global/bin", home),
+            format!("{}/.local/bin", home),
+            "/usr/bin".to_string(),
+            "/bin".to_string(),
+            "/usr/sbin".to_string(),
+            "/sbin".to_string(),
+        ];
+
+        // 현재 환경 PATH와 합치기 (중복 제거)
+        let current = std::env::var("PATH").unwrap_or_default();
+        let mut all: Vec<String> = known_paths;
+        for p in current.split(':') {
+            if !p.is_empty() {
+                all.push(p.to_string());
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        let deduped: Vec<String> = all.into_iter().filter(|p| seen.insert(p.clone())).collect();
+        let result = deduped.join(":");
+        eprintln!("[macOS PATH] fallback PATH 사용");
+        result
+    }).clone()
+}
+
+/// macOS에서 PATH가 적용된 Command 빌더 반환
+#[cfg(target_os = "macos")]
+fn macos_cmd(program: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    cmd.env("PATH", get_macos_path());
+    cmd
+}
+
+/// macOS에서 PATH가 적용된 tokio::process::Command 빌더 반환
+#[cfg(target_os = "macos")]
+fn macos_async_cmd(program: &str) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.env("PATH", get_macos_path());
+    cmd
+}
+
 // ===== 환경 체크 =====
 
 #[tauri::command]
@@ -18,7 +93,15 @@ fn check_node_installed() -> bool {
     {
         windows_helper::get_node_version().is_some()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        macos_cmd("node")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         std::process::Command::new("node")
             .arg("--version")
@@ -34,7 +117,16 @@ fn get_node_version() -> Option<String> {
     {
         windows_helper::get_node_version()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        macos_cmd("node")
+            .arg("--version")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    }
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         std::process::Command::new("node")
             .arg("--version")
@@ -51,7 +143,15 @@ fn check_openclaw_installed() -> bool {
     {
         windows_helper::is_openclaw_installed()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        macos_cmd("openclaw")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         std::process::Command::new("openclaw")
             .arg("--version")
@@ -67,7 +167,16 @@ fn get_openclaw_version() -> Option<String> {
     {
         windows_helper::get_openclaw_version()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        macos_cmd("openclaw")
+            .arg("--version")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    }
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         std::process::Command::new("openclaw")
             .arg("--version")
@@ -121,18 +230,18 @@ fn verify_openclaw_status() -> serde_json::Value {
         })
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
-        let exists = std::process::Command::new("which")
+        let exists = macos_cmd("which")
             .args(["openclaw"])
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false);
-        
-        let version_output = std::process::Command::new("openclaw")
+
+        let version_output = macos_cmd("openclaw")
             .args(["--version"])
             .output();
-        
+
         let (works, version) = match version_output {
             Ok(o) if o.status.success() => {
                 let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
@@ -140,9 +249,39 @@ fn verify_openclaw_status() -> serde_json::Value {
             }
             _ => (false, None),
         };
-        
+
         let incomplete = exists && !works;
-        
+
+        serde_json::json!({
+            "exists": exists,
+            "works": works,
+            "version": version,
+            "incomplete": incomplete
+        })
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        let exists = std::process::Command::new("which")
+            .args(["openclaw"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        let version_output = std::process::Command::new("openclaw")
+            .args(["--version"])
+            .output();
+
+        let (works, version) = match version_output {
+            Ok(o) if o.status.success() => {
+                let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                (true, Some(v))
+            }
+            _ => (false, None),
+        };
+
+        let incomplete = exists && !works;
+
         serde_json::json!({
             "exists": exists,
             "works": works,
@@ -210,18 +349,25 @@ async fn cleanup_incomplete_openclaw() -> Result<String, String> {
         Ok("불완전한 설치가 정리되었습니다.".to_string())
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
-        // npm uninstall
+        let _ = macos_cmd("npm")
+            .args(["uninstall", "-g", "openclaw"])
+            .output();
+        let _ = macos_cmd("npm")
+            .args(["cache", "clean", "--force"])
+            .output();
+        Ok("불완전한 설치가 정리되었습니다.".to_string())
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
         let _ = std::process::Command::new("npm")
             .args(["uninstall", "-g", "openclaw"])
             .output();
-        
-        // npm 캐시 정리
         let _ = std::process::Command::new("npm")
             .args(["cache", "clean", "--force"])
             .output();
-        
         Ok("불완전한 설치가 정리되었습니다.".to_string())
     }
 }
@@ -242,13 +388,39 @@ async fn install_openclaw() -> Result<String, String> {
         // 에러 핸들링 및 자동 복구 시스템 사용
         windows_helper::install_openclaw_with_recovery()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        let output = macos_cmd("npm")
+            .args(["install", "-g", "openclaw", "--ignore-scripts"])
+            .output()
+            .map_err(|e| format!("npm 실행 실패: {}", e))?;
+
+        if output.status.success() {
+            Ok("OpenClaw 설치 완료!".to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // EACCES 오류: npm global 권한 문제 → 사용자 디렉토리로 재시도
+            if stderr.contains("EACCES") || stderr.contains("permission") {
+                let output2 = macos_cmd("npm")
+                    .args(["install", "-g", "openclaw", "--ignore-scripts", "--prefix",
+                           &format!("{}/Library/npm", std::env::var("HOME").unwrap_or_default())])
+                    .output()
+                    .map_err(|e| format!("npm 실행 실패: {}", e))?;
+                if output2.status.success() {
+                    return Ok("OpenClaw 설치 완료! (사용자 디렉토리)".to_string());
+                }
+            }
+            Err(format!("설치 실패: {}", stderr))
+        }
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         let output = std::process::Command::new("npm")
             .args(["install", "-g", "openclaw", "--ignore-scripts"])
             .output()
             .map_err(|e| format!("npm 실행 실패: {}", e))?;
-        
+
         if output.status.success() {
             Ok("OpenClaw 설치 완료!".to_string())
         } else {
@@ -535,7 +707,16 @@ fn is_openclaw_installed_sync() -> bool {
             .unwrap_or(false)
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        macos_cmd("openclaw")
+            .args(["--version"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         std::process::Command::new("openclaw")
             .args(["--version"])
@@ -665,14 +846,44 @@ async fn uninstall_moldclaw() -> Result<(), String> {
         Err("언인스톨러를 찾을 수 없습니다.\n\n제어판 > 프로그램 제거에서 'moldClaw'를 직접 삭제해 주세요.".to_string())
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
-        // Linux/Mac: 앱 파일 직접 삭제 시도
-        let app_path = std::env::current_exe().ok();
-        if let Some(path) = app_path {
-            eprintln!("앱 경로: {:?}", path);
+        // macOS: /Applications/moldClaw.app 삭제
+        let app_path = "/Applications/moldClaw.app";
+        if std::path::Path::new(app_path).exists() {
+            // Finder에서 삭제 (Trash로 이동)
+            let script = format!(
+                r#"tell application "Finder" to delete POSIX file "{}""#,
+                app_path
+            );
+            let result = std::process::Command::new("osascript")
+                .args(["-e", &script])
+                .output();
+
+            match result {
+                Ok(o) if o.status.success() => {
+                    eprintln!("moldClaw.app 휴지통으로 이동됨");
+                    std::process::exit(0);
+                }
+                _ => {
+                    // osascript 실패 시 rm -rf 시도
+                    let rm = std::process::Command::new("rm")
+                        .args(["-rf", app_path])
+                        .output();
+                    if rm.map(|o| o.status.success()).unwrap_or(false) {
+                        eprintln!("moldClaw.app 삭제됨");
+                        std::process::exit(0);
+                    }
+                }
+            }
         }
-        Err("Linux/Mac에서는 앱을 직접 삭제해 주세요.".to_string())
+
+        Err("앱을 찾을 수 없습니다.\n/Applications 폴더에서 moldClaw를 직접 삭제해 주세요.".to_string())
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        Err("앱을 직접 삭제해 주세요.".to_string())
     }
 }
 
@@ -699,12 +910,20 @@ async fn cleanup_before_exit() -> Result<(), String> {
         }
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        let check = macos_cmd("which").arg("openclaw").output();
+        if check.is_err() || !check.unwrap().status.success() {
+            eprintln!("OpenClaw 미설치 - 바로 종료");
+            return Ok(());
+        }
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         let check = std::process::Command::new("which")
             .arg("openclaw")
             .output();
-        
         if check.is_err() || !check.unwrap().status.success() {
             eprintln!("OpenClaw 미설치 - 바로 종료");
             return Ok(());
@@ -1402,7 +1621,60 @@ fn check_prerequisites() -> windows_helper::PrerequisiteStatus {
     windows_helper::check_prerequisites()
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn check_prerequisites() -> serde_json::Value {
+    // node 설치 여부 실제 확인
+    let node_version = macos_cmd("node")
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+    let node_installed = node_version.is_some();
+
+    // node 버전 호환성 확인 (22.x 이상 권장)
+    let node_compatible = node_version.as_ref().map(|v| {
+        let v = v.trim_start_matches('v');
+        v.split('.').next()
+            .and_then(|major| major.parse::<u32>().ok())
+            .map(|major| major >= 18)
+            .unwrap_or(false)
+    }).unwrap_or(false);
+
+    let npm_installed = macos_cmd("npm")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    // 디스크 공간 확인
+    let disk_space_gb: f64 = std::process::Command::new("df")
+        .args(["-g", "/"])
+        .output()
+        .ok()
+        .and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout);
+            s.lines().nth(1).and_then(|line| {
+                line.split_whitespace().nth(3).and_then(|v| v.parse().ok())
+            })
+        })
+        .unwrap_or(100.0);
+
+    serde_json::json!({
+        "node_installed": node_installed,
+        "node_version": node_version,
+        "node_compatible": node_compatible,
+        "npm_installed": npm_installed,
+        "vc_redist_installed": true,  // macOS 비해당
+        "disk_space_gb": disk_space_gb,
+        "disk_space_ok": disk_space_gb >= 2.0,
+        "antivirus_detected": null
+    })
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
 #[tauri::command]
 fn check_prerequisites() -> serde_json::Value {
     serde_json::json!({
@@ -1410,7 +1682,7 @@ fn check_prerequisites() -> serde_json::Value {
         "node_version": null,
         "node_compatible": true,
         "npm_installed": true,
-        "vc_redist_installed": true,  // Windows 전용, 다른 OS에서는 항상 true
+        "vc_redist_installed": true,
         "disk_space_gb": 100.0,
         "disk_space_ok": true,
         "antivirus_detected": null
@@ -1461,7 +1733,40 @@ fn install_vc_redist() -> Result<String, String> {
     Err("이 기능은 Windows에서만 사용 가능합니다".to_string())
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn install_nodejs() -> Result<String, String> {
+    // 1. Homebrew로 Node.js 설치 시도
+    let brew_check = std::process::Command::new("brew")
+        .arg("--version")
+        .output();
+
+    if brew_check.map(|o| o.status.success()).unwrap_or(false) {
+        // brew install node@22 실행
+        let output = std::process::Command::new("brew")
+            .args(["install", "node@22"])
+            .output()
+            .map_err(|e| format!("brew 실행 실패: {}", e))?;
+
+        if output.status.success() {
+            // brew link
+            let _ = std::process::Command::new("brew")
+                .args(["link", "--overwrite", "--force", "node@22"])
+                .output();
+            return Ok("Node.js 22가 Homebrew로 설치되었습니다. 앱을 재시작해주세요.".to_string());
+        }
+    }
+
+    // 2. Homebrew 없음 → Node.js 공식 PKG 다운로드 안내
+    // open으로 브라우저 열기
+    let _ = std::process::Command::new("open")
+        .arg("https://nodejs.org/dist/v22.16.0/node-v22.16.0.pkg")
+        .spawn();
+
+    Err("Homebrew가 없습니다. 브라우저에서 Node.js 설치 파일을 다운로드합니다.\n설치 후 앱을 재시작해주세요.".to_string())
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
 #[tauri::command]
 fn install_nodejs() -> Result<String, String> {
     Err("이 기능은 Windows에서만 사용 가능합니다".to_string())
@@ -1582,9 +1887,36 @@ fn install_prerequisites() -> Result<serde_json::Value, String> {
         }
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
-        // Unix에서는 시스템 패키지 매니저 사용 안내
+        // macOS: node 확인 후 없으면 Homebrew 또는 공홈 안내
+        let node_version = macos_cmd("node")
+            .arg("--version")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+        if let Some(version) = node_version {
+            messages.push(format!("✓ Node.js {} 설치됨", version));
+        } else {
+            // Homebrew로 설치 시도
+            let brew_ok = std::process::Command::new("brew")
+                .arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
+            if brew_ok {
+                messages.push("Node.js 설치 중 (Homebrew)...".to_string());
+                match install_nodejs() {
+                    Ok(msg) => messages.push(format!("✓ {}", msg)),
+                    Err(e) => return Err(e),
+                }
+            } else {
+                return Err("Node.js가 설치되어 있지 않습니다.\nhttps://nodejs.org 에서 Node.js 22 LTS를 설치해주세요.".to_string());
+            }
+        }
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
         if !check_node_installed() {
             return Err("Node.js가 설치되어 있지 않습니다. 시스템 패키지 매니저로 설치해주세요.".to_string());
         }
@@ -1706,7 +2038,10 @@ pub fn run() {
         ])
         .setup(|_app| {
             eprintln!("moldClaw 시작됨");
+            #[cfg(windows)]
             eprintln!("winget 기반 설치 모드 (node-portable 번들 없음)");
+            #[cfg(target_os = "macos")]
+            eprintln!("macOS 모드 - PATH: {}", &get_macos_path()[..get_macos_path().len().min(120)]);
             Ok(())
         })
         .on_window_event(|_window, event| {
