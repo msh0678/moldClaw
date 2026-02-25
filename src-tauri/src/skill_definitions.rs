@@ -1,7 +1,7 @@
 use crate::skills::*;
 use once_cell::sync::Lazy;
 
-/// 45개 스킬 정의
+/// 38개 스킬 정의
 /// 
 /// 참조 문서:
 /// - SKILL_LIST_FILTERED.md
@@ -10,95 +10,7 @@ use once_cell::sync::Lazy;
 pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
     vec![
         // =========================================================================
-        // 자동 활성화 스킬 (hidden: true) - 4개
-        // =========================================================================
-        SkillDefinition {
-            id: "canvas".into(),
-            name: "Canvas".into(),
-            description: "OpenClaw 내장 캔버스".into(),
-            emoji: "🎨".into(),
-            category: "builtin".into(),
-            install_method: InstallMethod::Builtin,
-            install_command: None,
-            windows_install_method: None,
-            windows_install_command: None,
-            binary_name: None,
-            platform: PlatformSupport { windows: true, macos: true, linux: true },
-            setup: SetupRequirement::None,
-            disconnect: DisconnectConfig {
-                logout_command: None,
-                config_paths: vec![],
-                env_vars: vec![],
-                mac_permissions: None,
-            },
-            hidden: true,
-        },
-        SkillDefinition {
-            id: "healthcheck".into(),
-            name: "Healthcheck".into(),
-            description: "시스템 상태 점검".into(),
-            emoji: "🏥".into(),
-            category: "builtin".into(),
-            install_method: InstallMethod::Builtin,
-            install_command: None,
-            windows_install_method: None,
-            windows_install_command: None,
-            binary_name: None,
-            platform: PlatformSupport { windows: true, macos: true, linux: true },
-            setup: SetupRequirement::None,
-            disconnect: DisconnectConfig {
-                logout_command: None,
-                config_paths: vec![],
-                env_vars: vec![],
-                mac_permissions: None,
-            },
-            hidden: true,
-        },
-        SkillDefinition {
-            id: "skill-creator".into(),
-            name: "Skill Creator".into(),
-            description: "새 스킬 생성 도구".into(),
-            emoji: "🛠️".into(),
-            category: "builtin".into(),
-            install_method: InstallMethod::Builtin,
-            install_command: None,
-            windows_install_method: None,
-            windows_install_command: None,
-            binary_name: None,
-            platform: PlatformSupport { windows: true, macos: true, linux: true },
-            setup: SetupRequirement::None,
-            disconnect: DisconnectConfig {
-                logout_command: None,
-                config_paths: vec![],
-                env_vars: vec![],
-                mac_permissions: None,
-            },
-            hidden: true,
-        },
-        SkillDefinition {
-            id: "weather".into(),
-            name: "Weather".into(),
-            description: "날씨 정보 조회 (wttr.in)".into(),
-            emoji: "🌤️".into(),
-            category: "builtin".into(),
-            install_method: InstallMethod::Builtin,
-            install_command: None,
-            windows_install_method: None,
-            windows_install_command: None,
-            binary_name: Some("curl".into()),
-            platform: PlatformSupport { windows: true, macos: true, linux: true },
-            setup: SetupRequirement::None,
-            disconnect: DisconnectConfig {
-                logout_command: None,
-                config_paths: vec![],
-                env_vars: vec![],
-                mac_permissions: None,
-            },
-            hidden: true,
-        },
-
-        // =========================================================================
-        // Windows + macOS/Linux 지원 스킬 - 21개
+        // Windows + macOS/Linux 지원 스킬
         // =========================================================================
         
         // 1password: brew (macOS/Linux) / winget (Windows)
@@ -187,29 +99,6 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             disconnect: DisconnectConfig {
                 logout_command: Some("clawhub logout".into()),
                 config_paths: vec!["~/.config/clawhub/".into()],
-                env_vars: vec![],
-                mac_permissions: None,
-            },
-            hidden: false,
-        },
-
-        // coding-agent: manual (전 플랫폼)
-        SkillDefinition {
-            id: "coding-agent".into(),
-            name: "Coding Agent".into(),
-            description: "AI 코딩 에이전트 (Claude Code, Codex 등)".into(),
-            emoji: "🤖".into(),
-            category: "dev".into(),
-            install_method: InstallMethod::Manual,
-            install_command: None,
-            windows_install_method: None,
-            windows_install_command: None,
-            binary_name: Some("claude".into()),
-            platform: PlatformSupport { windows: true, macos: true, linux: true },
-            setup: SetupRequirement::Custom { description: "Claude Code, Codex, OpenCode 중 하나 설치 필요".into() },
-            disconnect: DisconnectConfig {
-                logout_command: None,
-                config_paths: vec!["~/.claude/".into(), "~/.codex/".into()],
                 env_vars: vec![],
                 mac_permissions: None,
             },
@@ -446,6 +335,29 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             hidden: false,
         },
 
+        // ordercli: go (전 플랫폼) - food-order와 같은 바이너리
+        SkillDefinition {
+            id: "ordercli".into(),
+            name: "Order CLI".into(),
+            description: "Foodora 과거 주문 조회 및 활성 주문 상태 추적".into(),
+            emoji: "🛒".into(),
+            category: "lifestyle".into(),
+            install_method: InstallMethod::Go,
+            install_command: Some("go install github.com/steipete/ordercli/cmd/ordercli@latest".into()),
+            windows_install_method: None,
+            windows_install_command: None,
+            binary_name: Some("ordercli".into()),
+            platform: PlatformSupport { windows: true, macos: true, linux: true },
+            setup: SetupRequirement::Login { command: "ordercli foodora session chrome --url https://www.foodora.at/".into() },
+            disconnect: DisconnectConfig {
+                logout_command: None,
+                config_paths: vec!["~/.config/ordercli/".into()],
+                env_vars: vec![],
+                mac_permissions: None,
+            },
+            hidden: false,
+        },
+
         // session-logs: brew (macOS/Linux) / winget (Windows)
         SkillDefinition {
             id: "session-logs".into(),
@@ -464,29 +376,6 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
                 logout_command: None,
                 config_paths: vec![],
                 env_vars: vec![],
-                mac_permissions: None,
-            },
-            hidden: false,
-        },
-
-        // sherpa-onnx-tts: manual (전 플랫폼)
-        SkillDefinition {
-            id: "sherpa-onnx-tts".into(),
-            name: "Sherpa ONNX TTS".into(),
-            description: "로컬 TTS 엔진".into(),
-            emoji: "🔊".into(),
-            category: "media".into(),
-            install_method: InstallMethod::Manual,
-            install_command: None,
-            windows_install_method: None,
-            windows_install_command: None,
-            binary_name: None,
-            platform: PlatformSupport { windows: true, macos: true, linux: true },
-            setup: SetupRequirement::Custom { description: "런타임 + 모델 다운로드 필요".into() },
-            disconnect: DisconnectConfig {
-                logout_command: None,
-                config_paths: vec!["~/.openclaw/tools/sherpa-onnx-tts/".into()],
-                env_vars: vec!["SHERPA_ONNX_RUNTIME_DIR".into(), "SHERPA_ONNX_MODEL_DIR".into()],
                 mac_permissions: None,
             },
             hidden: false,
@@ -529,29 +418,6 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             binary_name: Some("ffmpeg".into()),
             platform: PlatformSupport { windows: true, macos: true, linux: true },
             setup: SetupRequirement::None,
-            disconnect: DisconnectConfig {
-                logout_command: None,
-                config_paths: vec![],
-                env_vars: vec![],
-                mac_permissions: None,
-            },
-            hidden: false,
-        },
-
-        // voice-call: builtin (전 플랫폼)
-        SkillDefinition {
-            id: "voice-call".into(),
-            name: "Voice Call".into(),
-            description: "Twilio/Telnyx 음성 통화".into(),
-            emoji: "📞".into(),
-            category: "messaging".into(),
-            install_method: InstallMethod::Builtin,
-            install_command: None,
-            windows_install_method: None,
-            windows_install_command: None,
-            binary_name: None,
-            platform: PlatformSupport { windows: true, macos: true, linux: true },
-            setup: SetupRequirement::Custom { description: "Twilio/Telnyx/Plivo 설정 필요".into() },
             disconnect: DisconnectConfig {
                 logout_command: None,
                 config_paths: vec![],
