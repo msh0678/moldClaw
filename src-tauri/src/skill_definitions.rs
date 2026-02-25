@@ -423,7 +423,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             hidden: false,
         },
 
-        // oracle: npm (전 플랫폼)
+        // oracle: npm (전 플랫폼) - API 키 선택적
         SkillDefinition {
             id: "oracle".into(),
             name: "Oracle".into(),
@@ -436,7 +436,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_command: None,
             binary_name: Some("oracle".into()),
             platform: PlatformSupport { windows: true, macos: true, linux: true },
-            setup: SetupRequirement::ApiKey { vars: vec!["OPENAI_API_KEY".into()] },
+            setup: SetupRequirement::None, // API 키 선택적 (없어도 기본 동작)
             disconnect: DisconnectConfig {
                 logout_command: None,
                 config_paths: vec!["~/.oracle/".into()],
