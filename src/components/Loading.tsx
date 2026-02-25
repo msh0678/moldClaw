@@ -67,7 +67,11 @@ export default function Loading({ onReady, onDashboard }: LoadingProps) {
       // Node.js 확인
       setStatus('Node.js 확인 중...')
       
-      // Node.js 24+도 일단 설치 시도 (실패 시 에러 분석에서 안내)
+      // Node.js 24+ 경고 (네이티브 모듈 호환성 문제)
+      if (status.node_too_new && status.node_version) {
+        console.warn(`Node.js ${status.node_version}는 24+ 버전입니다. 22 LTS 권장.`)
+        // 설치는 시도하지만 실패 가능성 있음
+      }
       
       if (!status.node_compatible) {
         if (isWindows) {

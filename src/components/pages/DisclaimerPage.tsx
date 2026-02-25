@@ -245,7 +245,7 @@ export default function DisclaimerPage({ onAgree }: DisclaimerPageProps) {
 
         {/* 하단 정보 */}
         <p className="text-center text-xs text-forge-muted mt-4">
-          moldClaw v0.5.3+ • OpenClaw 기반 • MIT License
+          moldClaw • OpenClaw 기반 • MIT License
         </p>
       </div>
     </div>

@@ -1636,12 +1636,12 @@ fn check_prerequisites() -> serde_json::Value {
 
     let node_installed = node_version.is_some();
 
-    // node 버전 호환성 확인 (22.x 이상 권장)
+    // node 버전 호환성 확인 (22.x 이상 필수, OpenClaw 요구사항)
     let node_compatible = node_version.as_ref().map(|v| {
         let v = v.trim_start_matches('v');
         v.split('.').next()
             .and_then(|major| major.parse::<u32>().ok())
-            .map(|major| major >= 18)
+            .map(|major| major >= 22)
             .unwrap_or(false)
     }).unwrap_or(false);
 
