@@ -76,9 +76,7 @@ const TOOLS: Tool[] = [
     id: 'jina',
     name: 'Jina Reader',
     icon: '📖',
-    iconSlug: 'jina',
-    iconColor: '#F57C00',
-    logo: 'https://cdn.simpleicons.org/jina/F57C00',
+    // Simple Icons 미지원 - 이모지 사용
     description: '웹페이지 읽기',
     detailedDesc: '웹페이지를 AI가 이해하기 쉬운 형태로 변환합니다. 광고, 메뉴 등을 제외한 본문만 추출합니다.',
     envVar: 'JINA_API_KEY',

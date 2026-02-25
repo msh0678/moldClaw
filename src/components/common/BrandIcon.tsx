@@ -1,6 +1,7 @@
 // BrandIcon - 브랜드 아이콘 표시 컴포넌트
 // @iconify/react (Simple Icons) 사용, fallback으로 이미지/이모지
 
+import { useState } from 'react';
 import { Icon } from '@iconify/react';
 
 interface BrandIconProps {
@@ -22,6 +23,8 @@ export function BrandIcon({
   size = 24,
   className = ''
 }: BrandIconProps) {
+  const [imgError, setImgError] = useState(false);
+
   // 1순위: iconSlug가 있으면 @iconify/react 사용
   if (iconSlug) {
     return (
@@ -35,20 +38,15 @@ export function BrandIcon({
     );
   }
 
-  // 2순위: logo URL이 있으면 이미지 사용
-  if (logo) {
+  // 2순위: logo URL이 있고 에러 없으면 이미지 사용
+  if (logo && !imgError) {
     return (
       <img 
         src={logo} 
         alt={name} 
         className={`object-contain ${className}`}
         style={{ width: size, height: size }}
-        onError={(e) => {
-          // 이미지 로드 실패 시 이모지로 fallback
-          const target = e.target as HTMLImageElement;
-          target.style.display = 'none';
-          target.parentElement?.querySelector('.fallback-emoji')?.classList.remove('hidden');
-        }}
+        onError={() => setImgError(true)}
       />
     );
   }
@@ -56,8 +54,8 @@ export function BrandIcon({
   // 3순위: 이모지 아이콘
   return (
     <span 
-      className={`text-center ${className}`}
-      style={{ fontSize: size * 0.8, lineHeight: `${size}px` }}
+      className={`text-center inline-flex items-center justify-center ${className}`}
+      style={{ fontSize: size * 0.8, width: size, height: size }}
     >
       {icon || '❓'}
     </span>

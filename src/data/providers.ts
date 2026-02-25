@@ -78,8 +78,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'groq',
     name: 'Groq',
     icon: '⚡',
-    iconSlug: 'groq',
-    iconColor: '#F55036',
+    // Simple Icons 미지원 - 로컬 SVG 사용
     logo: '/icons/groq.svg',
     color: '#F97316',
     models: [
@@ -94,8 +93,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'mistral',
     name: 'Mistral',
     icon: '🔷',
-    iconSlug: 'mistral',
-    iconColor: '#FF7000',
+    // Simple Icons 미지원 - 로컬 SVG 사용
     logo: '/icons/mistral.svg',
     color: '#FF7000',
     models: [
@@ -110,8 +108,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'together',
     name: 'Together AI',
     icon: '🤝',
-    iconSlug: 'togetherai',
-    iconColor: '#0EA5E9',
+    // Simple Icons 미지원 - 로컬 SVG 사용
     logo: '/icons/together.svg',
     color: '#0EA5E9',
     models: [
@@ -126,8 +123,7 @@ export const ADDITIONAL_PROVIDERS: ProviderInfo[] = [
     id: 'cerebras',
     name: 'Cerebras',
     icon: '🧠',
-    iconSlug: 'cerebras',
-    iconColor: '#00D4AA',
+    // Simple Icons 미지원 - 로컬 SVG 사용
     logo: '/icons/cerebras.svg',
     color: '#00D4AA',
     models: [

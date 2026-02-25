@@ -580,7 +580,7 @@ export default function SkillsSettings({
           onClick={() => setActiveTab('cli')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'cli' ? 'bg-forge-copper text-white' : 'bg-[#252836] text-forge-muted hover:bg-[#2d3142]'}`}
         >
-          🛠️ CLI 도구 ({cliSkills.length})
+          🛠️ CLI 도구 ({cliSkills.length || 38})
         </button>
       </div>
 
@@ -590,16 +590,16 @@ export default function SkillsSettings({
           <div className="flex items-start gap-3">
             <span className="text-2xl">⚠️</span>
             <div className="flex-1">
-              <p className="font-medium text-forge-amber mb-2">일부 스킬에 필요한 도구가 설치되어 있지 않습니다</p>
-              <div className="flex flex-wrap gap-2">
+              <p className="font-medium text-forge-amber mb-3">일부 스킬에 필요한 도구가 설치되어 있지 않습니다</p>
+              <div className="flex flex-wrap gap-3">
                 {missingPrereqs.map(name => (
                   <button
                     key={name}
                     onClick={() => installPrerequisite(name.toLowerCase())}
                     disabled={!!installingPrereq}
-                    className="px-3 py-1.5 bg-forge-amber text-[#1a1c24] rounded-lg text-sm font-medium hover:bg-forge-amber/80 disabled:opacity-50"
+                    className="px-4 py-2 bg-forge-copper hover:bg-forge-copper/80 text-white rounded-lg text-sm font-semibold shadow-md border border-forge-copper/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
-                    {installingPrereq === name.toLowerCase() ? '설치 중...' : `${name} 설치`}
+                    {installingPrereq === name.toLowerCase() ? '⏳ 설치 중...' : `📦 ${name} 설치`}
                   </button>
                 ))}
               </div>
@@ -610,6 +610,8 @@ export default function SkillsSettings({
 
       {/* API 스킬 탭 */}
       {activeTab === 'api' && (
+        <div className="border-2 border-[#2a2d3e] rounded-xl p-4 bg-[#1a1c24]/50">
+        <p className="text-xs text-forge-muted mb-4">💡 API 키를 저장하면 AI가 curl/exec로 해당 서비스를 사용할 수 있습니다</p>
         <div className="grid grid-cols-3 gap-3">
           {API_SKILLS.map((skill) => {
             const configured = isApiConfigured(skill);
@@ -637,11 +639,12 @@ export default function SkillsSettings({
             );
           })}
         </div>
+        </div>
       )}
 
       {/* CLI 스킬 탭 */}
       {activeTab === 'cli' && (
-        <>
+        <div className="border-2 border-[#2a2d3e] rounded-xl p-4 bg-[#1a1c24]/50">
           {/* 필터 */}
           <div className="flex gap-3 mb-4">
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="bg-[#252836] text-forge-text border border-[#2a2d3e] rounded-lg px-3 py-2 text-sm">
@@ -722,7 +725,7 @@ export default function SkillsSettings({
               )}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* API 연결 해제 확인 모달 */}
