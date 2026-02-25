@@ -2520,6 +2520,7 @@ pub async fn update_messenger_config(
 
 /// 부가기능(통합) 설정만 업데이트 (기존 config에 패치)
 /// 빈 값("")은 해당 키를 삭제함
+/// 저장 후 TOOLS.md도 자동 업데이트
 pub async fn update_integrations_config(integrations: Value) -> Result<(), String> {
     let mut config = read_existing_config();
     
@@ -2555,6 +2556,12 @@ pub async fn update_integrations_config(integrations: Value) -> Result<(), Strin
     
     // 저장
     write_config(&config)?;
+    
+    // TOOLS.md 업데이트 (실패해도 config 저장은 성공으로 처리)
+    if let Err(e) = update_tools_md() {
+        eprintln!("TOOLS.md 업데이트 실패 (무시됨): {}", e);
+    }
+    
     Ok(())
 }
 
@@ -3814,4 +3821,205 @@ pub fn check_gog_credentials() -> bool {
             .join("credentials.json");
         cred_path.exists()
     }
+}
+
+// ===== TOOLS.md 관리 (외부 도구 API 사용법 자동 추가) =====
+
+/// 도구별 API 사용법 템플릿
+/// BRAVE_API_KEY, FIRECRAWL_API_KEY는 OpenClaw 내장 지원이므로 제외
+fn get_tool_template(env_var: &str) -> Option<&'static str> {
+    match env_var {
+        "JINA_API_KEY" => Some(r#"### Jina Reader
+웹페이지 내용을 읽을 때 Jina Reader API를 사용하세요.
+```bash
+curl "https://r.jina.ai/<URL>" -H "Authorization: Bearer $JINA_API_KEY"
+```
+"#),
+        "SERPER_API_KEY" => Some(r#"### Serper (Google 검색)
+Google 검색이 필요하면 Serper API를 사용하세요.
+```bash
+curl -X POST "https://google.serper.dev/search" \
+  -H "X-API-KEY: $SERPER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"q": "<검색어>"}'
+```
+"#),
+        "TAVILY_API_KEY" => Some(r#"### Tavily Search
+AI 최적화 웹 검색이 필요하면 Tavily API를 사용하세요.
+```bash
+curl -X POST "https://api.tavily.com/search" \
+  -H "Content-Type: application/json" \
+  -d '{"api_key": "'"$TAVILY_API_KEY"'", "query": "<검색어>"}'
+```
+"#),
+        "EXA_API_KEY" => Some(r#"### Exa Search
+의미 기반 검색이 필요하면 Exa API를 사용하세요.
+```bash
+curl -X POST "https://api.exa.ai/search" \
+  -H "x-api-key: $EXA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "<검색어>", "type": "neural"}'
+```
+"#),
+        "BROWSERLESS_API_KEY" => Some(r#"### Browserless
+JavaScript가 필요한 웹페이지를 읽을 때 Browserless를 사용하세요.
+```bash
+curl -X POST "https://chrome.browserless.io/content?token=$BROWSERLESS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "<URL>"}'
+```
+"#),
+        "SCRAPERAPI_KEY" => Some(r#"### ScraperAPI
+봇 차단을 우회해서 웹페이지를 읽을 때 ScraperAPI를 사용하세요.
+```bash
+curl "https://api.scraperapi.com?api_key=$SCRAPERAPI_KEY&url=<URL>"
+```
+"#),
+        "APIFY_TOKEN" => Some(r#"### Apify
+웹 자동화 작업이 필요하면 Apify API를 사용하세요.
+```bash
+curl -X GET "https://api.apify.com/v2/acts" \
+  -H "Authorization: Bearer $APIFY_TOKEN"
+```
+"#),
+        "WOLFRAM_APP_ID" => Some(r#"### Wolfram Alpha
+수학/과학 계산이 필요하면 Wolfram Alpha API를 사용하세요.
+```bash
+curl "https://api.wolframalpha.com/v1/result?appid=$WOLFRAM_APP_ID&i=<질문을URL인코딩>"
+```
+예: "solve 3x^2 + 2x - 1 = 0" → "solve%203x%5E2%20%2B%202x%20-%201%20%3D%200"
+"#),
+        "NEWS_API_KEY" => Some(r#"### News API
+뉴스 검색이 필요하면 News API를 사용하세요.
+```bash
+curl "https://newsapi.org/v2/everything?q=<검색어>&apiKey=$NEWS_API_KEY"
+```
+또는 헤드라인:
+```bash
+curl "https://newsapi.org/v2/top-headlines?country=kr&apiKey=$NEWS_API_KEY"
+```
+"#),
+        "WEATHER_API_KEY" => Some(r#"### Weather API
+날씨 정보가 필요하면 Weather API를 사용하세요.
+```bash
+curl "https://api.weatherapi.com/v1/current.json?key=$WEATHER_API_KEY&q=<도시명>"
+```
+예보:
+```bash
+curl "https://api.weatherapi.com/v1/forecast.json?key=$WEATHER_API_KEY&q=<도시명>&days=3"
+```
+"#),
+        _ => None,
+    }
+}
+
+/// TOOLS.md의 moldClaw 관리 섹션 마커
+const TOOLS_MD_START_MARKER: &str = "<!-- MOLDCLAW_MANAGED_START -->";
+const TOOLS_MD_END_MARKER: &str = "<!-- MOLDCLAW_MANAGED_END -->";
+
+/// 현재 연결된 도구들의 env var 목록 가져오기
+pub fn get_connected_tool_env_vars() -> Vec<String> {
+    let config = read_existing_config();
+    let mut vars = Vec::new();
+    
+    if let Some(env) = config.get("env") {
+        if let Some(env_vars) = env.get("vars") {
+            if let Some(obj) = env_vars.as_object() {
+                for (key, value) in obj {
+                    // 값이 있는 것만 (빈 문자열 제외)
+                    if let Some(v) = value.as_str() {
+                        if !v.is_empty() {
+                            vars.push(key.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    vars
+}
+
+/// 연결된 도구들을 기반으로 TOOLS.md 관리 섹션 생성
+fn generate_tools_md_section(connected_vars: &[String]) -> String {
+    let mut section = String::new();
+    section.push_str(TOOLS_MD_START_MARKER);
+    section.push('\n');
+    
+    // 템플릿이 있는 도구만 필터링
+    let tools_with_templates: Vec<&String> = connected_vars
+        .iter()
+        .filter(|var| get_tool_template(var).is_some())
+        .collect();
+    
+    if tools_with_templates.is_empty() {
+        section.push_str("<!-- 연동된 외부 도구 API가 없습니다 -->\n");
+    } else {
+        section.push_str("## 🔧 연동된 외부 도구 API\n\n");
+        section.push_str("아래 도구들이 연동되어 있습니다. 필요시 해당 API를 사용하세요.\n\n");
+        
+        for var in tools_with_templates {
+            if let Some(template) = get_tool_template(var) {
+                section.push_str(template);
+                section.push('\n');
+            }
+        }
+    }
+    
+    section.push_str(TOOLS_MD_END_MARKER);
+    section
+}
+
+/// TOOLS.md 파일 업데이트
+pub fn update_tools_md() -> Result<(), String> {
+    let tools_md_path = get_workspace_dir().join("TOOLS.md");
+    
+    // 연결된 도구 목록 가져오기
+    let connected_vars = get_connected_tool_env_vars();
+    
+    // 새 섹션 생성
+    let new_section = generate_tools_md_section(&connected_vars);
+    
+    // 기존 파일 읽기 (없으면 빈 문자열)
+    let existing_content = std::fs::read_to_string(&tools_md_path)
+        .unwrap_or_default();
+    
+    // 마커 찾기
+    let start_pos = existing_content.find(TOOLS_MD_START_MARKER);
+    let end_pos = existing_content.find(TOOLS_MD_END_MARKER);
+    
+    let updated_content = match (start_pos, end_pos) {
+        (Some(start), Some(end)) => {
+            // 기존 마커가 있으면 교체
+            let end_with_marker = end + TOOLS_MD_END_MARKER.len();
+            format!(
+                "{}{}{}",
+                &existing_content[..start],
+                new_section,
+                &existing_content[end_with_marker..]
+            )
+        }
+        _ => {
+            // 마커가 없으면 파일 끝에 추가
+            if existing_content.is_empty() {
+                // 파일이 없었으면 기본 헤더 추가
+                format!(
+                    "# TOOLS.md - 도구 설정 노트\n\n이 파일에 도구 관련 메모를 추가할 수 있습니다.\n\n{}\n",
+                    new_section
+                )
+            } else {
+                format!(
+                    "{}\n\n{}\n",
+                    existing_content.trim_end(),
+                    new_section
+                )
+            }
+        }
+    };
+    
+    // 파일 쓰기
+    std::fs::write(&tools_md_path, updated_content)
+        .map_err(|e| format!("TOOLS.md 쓰기 실패: {}", e))?;
+    
+    Ok(())
 }
