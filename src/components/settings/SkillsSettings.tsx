@@ -580,7 +580,7 @@ export default function SkillsSettings({
                 : 'bg-[#252836] text-forge-muted hover:text-forge-text border-2 border-transparent rounded-t-xl -mb-[2px]'
               }`}
           >
-            🔑 API 연동 ({API_SKILLS.length})
+            🔑 API 연동
           </button>
           <button
             onClick={() => setActiveTab('cli')}
