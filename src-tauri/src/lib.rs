@@ -1737,20 +1737,28 @@ fn install_vc_redist() -> Result<String, String> {
 #[tauri::command]
 fn install_nodejs() -> Result<String, String> {
     // 1. Homebrew로 Node.js 설치 시도
-    let brew_check = std::process::Command::new("brew")
+    // 먼저 기본 PATH로 시도, 실패 시 확장 PATH로 재시도
+    let brew_available = std::process::Command::new("brew")
         .arg("--version")
-        .output();
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+        || macos_cmd("brew")  // fallback: 확장 PATH로 재시도
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
 
-    if brew_check.map(|o| o.status.success()).unwrap_or(false) {
-        // brew install node@22 실행
-        let output = std::process::Command::new("brew")
+    if brew_available {
+        // brew install node@22 실행 (확장 PATH 사용)
+        let output = macos_cmd("brew")
             .args(["install", "node@22"])
             .output()
             .map_err(|e| format!("brew 실행 실패: {}", e))?;
 
         if output.status.success() {
-            // brew link
-            let _ = std::process::Command::new("brew")
+            // brew link (확장 PATH 사용)
+            let _ = macos_cmd("brew")
                 .args(["link", "--overwrite", "--force", "node@22"])
                 .output();
             return Ok("Node.js 22가 Homebrew로 설치되었습니다. 앱을 재시작해주세요.".to_string());
@@ -1900,9 +1908,11 @@ fn install_prerequisites() -> Result<serde_json::Value, String> {
         if let Some(version) = node_version {
             messages.push(format!("✓ Node.js {} 설치됨", version));
         } else {
-            // Homebrew로 설치 시도
+            // Homebrew로 설치 시도 (기본 PATH → 확장 PATH 순서로 체크)
             let brew_ok = std::process::Command::new("brew")
-                .arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
+                .arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
+                || macos_cmd("brew")  // fallback: 확장 PATH로 재시도
+                    .arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
             if brew_ok {
                 messages.push("Node.js 설치 중 (Homebrew)...".to_string());
                 match install_nodejs() {
