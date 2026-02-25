@@ -593,6 +593,9 @@ pub async fn configure_skill_api_key(skill_id: String, api_keys: HashMap<String,
     std::fs::write(&config_path, content)
         .map_err(|e| format!("설정 파일 저장 실패: {}", e))?;
     
+    // TOOLS.md 업데이트 (실패해도 무시)
+    crate::openclaw::update_tools_md().ok();
+    
     Ok(format!("{} API 키 설정 완료", skill_id))
 }
 
@@ -733,6 +736,9 @@ pub async fn disconnect_skill(skill_id: String) -> Result<String, String> {
             
             std::fs::write(&config_path, content)
                 .map_err(|e| format!("설정 파일 저장 실패: {}", e))?;
+            
+            // TOOLS.md 업데이트 (실패해도 무시)
+            crate::openclaw::update_tools_md().ok();
         }
     }
 
