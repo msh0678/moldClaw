@@ -839,6 +839,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
                     "OPENAI_API_KEY".into(),
                     "ANTHROPIC_API_KEY".into(),
                     "GEMINI_API_KEY".into(),
+                    "XAI_API_KEY".into(),
                     "FIRECRAWL_API_KEY".into(),
                     "APIFY_API_TOKEN".into(),
                 ],
