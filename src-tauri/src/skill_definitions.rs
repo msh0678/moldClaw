@@ -82,6 +82,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
         },
 
         // ===== 1password =====
+        // Note: Windows는 winget 필요하나 현재 brew만 지원, Windows 비활성화
         SkillDefinition {
             id: "1password".into(),
             name: "1Password".into(),
@@ -91,7 +92,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             install_method: InstallMethod::Brew,
             install_command: Some("brew install 1password-cli".into()),
             binary_name: Some("op".into()),
-            platform: PlatformSupport { windows: true, macos: true, linux: true },
+            platform: PlatformSupport { windows: false, macos: true, linux: true },
             setup: SetupRequirement::Login { command: "op signin".into() },
             disconnect: DisconnectConfig {
                 logout_command: Some("op signout --all".into()),
@@ -332,6 +333,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
         },
 
         // ===== gifgrep =====
+        // Note: API 키는 선택적 (없으면 데모 키 사용)
         SkillDefinition {
             id: "gifgrep".into(),
             name: "GIF Grep".into(),
@@ -342,7 +344,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             install_command: Some("go install github.com/steipete/gifgrep/cmd/gifgrep@latest".into()),
             binary_name: Some("gifgrep".into()),
             platform: PlatformSupport { windows: true, macos: true, linux: true },
-            setup: SetupRequirement::ApiKey { vars: vec!["GIPHY_API_KEY".into()] },
+            setup: SetupRequirement::None,  // API 키 선택적
             disconnect: DisconnectConfig {
                 logout_command: None,
                 config_paths: vec![],
@@ -849,7 +851,13 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             disconnect: DisconnectConfig {
                 logout_command: None,
                 config_paths: vec!["~/.summarize/".into()],
-                env_vars: vec!["OPENAI_API_KEY".into(), "ANTHROPIC_API_KEY".into(), "GEMINI_API_KEY".into()],
+                env_vars: vec![
+                    "OPENAI_API_KEY".into(), 
+                    "ANTHROPIC_API_KEY".into(), 
+                    "GEMINI_API_KEY".into(),
+                    "FIRECRAWL_API_KEY".into(),
+                    "APIFY_API_TOKEN".into(),
+                ],
                 mac_permissions: None,
             },
             hidden: false,
@@ -906,6 +914,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
         },
 
         // ===== video-frames =====
+        // Note: Windows는 winget 필요하나 현재 brew만 지원, Windows 비활성화
         SkillDefinition {
             id: "video-frames".into(),
             name: "Video Frames".into(),
@@ -915,7 +924,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             install_method: InstallMethod::Brew,
             install_command: Some("brew install ffmpeg".into()),
             binary_name: Some("ffmpeg".into()),
-            platform: PlatformSupport { windows: true, macos: true, linux: true },
+            platform: PlatformSupport { windows: false, macos: true, linux: true },
             setup: SetupRequirement::None,
             disconnect: DisconnectConfig {
                 logout_command: None,
