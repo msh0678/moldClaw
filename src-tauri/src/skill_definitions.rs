@@ -875,7 +875,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             install_command: Some("brew install --cask steipete/tap/codexbar".into()),
             windows_install_method: None,
             windows_install_command: None,
-            binary_name: None,
+            binary_name: Some("codexbar".into()), // OC requires.bins: ["codexbar"]
             platform: PlatformSupport { windows: false, macos: true, linux: false },
             setup: SetupRequirement::None,
             disconnect: DisconnectConfig {
