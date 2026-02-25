@@ -1,4 +1,6 @@
 mod openclaw;
+mod skills;
+mod skill_definitions;
 
 // Platform abstraction layer (new architecture for cross-platform support)
 // Use platform::get_platform() for new code
@@ -2045,6 +2047,15 @@ pub fn run() {
             get_gmail_status,
             register_gog_credentials,
             check_gog_credentials,
+            // 스킬 관리
+            skills::get_skills_status,
+            skills::get_skill_definitions,
+            skills::install_skill,
+            skills::configure_skill_api_key,
+            skills::open_skill_login_terminal,
+            skills::disconnect_skill,
+            skills::disable_skill,
+            skills::enable_skill,
         ])
         .setup(|_app| {
             eprintln!("moldClaw 시작됨");
