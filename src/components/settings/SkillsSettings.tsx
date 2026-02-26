@@ -416,15 +416,22 @@ export default function SkillsSettings({
         }
       };
 
+      const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+      const [disconnectResult, setDisconnectResult] = useState<string | null>(null);
+
       const handleDisconnect = async () => {
-        if (!confirm(`${skill.name} 연결을 해제하시겠습니까?\n설정과 인증 정보가 삭제됩니다.`)) return;
+        setShowDisconnectConfirm(true);
+      };
+
+      const confirmDisconnect = async () => {
+        setShowDisconnectConfirm(false);
         setDisconnecting(true);
         setError(null);
         try {
           const result = await invoke<string>('disconnect_skill', { skillId: skill.id });
-          alert(result);
+          setDisconnectResult(result);
+          await refreshStatus();
           await loadCliSkills();
-          closeModal();
         } catch (err) {
           setError(String(err));
         } finally {
@@ -512,13 +519,48 @@ export default function SkillsSettings({
               <p className="text-sm text-forge-text">{skill.description}</p>
             </div>
 
-            {/* 연결 해제 */}
-            <div className="pt-4 border-t border-[#2a2d3e]">
-              <button onClick={handleDisconnect} disabled={disconnecting} className="w-full px-4 py-2 bg-forge-error/10 text-forge-error border border-forge-error/30 rounded-lg text-sm hover:bg-forge-error/20 disabled:opacity-50 flex items-center justify-center gap-2">
-                {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-forge-error/30 border-t-forge-error rounded-full" /> 연결 해제 중...</> : '연결 해제'}
-              </button>
-              <p className="text-xs text-forge-muted mt-2 text-center">바이너리는 유지됩니다</p>
-            </div>
+            {/* 연결 해제 결과 */}
+            {disconnectResult && (
+              <div className="p-3 bg-forge-success/20 text-forge-success rounded-lg text-sm">
+                <p className="font-medium mb-1">✓ 연결 해제 완료</p>
+                <p className="text-xs whitespace-pre-line">{disconnectResult}</p>
+              </div>
+            )}
+
+            {/* 연결 해제 확인 모달 */}
+            {showDisconnectConfirm && (
+              <div className="p-4 bg-forge-error/10 border border-forge-error/30 rounded-xl">
+                <p className="text-sm text-forge-text mb-3">
+                  <span className="font-medium text-forge-error">{skill.name}</span> 연결을 해제하시겠습니까?
+                </p>
+                <p className="text-xs text-forge-muted mb-4">설정과 인증 정보가 삭제됩니다.</p>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setShowDisconnectConfirm(false)} 
+                    className="flex-1 px-3 py-2 bg-[#252836] text-forge-text rounded-lg text-sm hover:bg-[#2d3142]"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    onClick={confirmDisconnect}
+                    disabled={disconnecting}
+                    className="flex-1 px-3 py-2 bg-forge-error text-white rounded-lg text-sm hover:bg-forge-error/80 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> 해제 중...</> : '연결 해제'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 연결 해제 버튼 */}
+            {!showDisconnectConfirm && !disconnectResult && (
+              <div className="pt-4 border-t border-[#2a2d3e]">
+                <button onClick={handleDisconnect} disabled={disconnecting} className="w-full px-4 py-2 bg-forge-error/10 text-forge-error border border-forge-error/30 rounded-lg text-sm hover:bg-forge-error/20 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-forge-error/30 border-t-forge-error rounded-full" /> 연결 해제 중...</> : '연결 해제'}
+                </button>
+                <p className="text-xs text-forge-muted mt-2 text-center">바이너리는 유지됩니다</p>
+              </div>
+            )}
 
             {error && <div className="p-3 bg-forge-error/20 text-forge-error rounded-lg text-sm">{error}</div>}
           </div>
