@@ -418,35 +418,54 @@ fn check_brew_installed() -> bool {
 
 /// Homebrew 버전 확인 (특수 경로 포함)
 fn get_brew_version() -> Option<String> {
-    // 다양한 brew 경로 시도
-    let brew_paths = [
-        "brew".to_string(),
-        "/opt/homebrew/bin/brew".to_string(),
-        "/usr/local/bin/brew".to_string(),
-        "/home/linuxbrew/.linuxbrew/bin/brew".to_string(),
-    ];
+    // Windows에서는 brew 없음
+    #[cfg(windows)]
+    return None;
     
-    for brew_path in &brew_paths {
-        if let Ok(output) = Command::new(brew_path).arg("--version").output() {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                return stdout.lines().next().map(|s| s.trim().to_string());
+    #[cfg(not(windows))]
+    {
+        // 다양한 brew 경로 시도
+        let brew_paths = [
+            "brew".to_string(),
+            "/opt/homebrew/bin/brew".to_string(),
+            "/usr/local/bin/brew".to_string(),
+            "/home/linuxbrew/.linuxbrew/bin/brew".to_string(),
+        ];
+        
+        for brew_path in &brew_paths {
+            #[cfg(target_os = "macos")]
+            let output = macos_cmd(&brew_path).arg("--version").output();
+            #[cfg(target_os = "linux")]
+            let output = linux_cmd(&brew_path).arg("--version").output();
+            
+            if let Ok(output) = output {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    return stdout.lines().next().map(|s| s.trim().to_string());
+                }
             }
         }
-    }
-    
-    // 사용자 홈 Linuxbrew
-    if let Some(home) = dirs::home_dir() {
-        let user_brew = home.join(".linuxbrew/bin/brew");
-        if let Ok(output) = Command::new(&user_brew).arg("--version").output() {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                return stdout.lines().next().map(|s| s.trim().to_string());
+        
+        // 사용자 홈 Linuxbrew
+        if let Some(home) = dirs::home_dir() {
+            let user_brew = home.join(".linuxbrew/bin/brew");
+            let user_brew_str = user_brew.to_string_lossy().to_string();
+            
+            #[cfg(target_os = "macos")]
+            let output = macos_cmd(&user_brew_str).arg("--version").output();
+            #[cfg(target_os = "linux")]
+            let output = linux_cmd(&user_brew_str).arg("--version").output();
+            
+            if let Ok(output) = output {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    return stdout.lines().next().map(|s| s.trim().to_string());
+                }
             }
         }
+        
+        None
     }
-    
-    None
 }
 
 /// Prerequisite 상태 확인
