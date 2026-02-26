@@ -680,9 +680,10 @@ export default function SkillsSettings({
                     {missingPrereqs.map(name => (
                       <button
                         key={name}
+                        type="button"
                         onClick={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
-                          console.log('Installing:', name);
                           installPrerequisite(name.toLowerCase());
                         }}
                         disabled={!!installingPrereq}

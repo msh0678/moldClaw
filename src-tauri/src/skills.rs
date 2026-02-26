@@ -679,53 +679,45 @@ async fn install_go() -> Result<String, String> {
     
     #[cfg(target_os = "linux")]
     {
-        // Linux: apt, dnf, pacman 순서로 시도
+        // Linux: 터미널을 열어서 사용자가 직접 설치 (sudo 비밀번호 필요)
+        // 패키지 매니저 감지 후 적절한 명령 생성
         
-        // apt (Debian/Ubuntu)
-        if Command::new("which").arg("apt").output().map(|o| o.status.success()).unwrap_or(false) {
-            let output = linux_sh("sudo apt update && sudo apt install -y golang-go")
+        let install_cmd = if Command::new("which").arg("apt").output().map(|o| o.status.success()).unwrap_or(false) {
+            "sudo apt update && sudo apt install -y golang-go && echo '✅ Go 설치 완료! 이 창을 닫아도 됩니다.' && read -p '아무 키나 누르세요...'"
+        } else if Command::new("which").arg("dnf").output().map(|o| o.status.success()).unwrap_or(false) {
+            "sudo dnf install -y golang && echo '✅ Go 설치 완료! 이 창을 닫아도 됩니다.' && read -p '아무 키나 누르세요...'"
+        } else if Command::new("which").arg("pacman").output().map(|o| o.status.success()).unwrap_or(false) {
+            "sudo pacman -S --noconfirm go && echo '✅ Go 설치 완료! 이 창을 닫아도 됩니다.' && read -p '아무 키나 누르세요...'"
+        } else if Command::new("which").arg("brew").output().map(|o| o.status.success()).unwrap_or(false) {
+            "brew install go && echo '✅ Go 설치 완료! 이 창을 닫아도 됩니다.' && read -p '아무 키나 누르세요...'"
+        } else {
+            return Err("지원되는 패키지 매니저를 찾을 수 없습니다 (apt, dnf, pacman, brew)".into());
+        };
+        
+        // 터미널 열어서 실행
+        let xfce_cmd = format!("bash -c '{}'", install_cmd);
+        let terminals: [(&str, Vec<&str>); 4] = [
+            ("gnome-terminal", vec!["--", "bash", "-c", install_cmd]),
+            ("konsole", vec!["-e", "bash", "-c", install_cmd]),
+            ("xfce4-terminal", vec!["-e", &xfce_cmd]),
+            ("xterm", vec!["-e", "bash", "-c", install_cmd]),
+        ];
+        
+        for (term, args) in terminals {
+            if Command::new("which")
+                .arg(term)
                 .output()
-                .map_err(|e| format!("apt 실행 실패: {}", e))?;
-            
-            if output.status.success() {
-                return Ok("Go 설치 완료 (apt)".into());
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+            {
+                match Command::new(term).args(&args).spawn() {
+                    Ok(_) => return Ok("터미널에서 Go 설치가 시작됩니다.\n비밀번호를 입력해주세요.\n설치 완료 후 앱을 재시작해주세요.".into()),
+                    Err(_) => continue,
+                }
             }
         }
         
-        // dnf (Fedora/RHEL)
-        if Command::new("which").arg("dnf").output().map(|o| o.status.success()).unwrap_or(false) {
-            let output = linux_sh("sudo dnf install -y golang")
-                .output()
-                .map_err(|e| format!("dnf 실행 실패: {}", e))?;
-            
-            if output.status.success() {
-                return Ok("Go 설치 완료 (dnf)".into());
-            }
-        }
-        
-        // pacman (Arch)
-        if Command::new("which").arg("pacman").output().map(|o| o.status.success()).unwrap_or(false) {
-            let output = linux_sh("sudo pacman -S --noconfirm go")
-                .output()
-                .map_err(|e| format!("pacman 실행 실패: {}", e))?;
-            
-            if output.status.success() {
-                return Ok("Go 설치 완료 (pacman)".into());
-            }
-        }
-        
-        // Homebrew (Linuxbrew)
-        if Command::new("which").arg("brew").output().map(|o| o.status.success()).unwrap_or(false) {
-            let output = linux_sh("brew install go")
-                .output()
-                .map_err(|e| format!("brew 실행 실패: {}", e))?;
-            
-            if output.status.success() {
-                return Ok("Go 설치 완료 (brew)".into());
-            }
-        }
-        
-        Err("지원되는 패키지 매니저를 찾을 수 없습니다 (apt, dnf, pacman, brew)".into())
+        Err("지원되는 터미널을 찾을 수 없습니다 (gnome-terminal, konsole, xfce4-terminal, xterm)".into())
     }
 }
 
