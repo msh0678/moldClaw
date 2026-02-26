@@ -650,31 +650,36 @@ pub async fn install_prerequisite(name: String) -> Result<String, String> {
 async fn install_go() -> Result<String, String> {
     #[cfg(windows)]
     {
-        let output = Command::new("winget")
-            .args(["install", "--id", "GoLang.Go", "-e", "--accept-source-agreements", "--accept-package-agreements"])
-            .output()
-            .map_err(|e| format!("winget 실행 실패: {}", e))?;
-
-        if output.status.success() {
-            Ok("Go 설치 완료. 앱을 재시작해주세요.".into())
-        } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
-        }
+        // Windows: cmd 창 열어서 winget 실행 (사용자가 진행 상황 볼 수 있음)
+        let install_cmd = "winget install --id GoLang.Go -e --accept-source-agreements --accept-package-agreements && echo. && echo Go 설치 완료! 앱을 재시작해주세요. && pause";
+        
+        Command::new("cmd")
+            .args(["/c", "start", "cmd", "/k", install_cmd])
+            .spawn()
+            .map_err(|e| format!("cmd 실행 실패: {}", e))?;
+        
+        Ok("터미널에서 Go 설치가 시작됩니다.\n설치 완료 후 앱을 재시작해주세요.".into())
     }
     
     #[cfg(target_os = "macos")]
     {
-        // macOS: 확장 PATH로 brew 실행
-        let output = macos_cmd("brew")
-            .args(["install", "go"])
-            .output()
-            .map_err(|e| format!("brew 실행 실패: {}", e))?;
-
-        if output.status.success() {
-            Ok("Go 설치 완료".into())
-        } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
-        }
+        // macOS: Terminal.app 열어서 brew 실행
+        let install_cmd = "brew install go && echo '✅ Go 설치 완료! 이 창을 닫아도 됩니다.'";
+        
+        let apple_script = format!(
+            r#"tell application "Terminal"
+                activate
+                do script "{}"
+            end tell"#,
+            install_cmd.replace('"', r#"\""#)
+        );
+        
+        Command::new("osascript")
+            .args(["-e", &apple_script])
+            .spawn()
+            .map_err(|e| format!("Terminal 실행 실패: {}", e))?;
+        
+        Ok("터미널에서 Go 설치가 시작됩니다.\n설치 완료 후 앱을 재시작해주세요.".into())
     }
     
     #[cfg(target_os = "linux")]
@@ -724,44 +729,66 @@ async fn install_go() -> Result<String, String> {
 async fn install_uv() -> Result<String, String> {
     #[cfg(windows)]
     {
-        let output = Command::new("powershell")
-            .args(["-Command", "irm https://astral.sh/uv/install.ps1 | iex"])
-            .output()
+        // Windows: PowerShell 창 열어서 uv 설치
+        let install_cmd = "irm https://astral.sh/uv/install.ps1 | iex; Write-Host ''; Write-Host 'uv 설치 완료! 앱을 재시작해주세요.' -ForegroundColor Green; Read-Host '아무 키나 누르세요'";
+        
+        Command::new("powershell")
+            .args(["-Command", &format!("Start-Process powershell -ArgumentList '-NoExit', '-Command', '{}'", install_cmd)])
+            .spawn()
             .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
-
-        if output.status.success() {
-            Ok("uv 설치 완료".into())
-        } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
-        }
+        
+        Ok("터미널에서 uv 설치가 시작됩니다.\n설치 완료 후 앱을 재시작해주세요.".into())
     }
     
     #[cfg(target_os = "macos")]
     {
-        // macOS: 확장 PATH로 curl 실행
-        let output = macos_sh("curl -LsSf https://astral.sh/uv/install.sh | sh")
-            .output()
-            .map_err(|e| format!("설치 스크립트 실행 실패: {}", e))?;
-
-        if output.status.success() {
-            Ok("uv 설치 완료".into())
-        } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
-        }
+        // macOS: Terminal.app 열어서 uv 설치
+        let install_cmd = "curl -LsSf https://astral.sh/uv/install.sh | sh && echo '✅ uv 설치 완료! 이 창을 닫아도 됩니다.'";
+        
+        let apple_script = format!(
+            r#"tell application "Terminal"
+                activate
+                do script "{}"
+            end tell"#,
+            install_cmd.replace('"', r#"\""#)
+        );
+        
+        Command::new("osascript")
+            .args(["-e", &apple_script])
+            .spawn()
+            .map_err(|e| format!("Terminal 실행 실패: {}", e))?;
+        
+        Ok("터미널에서 uv 설치가 시작됩니다.\n설치 완료 후 앱을 재시작해주세요.".into())
     }
     
     #[cfg(target_os = "linux")]
     {
-        // Linux: 확장 PATH로 curl 실행
-        let output = linux_sh("curl -LsSf https://astral.sh/uv/install.sh | sh")
-            .output()
-            .map_err(|e| format!("설치 스크립트 실행 실패: {}", e))?;
-
-        if output.status.success() {
-            Ok("uv 설치 완료".into())
-        } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        // Linux: 터미널 열어서 uv 설치
+        let install_cmd = "curl -LsSf https://astral.sh/uv/install.sh | sh && echo '✅ uv 설치 완료! 이 창을 닫아도 됩니다.' && read -p '아무 키나 누르세요...'";
+        
+        let xfce_cmd = format!("bash -c '{}'", install_cmd);
+        let terminals: [(&str, Vec<&str>); 4] = [
+            ("gnome-terminal", vec!["--", "bash", "-c", install_cmd]),
+            ("konsole", vec!["-e", "bash", "-c", install_cmd]),
+            ("xfce4-terminal", vec!["-e", &xfce_cmd]),
+            ("xterm", vec!["-e", "bash", "-c", install_cmd]),
+        ];
+        
+        for (term, args) in terminals {
+            if Command::new("which")
+                .arg(term)
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+            {
+                match Command::new(term).args(&args).spawn() {
+                    Ok(_) => return Ok("터미널에서 uv 설치가 시작됩니다.\n설치 완료 후 앱을 재시작해주세요.".into()),
+                    Err(_) => continue,
+                }
+            }
         }
+        
+        Err("지원되는 터미널을 찾을 수 없습니다 (gnome-terminal, konsole, xfce4-terminal, xterm)".into())
     }
 }
 
