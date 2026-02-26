@@ -968,10 +968,10 @@ async fn install_with_go(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: start "" 로 빈 제목 지정 (첫 따옴표 인자가 제목으로 해석되는 문제 방지)
-        let full_cmd = format!("start \"\" cmd /k \"{} & pause\"", cmd);
+        // Windows: 각 인자를 별도로 전달 (Rust의 따옴표 이스케이프 문제 방지)
+        let install_script = format!("{} & pause", cmd);
         Command::new("cmd")
-            .args(["/c", &full_cmd])
+            .args(["/c", "start", "", "cmd", "/k", &install_script])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
@@ -1003,10 +1003,10 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: start "" 로 빈 제목 지정 (첫 따옴표 인자가 제목으로 해석되는 문제 방지)
-        let full_cmd = format!("start \"\" cmd /k \"{} & pause\"", cmd);
+        // Windows: 각 인자를 별도로 전달 (Rust의 따옴표 이스케이프 문제 방지)
+        let install_script = format!("{} & pause", cmd);
         Command::new("cmd")
-            .args(["/c", &full_cmd])
+            .args(["/c", "start", "", "cmd", "/k", &install_script])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
@@ -1038,10 +1038,10 @@ async fn install_with_uv(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: start "" 로 빈 제목 지정 (첫 따옴표 인자가 제목으로 해석되는 문제 방지)
-        let full_cmd = format!("start \"\" cmd /k \"{} & pause\"", cmd);
+        // Windows: 각 인자를 별도로 전달 (Rust의 따옴표 이스케이프 문제 방지)
+        let install_script = format!("{} & pause", cmd);
         Command::new("cmd")
-            .args(["/c", &full_cmd])
+            .args(["/c", "start", "", "cmd", "/k", &install_script])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
@@ -1072,10 +1072,10 @@ async fn install_with_winget(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: start "" 로 빈 제목 지정 (첫 따옴표 인자가 제목으로 해석되는 문제 방지)
-        let full_cmd = format!("start \"\" cmd /k \"{} & pause\"", cmd);
+        // Windows: 각 인자를 별도로 전달 (Rust의 따옴표 이스케이프 문제 방지)
+        let install_script = format!("{} & pause", cmd);
         Command::new("cmd")
-            .args(["/c", &full_cmd])
+            .args(["/c", "start", "", "cmd", "/k", &install_script])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
