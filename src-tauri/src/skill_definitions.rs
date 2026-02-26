@@ -29,7 +29,8 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             setup: SetupRequirement::Login { command: "op signin".into() },
             disconnect: DisconnectConfig {
                 logout_command: Some("op signout --all".into()),
-                config_paths: vec![],
+                // 1Password는 세션 기반이지만 config 파일로 감지
+                config_paths: vec!["~/.config/op/config".into()],
                 env_vars: vec![],
                 mac_permissions: None,
             },
@@ -144,7 +145,8 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             setup: SetupRequirement::Login { command: "ordercli foodora session chrome --url https://www.foodora.at/".into() },
             disconnect: DisconnectConfig {
                 logout_command: None,
-                config_paths: vec!["~/.config/ordercli/".into()],
+                // ordercli 세션 생성 시 session.json 파일 생성
+                config_paths: vec!["~/.config/ordercli/session.json".into()],
                 env_vars: vec![],
                 mac_permissions: None,
             },
@@ -351,7 +353,8 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             setup: SetupRequirement::Login { command: "ordercli foodora session chrome --url https://www.foodora.at/".into() },
             disconnect: DisconnectConfig {
                 logout_command: None,
-                config_paths: vec!["~/.config/ordercli/".into()],
+                // ordercli 세션 생성 시 session.json 파일 생성
+                config_paths: vec!["~/.config/ordercli/session.json".into()],
                 env_vars: vec![],
                 mac_permissions: None,
             },
@@ -443,7 +446,8 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             setup: SetupRequirement::Login { command: "wacli auth".into() },
             disconnect: DisconnectConfig {
                 logout_command: Some("wacli logout".into()),
-                config_paths: vec!["~/.config/wacli/".into()],
+                // wacli QR 로그인 완료 시 store.db 생성
+                config_paths: vec!["~/.config/wacli/store.db".into()],
                 env_vars: vec![],
                 mac_permissions: None,
             },
@@ -493,7 +497,8 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             setup: SetupRequirement::Login { command: "gog auth add <email> --services gmail,calendar,drive".into() },
             disconnect: DisconnectConfig {
                 logout_command: Some("gog auth remove-all".into()),
-                config_paths: vec!["~/.config/gog/".into()],
+                // gog 인증 완료 시 accounts.json 생성
+                config_paths: vec!["~/.config/gog/accounts.json".into()],
                 env_vars: vec![],
                 mac_permissions: None,
             },
@@ -524,6 +529,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
         },
 
         // himalaya: brew (macOS/Linux)
+        // 연결 감지: config.toml 파일 존재 여부 (폴더가 아닌 설정 파일)
         SkillDefinition {
             id: "himalaya".into(),
             name: "Himalaya Email".into(),
@@ -539,7 +545,8 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             setup: SetupRequirement::Login { command: "himalaya".into() },
             disconnect: DisconnectConfig {
                 logout_command: None,
-                config_paths: vec!["~/.config/himalaya/".into()],
+                // config.toml 파일로 연결 감지 + 해제 시 삭제
+                config_paths: vec!["~/.config/himalaya/config.toml".into()],
                 env_vars: vec![],
                 mac_permissions: None,
             },
@@ -585,7 +592,8 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             setup: SetupRequirement::Login { command: "openhue setup (30초 내에 Bridge 버튼 누르기)".into() },
             disconnect: DisconnectConfig {
                 logout_command: None,
-                config_paths: vec!["~/.config/openhue/".into()],
+                // openhue Bridge 연결 완료 시 config.yaml 생성
+                config_paths: vec!["~/.config/openhue/config.yaml".into()],
                 env_vars: vec![],
                 mac_permissions: None,
             },
@@ -677,7 +685,8 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             setup: SetupRequirement::Login { command: "spogo auth import --browser chrome".into() },
             disconnect: DisconnectConfig {
                 logout_command: Some("spogo auth logout".into()),
-                config_paths: vec!["~/.config/spogo/".into()],
+                // spogo 인증 완료 시 credentials.json 생성
+                config_paths: vec!["~/.config/spogo/credentials.json".into()],
                 env_vars: vec![],
                 mac_permissions: None,
             },

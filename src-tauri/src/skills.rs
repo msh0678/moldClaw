@@ -1222,3 +1222,195 @@ fn update_skill_enabled(skill_id: &str, enabled: bool) -> Result<String, String>
     
     Ok(format!("{} {}", skill_id, if enabled { "활성화됨" } else { "비활성화됨" }))
 }
+
+// ============================================================================
+// 스킬 마법사 지원 함수들
+// ============================================================================
+
+/// 스킬 설정 파일 존재 여부 확인 (폴링용)
+#[tauri::command]
+pub fn poll_skill_config(skill_id: String) -> Result<bool, String> {
+    let skill = SKILL_DEFINITIONS
+        .iter()
+        .find(|s| s.id == skill_id)
+        .ok_or_else(|| format!("스킬을 찾을 수 없음: {}", skill_id))?;
+    
+    // config_paths에서 파일/폴더 존재 여부 확인
+    for path in &skill.disconnect.config_paths {
+        let expanded = shellexpand::tilde(path);
+        let path_buf = PathBuf::from(expanded.as_ref());
+        if path_buf.exists() {
+            return Ok(true);
+        }
+    }
+    
+    Ok(false)
+}
+
+/// Bear Notes 토큰 저장
+#[tauri::command]
+pub fn save_bear_token(token: String) -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
+    let config_dir = home.join(".config").join("grizzly");
+    let token_path = config_dir.join("token");
+    
+    // 디렉토리 생성
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("디렉토리 생성 실패: {}", e))?;
+    
+    // 토큰 저장
+    std::fs::write(&token_path, token.trim())
+        .map_err(|e| format!("토큰 저장 실패: {}", e))?;
+    
+    Ok("Bear 토큰이 저장되었습니다".into())
+}
+
+/// Camsnap 카메라 설정
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct CamsnapCamera {
+    pub name: String,
+    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+}
+
+/// Camsnap 카메라 목록 조회
+#[tauri::command]
+pub fn get_camsnap_cameras() -> Result<Vec<CamsnapCamera>, String> {
+    let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
+    let config_path = home.join(".config").join("camsnap").join("config.yaml");
+    
+    if !config_path.exists() {
+        return Ok(vec![]);
+    }
+    
+    let content = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("설정 파일 읽기 실패: {}", e))?;
+    
+    // YAML 파싱
+    let config: serde_yaml::Value = serde_yaml::from_str(&content)
+        .map_err(|e| format!("YAML 파싱 실패: {}", e))?;
+    
+    let cameras = config.get("cameras")
+        .and_then(|c| c.as_sequence())
+        .map(|seq| {
+            seq.iter().filter_map(|cam| {
+                Some(CamsnapCamera {
+                    name: cam.get("name")?.as_str()?.to_string(),
+                    url: cam.get("url")?.as_str()?.to_string(),
+                    username: cam.get("username").and_then(|u| u.as_str()).map(String::from),
+                    password: cam.get("password").and_then(|p| p.as_str()).map(String::from),
+                })
+            }).collect()
+        })
+        .unwrap_or_default();
+    
+    Ok(cameras)
+}
+
+/// Camsnap 카메라 추가
+#[tauri::command]
+pub fn save_camsnap_camera(camera: CamsnapCamera) -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
+    let config_dir = home.join(".config").join("camsnap");
+    let config_path = config_dir.join("config.yaml");
+    
+    // 디렉토리 생성
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("디렉토리 생성 실패: {}", e))?;
+    
+    // 기존 카메라 목록 로드
+    let mut cameras = get_camsnap_cameras().unwrap_or_default();
+    
+    // 같은 이름의 카메라가 있으면 업데이트, 없으면 추가
+    if let Some(existing) = cameras.iter_mut().find(|c| c.name == camera.name) {
+        *existing = camera.clone();
+    } else {
+        cameras.push(camera.clone());
+    }
+    
+    // YAML로 저장
+    let config = serde_yaml::to_string(&serde_json::json!({ "cameras": cameras }))
+        .map_err(|e| format!("YAML 직렬화 실패: {}", e))?;
+    
+    std::fs::write(&config_path, config)
+        .map_err(|e| format!("설정 파일 저장 실패: {}", e))?;
+    
+    Ok(format!("카메라 '{}' 저장됨", camera.name))
+}
+
+/// Camsnap 카메라 삭제
+#[tauri::command]
+pub fn delete_camsnap_camera(name: String) -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
+    let config_path = home.join(".config").join("camsnap").join("config.yaml");
+    
+    let mut cameras = get_camsnap_cameras().unwrap_or_default();
+    let original_len = cameras.len();
+    cameras.retain(|c| c.name != name);
+    
+    if cameras.len() == original_len {
+        return Err(format!("카메라 '{}' 를 찾을 수 없습니다", name));
+    }
+    
+    // YAML로 저장
+    let config = serde_yaml::to_string(&serde_json::json!({ "cameras": cameras }))
+        .map_err(|e| format!("YAML 직렬화 실패: {}", e))?;
+    
+    std::fs::write(&config_path, config)
+        .map_err(|e| format!("설정 파일 저장 실패: {}", e))?;
+    
+    Ok(format!("카메라 '{}' 삭제됨", name))
+}
+
+/// Obsidian Vault 경로 저장
+#[tauri::command]
+pub fn save_obsidian_vault(vault_path: String) -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
+    let config_dir = home.join(".config").join("obsidian-cli");
+    let config_path = config_dir.join("config.yaml");
+    
+    // 경로 검증
+    let vault = PathBuf::from(&vault_path);
+    if !vault.exists() || !vault.is_dir() {
+        return Err("유효하지 않은 Vault 경로입니다".into());
+    }
+    
+    // 디렉토리 생성
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("디렉토리 생성 실패: {}", e))?;
+    
+    // YAML로 저장
+    let config = format!("default_vault: {}\n", vault_path);
+    std::fs::write(&config_path, config)
+        .map_err(|e| format!("설정 파일 저장 실패: {}", e))?;
+    
+    Ok(format!("Obsidian Vault 설정 완료: {}", vault_path))
+}
+
+/// Obsidian Vault 경로 조회
+#[tauri::command]
+pub fn get_obsidian_vault() -> Result<Option<String>, String> {
+    let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
+    let config_path = home.join(".config").join("obsidian-cli").join("config.yaml");
+    
+    if !config_path.exists() {
+        return Ok(None);
+    }
+    
+    let content = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("설정 파일 읽기 실패: {}", e))?;
+    
+    let config: serde_yaml::Value = serde_yaml::from_str(&content)
+        .map_err(|e| format!("YAML 파싱 실패: {}", e))?;
+    
+    let vault = config.get("default_vault")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    
+    Ok(vault)
+}
+
+// (open_skill_login_terminal은 위에 이미 정의됨)

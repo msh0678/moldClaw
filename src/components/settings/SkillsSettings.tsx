@@ -1,5 +1,5 @@
 // SkillsSettings - 통합 스킬 관리 (moldClaw API 스킬 + OpenClaw CLI 스킬)
-// v3.0: Prerequisite 체크 + 플랫폼별 비활성화
+// v3.0: Prerequisite 체크 + 플랫폼별 비활성화 + 스킬 마법사
 
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
@@ -13,6 +13,8 @@ import type {
 } from '../../types/skills';
 import { SKILL_CATEGORIES, getEffectiveInstallMethod, needsPrerequisite } from '../../types/skills';
 import { BrandIcon } from '../common/BrandIcon';
+import SkillWizard from './wizards/SkillWizard';
+import { getSkillWizardConfig } from './wizards/SkillWizardConfig';
 
 interface SkillsSettingsProps {
   config: FullConfig;
@@ -414,14 +416,41 @@ export default function SkillsSettings({
         }
         
         if (setup.type === 'login') {
+          const wizardConfig = getSkillWizardConfig(skill.id);
+          
           return (
-            <div className="space-y-3">
-              <h4 className="font-medium text-forge-text">로그인 필요</h4>
-              <p className="text-sm text-forge-muted">터미널에서 로그인을 완료해주세요.</p>
-              <code className="block text-xs bg-[#1a1c24] p-2 rounded font-mono text-forge-muted">{setup.command}</code>
-              <button onClick={handleOpenLogin} className="px-4 py-2 bg-forge-copper rounded-lg text-sm font-medium hover:bg-forge-copper/80">
-                로그인 터미널 열기
-              </button>
+            <div className="bg-[#252836] border border-[#2a2d3e] rounded-xl p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-forge-copper/20 flex items-center justify-center">
+                  <span className="text-xl">🔐</span>
+                </div>
+                <div>
+                  <h4 className="font-medium text-forge-text">로그인 필요</h4>
+                  <p className="text-sm text-forge-muted">
+                    {wizardConfig ? '마법사로 간편하게 설정하세요' : '터미널에서 로그인을 완료해주세요'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-center">
+                {wizardConfig ? (
+                  <button 
+                    onClick={() => openModal(wizardConfig.title, (
+                      <SkillWizard 
+                        config={wizardConfig} 
+                        onComplete={() => { closeModal(); loadCliSkills(); }} 
+                        onCancel={closeModal} 
+                      />
+                    ))} 
+                    className="px-6 py-2.5 bg-forge-copper border-2 border-forge-amber rounded-lg text-sm font-medium hover:bg-forge-copper/80 transition-colors"
+                  >
+                    🧙 설정 마법사 열기
+                  </button>
+                ) : (
+                  <button onClick={handleOpenLogin} className="px-6 py-2.5 bg-forge-copper border-2 border-forge-amber rounded-lg text-sm font-medium hover:bg-forge-copper/80 transition-colors">
+                    로그인 터미널 열기
+                  </button>
+                )}
+              </div>
             </div>
           );
         }
@@ -443,6 +472,38 @@ export default function SkillsSettings({
         }
         
         if (setup.type === 'config') {
+          const wizardConfig = getSkillWizardConfig(skill.id);
+          
+          if (wizardConfig) {
+            return (
+              <div className="bg-[#252836] border border-[#2a2d3e] rounded-xl p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-forge-copper/20 flex items-center justify-center">
+                    <span className="text-xl">⚙️</span>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-forge-text">설정 필요</h4>
+                    <p className="text-sm text-forge-muted">마법사로 간편하게 설정하세요</p>
+                  </div>
+                </div>
+                <div className="flex justify-center">
+                  <button 
+                    onClick={() => openModal(wizardConfig.title, (
+                      <SkillWizard 
+                        config={wizardConfig} 
+                        onComplete={() => { closeModal(); loadCliSkills(); }} 
+                        onCancel={closeModal} 
+                      />
+                    ))} 
+                    className="px-6 py-2.5 bg-forge-copper border-2 border-forge-amber rounded-lg text-sm font-medium hover:bg-forge-copper/80 transition-colors"
+                  >
+                    🧙 설정 마법사 열기
+                  </button>
+                </div>
+              </div>
+            );
+          }
+          
           return (
             <div className="space-y-3">
               <h4 className="font-medium text-forge-text">설정 파일 필요</h4>

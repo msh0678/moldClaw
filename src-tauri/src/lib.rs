@@ -2009,6 +2009,14 @@ pub fn run() {
             skills::disconnect_skill,
             skills::disable_skill,
             skills::enable_skill,
+            // 스킬 마법사 지원 함수들
+            skills::poll_skill_config,
+            skills::save_bear_token,
+            skills::get_camsnap_cameras,
+            skills::save_camsnap_camera,
+            skills::delete_camsnap_camera,
+            skills::save_obsidian_vault,
+            skills::get_obsidian_vault,
         ])
         .setup(|_app| {
             eprintln!("moldClaw 시작됨");
