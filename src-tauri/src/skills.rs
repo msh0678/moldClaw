@@ -679,7 +679,53 @@ async fn install_go() -> Result<String, String> {
     
     #[cfg(target_os = "linux")]
     {
-        Err("Linux에서는 패키지 매니저로 Go를 설치해주세요 (apt, dnf 등)".into())
+        // Linux: apt, dnf, pacman 순서로 시도
+        
+        // apt (Debian/Ubuntu)
+        if Command::new("which").arg("apt").output().map(|o| o.status.success()).unwrap_or(false) {
+            let output = linux_sh("sudo apt update && sudo apt install -y golang-go")
+                .output()
+                .map_err(|e| format!("apt 실행 실패: {}", e))?;
+            
+            if output.status.success() {
+                return Ok("Go 설치 완료 (apt)".into());
+            }
+        }
+        
+        // dnf (Fedora/RHEL)
+        if Command::new("which").arg("dnf").output().map(|o| o.status.success()).unwrap_or(false) {
+            let output = linux_sh("sudo dnf install -y golang")
+                .output()
+                .map_err(|e| format!("dnf 실행 실패: {}", e))?;
+            
+            if output.status.success() {
+                return Ok("Go 설치 완료 (dnf)".into());
+            }
+        }
+        
+        // pacman (Arch)
+        if Command::new("which").arg("pacman").output().map(|o| o.status.success()).unwrap_or(false) {
+            let output = linux_sh("sudo pacman -S --noconfirm go")
+                .output()
+                .map_err(|e| format!("pacman 실행 실패: {}", e))?;
+            
+            if output.status.success() {
+                return Ok("Go 설치 완료 (pacman)".into());
+            }
+        }
+        
+        // Homebrew (Linuxbrew)
+        if Command::new("which").arg("brew").output().map(|o| o.status.success()).unwrap_or(false) {
+            let output = linux_sh("brew install go")
+                .output()
+                .map_err(|e| format!("brew 실행 실패: {}", e))?;
+            
+            if output.status.success() {
+                return Ok("Go 설치 완료 (brew)".into());
+            }
+        }
+        
+        Err("지원되는 패키지 매니저를 찾을 수 없습니다 (apt, dnf, pacman, brew)".into())
     }
 }
 
