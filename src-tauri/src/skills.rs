@@ -160,6 +160,77 @@ fn get_binary_version(name: &str, version_arg: &str) -> Option<String> {
     }
 }
 
+/// Homebrew 설치 확인 (macOS/Linux 특수 경로 포함)
+fn check_brew_installed() -> bool {
+    // 1. which brew 시도
+    if check_binary_exists("brew") {
+        return true;
+    }
+    
+    // 2. macOS Homebrew 경로 직접 확인
+    #[cfg(target_os = "macos")]
+    {
+        // Apple Silicon
+        if std::path::Path::new("/opt/homebrew/bin/brew").exists() {
+            return true;
+        }
+        // Intel Mac
+        if std::path::Path::new("/usr/local/bin/brew").exists() {
+            return true;
+        }
+    }
+    
+    // 3. Linux Linuxbrew 경로 직접 확인
+    #[cfg(target_os = "linux")]
+    {
+        // 시스템 Linuxbrew
+        if std::path::Path::new("/home/linuxbrew/.linuxbrew/bin/brew").exists() {
+            return true;
+        }
+        // 사용자 홈 디렉토리 Linuxbrew
+        if let Some(home) = dirs::home_dir() {
+            if home.join(".linuxbrew/bin/brew").exists() {
+                return true;
+            }
+        }
+    }
+    
+    false
+}
+
+/// Homebrew 버전 확인 (특수 경로 포함)
+fn get_brew_version() -> Option<String> {
+    // 다양한 brew 경로 시도
+    let brew_paths = [
+        "brew".to_string(),
+        "/opt/homebrew/bin/brew".to_string(),
+        "/usr/local/bin/brew".to_string(),
+        "/home/linuxbrew/.linuxbrew/bin/brew".to_string(),
+    ];
+    
+    for brew_path in &brew_paths {
+        if let Ok(output) = Command::new(brew_path).arg("--version").output() {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                return stdout.lines().next().map(|s| s.trim().to_string());
+            }
+        }
+    }
+    
+    // 사용자 홈 Linuxbrew
+    if let Some(home) = dirs::home_dir() {
+        let user_brew = home.join(".linuxbrew/bin/brew");
+        if let Ok(output) = Command::new(&user_brew).arg("--version").output() {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                return stdout.lines().next().map(|s| s.trim().to_string());
+            }
+        }
+    }
+    
+    None
+}
+
 /// Prerequisite 상태 확인
 fn check_prerequisites() -> PrerequisiteStatus {
     PrerequisiteStatus {
@@ -167,8 +238,8 @@ fn check_prerequisites() -> PrerequisiteStatus {
         go_version: get_binary_version("go", "version"),
         uv_installed: check_binary_exists("uv"),
         uv_version: get_binary_version("uv", "--version"),
-        brew_installed: check_binary_exists("brew"),
-        brew_version: get_binary_version("brew", "--version"),
+        brew_installed: check_brew_installed(),
+        brew_version: get_brew_version(),
         winget_installed: check_binary_exists("winget"),
         npm_installed: check_binary_exists("npm"),
         npm_version: get_binary_version("npm", "--version"),
