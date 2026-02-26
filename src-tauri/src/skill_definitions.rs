@@ -458,7 +458,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
         SkillDefinition {
             id: "camsnap".into(),
             name: "Camera Snap".into(),
-            description: "RTSP/ONVIF 카메라 스냅샷".into(),
+            description: "RTSP/ONVIF 카메라 스냅샷 (macOS ARM64 전용)".into(),
             emoji: "📷".into(),
             category: "smarthome".into(),
             install_method: InstallMethod::Brew,
@@ -466,7 +466,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_method: None,
             windows_install_command: None,
             binary_name: Some("camsnap".into()),
-            platform: PlatformSupport { windows: false, macos: true, linux: true },
+            platform: PlatformSupport { windows: false, macos: true, linux: false },
             setup: SetupRequirement::Config { path: "~/.config/camsnap/config.yaml".into() },
             disconnect: DisconnectConfig {
                 logout_command: None,
@@ -481,7 +481,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
         SkillDefinition {
             id: "gog".into(),
             name: "Google Workspace".into(),
-            description: "Gmail, Calendar, Drive 통합".into(),
+            description: "Gmail, Calendar, Drive 통합 (macOS ARM64)".into(),
             emoji: "📧".into(),
             category: "productivity".into(),
             install_method: InstallMethod::Brew,
@@ -489,7 +489,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_method: None,
             windows_install_command: None,
             binary_name: Some("gog".into()),
-            platform: PlatformSupport { windows: false, macos: true, linux: true },
+            platform: PlatformSupport { windows: false, macos: true, linux: false },
             setup: SetupRequirement::Login { command: "gog auth add <email> --services gmail,calendar,drive".into() },
             disconnect: DisconnectConfig {
                 logout_command: Some("gog auth remove-all".into()),
@@ -504,7 +504,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
         SkillDefinition {
             id: "goplaces".into(),
             name: "Google Places".into(),
-            description: "Google Places API 장소 검색".into(),
+            description: "Google Places API 장소 검색 (macOS ARM64)".into(),
             emoji: "📍".into(),
             category: "productivity".into(),
             install_method: InstallMethod::Brew,
@@ -512,7 +512,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_method: None,
             windows_install_command: None,
             binary_name: Some("goplaces".into()),
-            platform: PlatformSupport { windows: false, macos: true, linux: true },
+            platform: PlatformSupport { windows: false, macos: true, linux: false },
             setup: SetupRequirement::ApiKey { vars: vec!["GOOGLE_PLACES_API_KEY".into()] },
             disconnect: DisconnectConfig {
                 logout_command: None,
@@ -619,7 +619,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
         SkillDefinition {
             id: "sag".into(),
             name: "ElevenLabs TTS".into(),
-            description: "고품질 음성 합성".into(),
+            description: "고품질 음성 합성 (macOS ARM64)".into(),
             emoji: "🗣️".into(),
             category: "media".into(),
             install_method: InstallMethod::Brew,
@@ -627,7 +627,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_method: None,
             windows_install_command: None,
             binary_name: Some("sag".into()),
-            platform: PlatformSupport { windows: false, macos: true, linux: true },
+            platform: PlatformSupport { windows: false, macos: true, linux: false },
             setup: SetupRequirement::ApiKey { vars: vec!["ELEVENLABS_API_KEY".into()] },
             disconnect: DisconnectConfig {
                 logout_command: None,
@@ -642,7 +642,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
         SkillDefinition {
             id: "songsee".into(),
             name: "SongSee".into(),
-            description: "오디오 스펙트로그램 시각화".into(),
+            description: "오디오 스펙트로그램 시각화 (macOS ARM64)".into(),
             emoji: "🎼".into(),
             category: "media".into(),
             install_method: InstallMethod::Brew,
@@ -650,7 +650,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_method: None,
             windows_install_command: None,
             binary_name: Some("songsee".into()),
-            platform: PlatformSupport { windows: false, macos: true, linux: true },
+            platform: PlatformSupport { windows: false, macos: true, linux: false },
             setup: SetupRequirement::None,
             disconnect: DisconnectConfig {
                 logout_command: None,
@@ -665,7 +665,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
         SkillDefinition {
             id: "spotify-player".into(),
             name: "Spotify Player".into(),
-            description: "Spotify 음악 제어".into(),
+            description: "Spotify 음악 제어 (macOS ARM64)".into(),
             emoji: "🎵".into(),
             category: "media".into(),
             install_method: InstallMethod::Brew,
@@ -673,7 +673,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_method: None,
             windows_install_command: None,
             binary_name: Some("spogo".into()),
-            platform: PlatformSupport { windows: false, macos: true, linux: true },
+            platform: PlatformSupport { windows: false, macos: true, linux: false },
             setup: SetupRequirement::Login { command: "spogo auth import --browser chrome".into() },
             disconnect: DisconnectConfig {
                 logout_command: Some("spogo auth logout".into()),
@@ -688,7 +688,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
         SkillDefinition {
             id: "summarize".into(),
             name: "Summarize".into(),
-            description: "URL/파일/YouTube 요약".into(),
+            description: "URL/파일/YouTube 요약 (macOS ARM64)".into(),
             emoji: "📋".into(),
             category: "productivity".into(),
             install_method: InstallMethod::Brew,
@@ -696,7 +696,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_method: None,
             windows_install_command: None,
             binary_name: Some("summarize".into()),
-            platform: PlatformSupport { windows: false, macos: true, linux: true },
+            platform: PlatformSupport { windows: false, macos: true, linux: false },
             setup: SetupRequirement::ApiKey { vars: vec!["OPENAI_API_KEY".into()] },
             disconnect: DisconnectConfig {
                 logout_command: None,
