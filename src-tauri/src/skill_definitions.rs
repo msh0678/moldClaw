@@ -589,7 +589,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_command: None,
             binary_name: Some("openhue".into()),
             platform: PlatformSupport { windows: false, macos: true, linux: true },
-            setup: SetupRequirement::Login { command: "openhue setup (30초 내에 Bridge 버튼 누르기)".into() },
+            setup: SetupRequirement::Login { command: "openhue setup".into() },
             disconnect: DisconnectConfig {
                 logout_command: None,
                 // openhue Bridge 연결 완료 시 config.yaml 생성
