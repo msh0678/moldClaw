@@ -1494,7 +1494,8 @@ fn get_uninstall_command(skill: &SkillDefinition, method: &InstallMethod) -> (St
             )
         }
         InstallMethod::Brew => {
-            let pkg = package_name.unwrap_or_else(|| binary.to_string());
+            // brew install 뒤의 모든 패키지 추출 (jq ripgrep → jq ripgrep)
+            let pkg = extract_brew_packages(skill).unwrap_or_else(|| binary.to_string());
             (
                 format!("brew uninstall {}", pkg),
                 format!("brew uninstall {}", pkg),
@@ -1511,6 +1512,18 @@ fn get_uninstall_command(skill: &SkillDefinition, method: &InstallMethod) -> (St
             (String::new(), format!("수동으로 {} 바이너리를 삭제해주세요", binary))
         }
     }
+}
+
+/// brew install_command에서 모든 패키지 이름 추출 (여러 개 가능)
+fn extract_brew_packages(skill: &SkillDefinition) -> Option<String> {
+    let cmd = get_effective_install_command(skill)?;
+    
+    if cmd.contains("brew install ") {
+        // "brew install jq ripgrep" → "jq ripgrep"
+        return cmd.split("brew install ").nth(1).map(|s| s.trim().to_string());
+    }
+    
+    None
 }
 
 /// install_command에서 패키지 이름 추출
