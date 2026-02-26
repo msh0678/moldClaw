@@ -14,25 +14,10 @@ fn get_macos_extended_path() -> String {
     static CACHED_PATH: OnceLock<String> = OnceLock::new();
 
     CACHED_PATH.get_or_init(|| {
-        // 1. 로그인 셸에서 PATH 가져오기 시도
-        let shells = ["/bin/zsh", "/bin/bash", "/bin/sh"];
-        for shell in &shells {
-            if let Ok(output) = std::process::Command::new(shell)
-                .args(["-l", "-c", "echo $PATH"])
-                .output()
-            {
-                if output.status.success() {
-                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    if !path.is_empty() && path.contains('/') {
-                        return path;
-                    }
-                }
-            }
-        }
-
-        // 2. Fallback: 알려진 경로 목록 조합
         let home = std::env::var("HOME").unwrap_or_default();
-        let known_paths = vec![
+        
+        // 필수 경로 목록 (항상 포함)
+        let essential_paths = vec![
             "/opt/homebrew/bin".to_string(),        // Apple Silicon brew
             "/opt/homebrew/sbin".to_string(),
             "/usr/local/bin".to_string(),           // Intel brew
@@ -47,18 +32,44 @@ fn get_macos_extended_path() -> String {
             "/usr/sbin".to_string(),
             "/sbin".to_string(),
         ];
-
+        
+        // 1. 로그인 셸에서 PATH 가져오기 시도
+        let mut shell_path = String::new();
+        let shells = ["/bin/zsh", "/bin/bash", "/bin/sh"];
+        for shell in &shells {
+            if let Ok(output) = std::process::Command::new(shell)
+                .args(["-l", "-c", "echo $PATH"])
+                .output()
+            {
+                if output.status.success() {
+                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !path.is_empty() && path.contains('/') {
+                        shell_path = path;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 2. 필수 경로 + 셸 PATH 병합 (필수 경로 우선)
+        let mut all_paths: Vec<String> = essential_paths;
+        for p in shell_path.split(':') {
+            if !p.is_empty() {
+                all_paths.push(p.to_string());
+            }
+        }
+        
+        // 현재 환경 PATH도 추가
         let current = std::env::var("PATH").unwrap_or_default();
-        let mut all: Vec<String> = known_paths;
         for p in current.split(':') {
             if !p.is_empty() {
-                all.push(p.to_string());
+                all_paths.push(p.to_string());
             }
         }
         
         // 중복 제거
         let mut seen = std::collections::HashSet::new();
-        let deduped: Vec<String> = all.into_iter().filter(|p| seen.insert(p.clone())).collect();
+        let deduped: Vec<String> = all_paths.into_iter().filter(|p| seen.insert(p.clone())).collect();
         deduped.join(":")
     }).clone()
 }
@@ -90,25 +101,11 @@ fn get_linux_extended_path() -> String {
     static CACHED_PATH: OnceLock<String> = OnceLock::new();
 
     CACHED_PATH.get_or_init(|| {
-        // 1. 로그인 셸에서 PATH 가져오기 시도
-        let shells = ["/bin/bash", "/bin/zsh", "/bin/sh"];
-        for shell in &shells {
-            if let Ok(output) = std::process::Command::new(shell)
-                .args(["-l", "-c", "echo $PATH"])
-                .output()
-            {
-                if output.status.success() {
-                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    if !path.is_empty() && path.contains('/') {
-                        return path;
-                    }
-                }
-            }
-        }
-
-        // 2. Fallback: 알려진 경로 목록 조합
+        eprintln!("[get_linux_extended_path] 시작...");
         let home = std::env::var("HOME").unwrap_or_default();
-        let known_paths = vec![
+        
+        // 필수 경로 목록 (항상 포함)
+        let essential_paths = vec![
             "/home/linuxbrew/.linuxbrew/bin".to_string(),   // 시스템 Linuxbrew
             "/home/linuxbrew/.linuxbrew/sbin".to_string(),
             format!("{}/.linuxbrew/bin", home),              // 사용자 Linuxbrew
@@ -125,19 +122,50 @@ fn get_linux_extended_path() -> String {
             "/usr/sbin".to_string(),
             "/sbin".to_string(),
         ];
-
+        
+        // 1. 로그인 셸에서 PATH 가져오기 시도
+        let mut shell_path = String::new();
+        let shells = ["/bin/bash", "/bin/zsh", "/bin/sh"];
+        for shell in &shells {
+            if let Ok(output) = std::process::Command::new(shell)
+                .args(["-l", "-c", "echo $PATH"])
+                .output()
+            {
+                if output.status.success() {
+                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !path.is_empty() && path.contains('/') {
+                        shell_path = path;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 2. 필수 경로 + 셸 PATH 병합 (필수 경로 우선)
+        let mut all_paths: Vec<String> = essential_paths;
+        for p in shell_path.split(':') {
+            if !p.is_empty() {
+                all_paths.push(p.to_string());
+            }
+        }
+        
+        // 현재 환경 PATH도 추가
         let current = std::env::var("PATH").unwrap_or_default();
-        let mut all: Vec<String> = known_paths;
         for p in current.split(':') {
             if !p.is_empty() {
-                all.push(p.to_string());
+                all_paths.push(p.to_string());
             }
         }
         
         // 중복 제거
         let mut seen = std::collections::HashSet::new();
-        let deduped: Vec<String> = all.into_iter().filter(|p| seen.insert(p.clone())).collect();
-        deduped.join(":")
+        let deduped: Vec<String> = all_paths.into_iter().filter(|p| seen.insert(p.clone())).collect();
+        let result = deduped.join(":");
+        
+        eprintln!("[get_linux_extended_path] 최종 PATH 길이: {}, linuxbrew 포함: {}", 
+            result.len(), result.contains("linuxbrew"));
+        
+        result
     }).clone()
 }
 
@@ -146,6 +174,10 @@ fn get_linux_extended_path() -> String {
 fn linux_sh(script: &str) -> Command {
     let extended_path = get_linux_extended_path();
     let full_script = format!("export PATH=\"{}\"; {}", extended_path, script);
+    // 디버그 로그
+    eprintln!("[linux_sh] extended_path 길이: {}", extended_path.len());
+    eprintln!("[linux_sh] brew in path: {}", extended_path.contains("linuxbrew"));
+    eprintln!("[linux_sh] full_script: {}", &full_script[..full_script.len().min(200)]);
     let mut cmd = Command::new("/bin/sh");
     cmd.args(["-c", &full_script]);
     cmd
