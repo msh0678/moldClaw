@@ -90,38 +90,6 @@ function App() {
     setSettingsJustClosed(false);
   }, []);
 
-  // 삭제 시작
-  const handleStartUninstall = async () => {
-    const confirmed = window.confirm(
-      'moldClaw와 OpenClaw를 모두 삭제하시겠습니까?\n\n' +
-      '• OpenClaw 프로그램 및 설정 파일이 삭제됩니다\n' +
-      '• API 키가 포함된 설정도 삭제됩니다\n' +
-      '• moldClaw 앱도 함께 삭제됩니다\n\n' +
-      '이 작업은 되돌릴 수 없습니다.'
-    );
-    if (!confirmed) return;
-
-    setUninstallState('uninstalling');
-    setUninstallError(null);
-
-    try {
-      await invoke<string>('uninstall_openclaw');
-      await invoke('uninstall_moldclaw');
-    } catch (err) {
-      const errorMsg = String(err);
-      
-      if (errorMsg.includes('EBUSY') || errorMsg.includes('being used') || 
-          errorMsg.includes('access') || errorMsg.includes('locked') ||
-          errorMsg.includes('삭제') || errorMsg.includes('실패')) {
-        setUninstallState('waitingForClose');
-        setUninstallError(errorMsg);
-      } else {
-        setUninstallState('error');
-        setUninstallError(errorMsg);
-      }
-    }
-  };
-
   const handleRetryUninstall = async () => {
     setUninstallState('uninstalling');
     setUninstallError(null);
@@ -284,7 +252,6 @@ function App() {
   return (
     <DashboardPlanetary
       onNavigate={handleNavigate}
-      onStartUninstall={handleStartUninstall}
       forceCheckOnMount={settingsJustClosed}
       onReady={handleDashboardReady}
     />

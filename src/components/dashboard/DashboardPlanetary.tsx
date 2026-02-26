@@ -11,12 +11,11 @@ import DeleteModal from './DeleteModal';
 
 interface DashboardPlanetaryProps {
   onNavigate: (view: AppView) => void;
-  onStartUninstall: () => void;
   forceCheckOnMount?: boolean;  // 설정에서 변경 후 돌아왔을 때 true
   onReady?: () => void;         // 초기 체크 완료 시 호출
 }
 
-export default function DashboardPlanetary({ onNavigate, onStartUninstall, forceCheckOnMount, onReady }: DashboardPlanetaryProps) {
+export default function DashboardPlanetary({ onNavigate, forceCheckOnMount, onReady }: DashboardPlanetaryProps) {
   // forceCheckOnMount가 true면 초기 상태를 'stopped'로 시작 (설정 변경 후 돌아왔을 때)
   const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>(forceCheckOnMount ? 'stopped' : 'checking');
   const [loading, setLoading] = useState(false);
@@ -173,7 +172,6 @@ export default function DashboardPlanetary({ onNavigate, onStartUninstall, force
       <DeleteModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
-        onConfirm={onStartUninstall}
       />
     </div>
   );
