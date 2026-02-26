@@ -536,7 +536,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_command: None,
             binary_name: Some("himalaya".into()),
             platform: PlatformSupport { windows: false, macos: true, linux: true },
-            setup: SetupRequirement::Login { command: "himalaya account configure".into() },
+            setup: SetupRequirement::Login { command: "himalaya".into() },
             disconnect: DisconnectConfig {
                 logout_command: None,
                 config_paths: vec!["~/.config/himalaya/".into()],
