@@ -5,6 +5,82 @@ use std::process::Command;
 
 use crate::skill_definitions::SKILL_DEFINITIONS;
 
+// ===== macOS PATH 해결 =====
+// macOS GUI 앱에서 shell 명령 실행 시 brew, npm 등을 찾을 수 있도록 PATH 확장
+
+#[cfg(target_os = "macos")]
+fn get_macos_extended_path() -> String {
+    use std::sync::OnceLock;
+    static CACHED_PATH: OnceLock<String> = OnceLock::new();
+
+    CACHED_PATH.get_or_init(|| {
+        // 1. 로그인 셸에서 PATH 가져오기 시도
+        let shells = ["/bin/zsh", "/bin/bash", "/bin/sh"];
+        for shell in &shells {
+            if let Ok(output) = std::process::Command::new(shell)
+                .args(["-l", "-c", "echo $PATH"])
+                .output()
+            {
+                if output.status.success() {
+                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !path.is_empty() && path.contains('/') {
+                        return path;
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback: 알려진 경로 목록 조합
+        let home = std::env::var("HOME").unwrap_or_default();
+        let known_paths = vec![
+            "/opt/homebrew/bin".to_string(),        // Apple Silicon brew
+            "/opt/homebrew/sbin".to_string(),
+            "/usr/local/bin".to_string(),           // Intel brew
+            "/usr/local/sbin".to_string(),
+            format!("{}/go/bin", home),             // Go binaries
+            format!("{}/.cargo/bin", home),         // Rust/Cargo
+            format!("{}/.local/bin", home),         // pipx, uv 등
+            format!("{}/Library/npm/bin", home),    // npm global
+            format!("{}/.npm-global/bin", home),
+            "/usr/bin".to_string(),
+            "/bin".to_string(),
+            "/usr/sbin".to_string(),
+            "/sbin".to_string(),
+        ];
+
+        let current = std::env::var("PATH").unwrap_or_default();
+        let mut all: Vec<String> = known_paths;
+        for p in current.split(':') {
+            if !p.is_empty() {
+                all.push(p.to_string());
+            }
+        }
+        
+        // 중복 제거
+        let mut seen = std::collections::HashSet::new();
+        let deduped: Vec<String> = all.into_iter().filter(|p| seen.insert(p.clone())).collect();
+        deduped.join(":")
+    }).clone()
+}
+
+/// macOS에서 확장 PATH로 명령 실행
+#[cfg(target_os = "macos")]
+fn macos_sh(script: &str) -> Command {
+    let extended_path = get_macos_extended_path();
+    let full_script = format!("export PATH=\"{}\"; {}", extended_path, script);
+    let mut cmd = Command::new("/bin/sh");
+    cmd.args(["-c", &full_script]);
+    cmd
+}
+
+/// macOS에서 확장 PATH로 프로그램 직접 실행
+#[cfg(target_os = "macos")]
+fn macos_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    cmd.env("PATH", get_macos_extended_path());
+    cmd
+}
+
 /// 스킬 설치 방법
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -131,23 +207,35 @@ fn get_current_platform() -> &'static str {
     return "unknown";
 }
 
-/// 바이너리 존재 확인
+/// 바이너리 존재 확인 (macOS: 확장 PATH 사용)
 fn check_binary_exists(name: &str) -> bool {
     #[cfg(windows)]
-    let result = Command::new("where").arg(name).output();
+    {
+        Command::new("where").arg(name).output()
+            .map(|o| o.status.success()).unwrap_or(false)
+    }
     
-    #[cfg(not(windows))]
-    let result = Command::new("which").arg(name).output();
+    #[cfg(target_os = "macos")]
+    {
+        // macOS GUI 앱에서는 확장 PATH로 which 실행
+        macos_cmd("which").arg(name).output()
+            .map(|o| o.status.success()).unwrap_or(false)
+    }
     
-    result.map(|o| o.status.success()).unwrap_or(false)
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("which").arg(name).output()
+            .map(|o| o.status.success()).unwrap_or(false)
+    }
 }
 
-/// 바이너리 버전 확인
+/// 바이너리 버전 확인 (macOS: 확장 PATH 사용)
 fn get_binary_version(name: &str, version_arg: &str) -> Option<String> {
-    let output = Command::new(name)
-        .arg(version_arg)
-        .output()
-        .ok()?;
+    #[cfg(target_os = "macos")]
+    let output = macos_cmd(name).arg(version_arg).output().ok()?;
+    
+    #[cfg(not(target_os = "macos"))]
+    let output = Command::new(name).arg(version_arg).output().ok()?;
     
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -472,7 +560,8 @@ async fn install_go() -> Result<String, String> {
     
     #[cfg(target_os = "macos")]
     {
-        let output = Command::new("brew")
+        // macOS: 확장 PATH로 brew 실행
+        let output = macos_cmd("brew")
             .args(["install", "go"])
             .output()
             .map_err(|e| format!("brew 실행 실패: {}", e))?;
@@ -505,7 +594,21 @@ async fn install_uv() -> Result<String, String> {
         }
     }
     
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        // macOS: 확장 PATH로 curl 실행
+        let output = macos_sh("curl -LsSf https://astral.sh/uv/install.sh | sh")
+            .output()
+            .map_err(|e| format!("설치 스크립트 실행 실패: {}", e))?;
+
+        if output.status.success() {
+            Ok("uv 설치 완료".into())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
+    }
+    
+    #[cfg(target_os = "linux")]
     {
         let output = Command::new("sh")
             .args(["-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"])
@@ -615,7 +718,21 @@ async fn install_with_brew(cmd: &str) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     return Err("Windows에서는 brew를 사용할 수 없습니다".into());
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        // macOS: 확장 PATH로 brew 명령 실행
+        let output = macos_sh(cmd)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if output.status.success() {
+            Ok("설치 완료".into())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
+    }
+    
+    #[cfg(target_os = "linux")]
     {
         let output = Command::new("sh")
             .args(["-c", cmd])
@@ -641,7 +758,12 @@ async fn install_with_go(cmd: &str) -> Result<String, String> {
         .output()
         .map_err(|e| e.to_string())?;
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    let output = macos_sh(cmd)
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    #[cfg(target_os = "linux")]
     let output = Command::new("sh")
         .args(["-c", cmd])
         .output()
@@ -665,7 +787,12 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
         .output()
         .map_err(|e| e.to_string())?;
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    let output = macos_sh(cmd)
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    #[cfg(target_os = "linux")]
     let output = Command::new("sh")
         .args(["-c", cmd])
         .output()
@@ -689,7 +816,12 @@ async fn install_with_uv(cmd: &str) -> Result<String, String> {
         .output()
         .map_err(|e| e.to_string())?;
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    let output = macos_sh(cmd)
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    #[cfg(target_os = "linux")]
     let output = Command::new("sh")
         .args(["-c", cmd])
         .output()
@@ -846,7 +978,10 @@ pub async fn disconnect_skill(skill_id: String) -> Result<String, String> {
         #[cfg(windows)]
         let output = Command::new("cmd").args(["/C", logout_cmd]).output();
         
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        let output = macos_sh(logout_cmd).output();
+        
+        #[cfg(target_os = "linux")]
         let output = Command::new("sh").args(["-c", logout_cmd]).output();
         
         match output {
