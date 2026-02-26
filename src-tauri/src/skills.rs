@@ -101,7 +101,6 @@ fn get_linux_extended_path() -> String {
     static CACHED_PATH: OnceLock<String> = OnceLock::new();
 
     CACHED_PATH.get_or_init(|| {
-        eprintln!("[get_linux_extended_path] 시작...");
         let home = std::env::var("HOME").unwrap_or_default();
         
         // 필수 경로 목록 (항상 포함)
@@ -160,12 +159,7 @@ fn get_linux_extended_path() -> String {
         // 중복 제거
         let mut seen = std::collections::HashSet::new();
         let deduped: Vec<String> = all_paths.into_iter().filter(|p| seen.insert(p.clone())).collect();
-        let result = deduped.join(":");
-        
-        eprintln!("[get_linux_extended_path] 최종 PATH 길이: {}, linuxbrew 포함: {}", 
-            result.len(), result.contains("linuxbrew"));
-        
-        result
+        deduped.join(":")
     }).clone()
 }
 
@@ -174,10 +168,6 @@ fn get_linux_extended_path() -> String {
 fn linux_sh(script: &str) -> Command {
     let extended_path = get_linux_extended_path();
     let full_script = format!("export PATH=\"{}\"; {}", extended_path, script);
-    // 디버그 로그
-    eprintln!("[linux_sh] extended_path 길이: {}", extended_path.len());
-    eprintln!("[linux_sh] brew in path: {}", extended_path.contains("linuxbrew"));
-    eprintln!("[linux_sh] full_script: {}", &full_script[..full_script.len().min(200)]);
     let mut cmd = Command::new("/bin/sh");
     cmd.args(["-c", &full_script]);
     cmd
