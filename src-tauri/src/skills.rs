@@ -948,9 +948,19 @@ async fn install_with_go(cmd: &str) -> Result<String, String> {
     }
 
     #[cfg(windows)]
-    let output = windows_shell(cmd)
-        .output()
-        .map_err(|e| e.to_string())?;
+    {
+        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
+        let install_script = format!(
+            "{} && echo. && echo 설치 완료! && timeout /t 3",
+            cmd
+        );
+        Command::new("cmd")
+            .args(["/c", "start", "cmd", "/k", &install_script])
+            .spawn()
+            .map_err(|e| format!("터미널 실행 실패: {}", e))?;
+        
+        return Ok("터미널에서 설치가 진행됩니다.\n완료 후 새로고침해주세요.".into());
+    }
 
     #[cfg(target_os = "macos")]
     let output = macos_sh(cmd)
@@ -962,6 +972,7 @@ async fn install_with_go(cmd: &str) -> Result<String, String> {
         .output()
         .map_err(|e| e.to_string())?;
 
+    #[cfg(not(windows))]
     if output.status.success() {
         Ok("설치 완료".into())
     } else {
@@ -975,9 +986,19 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
     }
 
     #[cfg(windows)]
-    let output = windows_shell(cmd)
-        .output()
-        .map_err(|e| e.to_string())?;
+    {
+        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
+        let install_script = format!(
+            "{} && echo. && echo 설치 완료! && timeout /t 3",
+            cmd
+        );
+        Command::new("cmd")
+            .args(["/c", "start", "cmd", "/k", &install_script])
+            .spawn()
+            .map_err(|e| format!("터미널 실행 실패: {}", e))?;
+        
+        return Ok("터미널에서 설치가 진행됩니다.\n완료 후 새로고침해주세요.".into());
+    }
 
     #[cfg(target_os = "macos")]
     let output = macos_sh(cmd)
@@ -989,6 +1010,7 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
         .output()
         .map_err(|e| e.to_string())?;
 
+    #[cfg(not(windows))]
     if output.status.success() {
         Ok("설치 완료".into())
     } else {
@@ -1002,9 +1024,19 @@ async fn install_with_uv(cmd: &str) -> Result<String, String> {
     }
 
     #[cfg(windows)]
-    let output = windows_shell(cmd)
-        .output()
-        .map_err(|e| e.to_string())?;
+    {
+        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
+        let install_script = format!(
+            "{} && echo. && echo 설치 완료! && timeout /t 3",
+            cmd
+        );
+        Command::new("cmd")
+            .args(["/c", "start", "cmd", "/k", &install_script])
+            .spawn()
+            .map_err(|e| format!("터미널 실행 실패: {}", e))?;
+        
+        return Ok("터미널에서 설치가 진행됩니다.\n완료 후 새로고침해주세요.".into());
+    }
 
     #[cfg(target_os = "macos")]
     let output = macos_sh(cmd)
@@ -1016,6 +1048,7 @@ async fn install_with_uv(cmd: &str) -> Result<String, String> {
         .output()
         .map_err(|e| e.to_string())?;
 
+    #[cfg(not(windows))]
     if output.status.success() {
         Ok("설치 완료".into())
     } else {
@@ -1029,15 +1062,17 @@ async fn install_with_winget(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        let output = windows_shell(cmd)
-            .output()
-            .map_err(|e| e.to_string())?;
-
-        if output.status.success() {
-            Ok("설치 완료".into())
-        } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
-        }
+        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
+        let install_script = format!(
+            "{} && echo. && echo 설치 완료! && timeout /t 3",
+            cmd
+        );
+        Command::new("cmd")
+            .args(["/c", "start", "cmd", "/k", &install_script])
+            .spawn()
+            .map_err(|e| format!("터미널 실행 실패: {}", e))?;
+        
+        Ok("터미널에서 설치가 진행됩니다.\n완료 후 새로고침해주세요.".into())
     }
 }
 
