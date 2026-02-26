@@ -2545,12 +2545,16 @@ pub async fn update_integrations_config(integrations: Value) -> Result<(), Strin
     let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     set_nested_value(&mut config, &["meta", "lastTouchedAt"], json!(now));
     
-    // integrations를 env.vars에 머지 (빈 값은 삭제)
+    // integrations를 env.vars에 머지 + 스킬 등록/해제
     if let Some(vars) = integrations.as_object() {
         for (key, value) in vars {
             if let Some(v) = value.as_str() {
+                // OpenClaw 내장 도구 확인 (Brave, Firecrawl)
+                let is_builtin = is_builtin_tool(key);
+                
                 if v.is_empty() {
-                    // 빈 값이면 해당 키 삭제
+                    // === 연결 해제 ===
+                    // 1. env.vars에서 삭제
                     if let Some(env) = config.get_mut("env") {
                         if let Some(env_vars) = env.get_mut("vars") {
                             if let Some(obj) = env_vars.as_object_mut() {
@@ -2558,9 +2562,30 @@ pub async fn update_integrations_config(integrations: Value) -> Result<(), Strin
                             }
                         }
                     }
+                    
+                    // 2. 스킬 폴더 삭제 + config.skills.entries 삭제 (내장 도구 제외)
+                    if !is_builtin {
+                        if let Err(e) = delete_skill_folder(key) {
+                            eprintln!("스킬 폴더 삭제 실패 (무시됨): {}", e);
+                        }
+                        if let Some(metadata) = get_skill_metadata(key) {
+                            remove_skill_entry(&mut config, metadata.name);
+                        }
+                    }
                 } else {
-                    // 값이 있으면 설정
+                    // === 연결 ===
+                    // 1. env.vars에 저장
                     set_nested_value(&mut config, &["env", "vars", key], json!(v));
+                    
+                    // 2. 스킬 폴더 생성 + config.skills.entries 추가 (내장 도구 제외)
+                    if !is_builtin {
+                        if let Err(e) = create_skill_folder(key) {
+                            eprintln!("스킬 폴더 생성 실패 (무시됨): {}", e);
+                        }
+                        if let Some(metadata) = get_skill_metadata(key) {
+                            add_skill_entry(&mut config, metadata.name);
+                        }
+                    }
                 }
             }
         }
@@ -2569,7 +2594,7 @@ pub async fn update_integrations_config(integrations: Value) -> Result<(), Strin
     // 저장
     write_config(&config)?;
     
-    // TOOLS.md 업데이트 (실패해도 config 저장은 성공으로 처리)
+    // TOOLS.md 업데이트 (fallback용, 실패해도 무시)
     if let Err(e) = update_tools_md() {
         eprintln!("TOOLS.md 업데이트 실패 (무시됨): {}", e);
     }
@@ -3832,6 +3857,230 @@ pub fn check_gog_credentials() -> bool {
             .join("gogcli")
             .join("credentials.json");
         cred_path.exists()
+    }
+}
+
+// ===== OpenClaw 스킬 자동 등록 =====
+
+/// 스킬 메타데이터
+struct SkillMetadata {
+    name: &'static str,
+    description: &'static str,
+    emoji: &'static str,
+}
+
+/// ENV_VAR → 스킬 메타데이터 매핑
+/// BRAVE_API_KEY, FIRECRAWL_API_KEY는 OpenClaw 내장이므로 제외
+fn get_skill_metadata(env_var: &str) -> Option<SkillMetadata> {
+    match env_var {
+        // 도구 (10개)
+        "JINA_API_KEY" => Some(SkillMetadata {
+            name: "jina-reader",
+            description: "Read web pages with Jina Reader API",
+            emoji: "📖",
+        }),
+        "SERPER_API_KEY" => Some(SkillMetadata {
+            name: "serper-search",
+            description: "Google search with Serper API",
+            emoji: "🌐",
+        }),
+        "TAVILY_API_KEY" => Some(SkillMetadata {
+            name: "tavily-search",
+            description: "AI-optimized web search with Tavily",
+            emoji: "🔎",
+        }),
+        "EXA_API_KEY" => Some(SkillMetadata {
+            name: "exa-search",
+            description: "Semantic search with Exa",
+            emoji: "⚡",
+        }),
+        "BROWSERLESS_API_KEY" => Some(SkillMetadata {
+            name: "browserless",
+            description: "Headless browser automation with Browserless",
+            emoji: "🌐",
+        }),
+        "SCRAPERAPI_KEY" => Some(SkillMetadata {
+            name: "scraperapi",
+            description: "Web scraping with anti-bot bypass",
+            emoji: "🕷️",
+        }),
+        "APIFY_TOKEN" => Some(SkillMetadata {
+            name: "apify",
+            description: "Web automation with Apify actors",
+            emoji: "🤖",
+        }),
+        "WOLFRAM_APP_ID" => Some(SkillMetadata {
+            name: "wolfram-alpha",
+            description: "Math and science computation with Wolfram Alpha",
+            emoji: "🔢",
+        }),
+        "NEWS_API_KEY" => Some(SkillMetadata {
+            name: "news-api",
+            description: "News search with News API",
+            emoji: "📰",
+        }),
+        "WEATHER_API_KEY" => Some(SkillMetadata {
+            name: "weather-api",
+            description: "Weather information with Weather API",
+            emoji: "🌤️",
+        }),
+        // API 스킬 (11개)
+        "NOTION_API_KEY" => Some(SkillMetadata {
+            name: "notion-api",
+            description: "Notion workspace management",
+            emoji: "📝",
+        }),
+        "GITHUB_TOKEN" => Some(SkillMetadata {
+            name: "github-api",
+            description: "GitHub repository and issue management",
+            emoji: "🐙",
+        }),
+        "TODOIST_API_TOKEN" => Some(SkillMetadata {
+            name: "todoist-api",
+            description: "Todoist task management",
+            emoji: "✅",
+        }),
+        "LINEAR_API_KEY" => Some(SkillMetadata {
+            name: "linear-api",
+            description: "Linear issue tracking",
+            emoji: "📊",
+        }),
+        "TRELLO_API_KEY" => Some(SkillMetadata {
+            name: "trello-api",
+            description: "Trello board and card management",
+            emoji: "📋",
+        }),
+        "FIGMA_ACCESS_TOKEN" => Some(SkillMetadata {
+            name: "figma-api",
+            description: "Figma file and project access",
+            emoji: "🎨",
+        }),
+        "JIRA_API_TOKEN" => Some(SkillMetadata {
+            name: "jira-api",
+            description: "Jira issue management",
+            emoji: "🎫",
+        }),
+        "ASANA_TOKEN" => Some(SkillMetadata {
+            name: "asana-api",
+            description: "Asana task management",
+            emoji: "📌",
+        }),
+        "AIRTABLE_API_KEY" => Some(SkillMetadata {
+            name: "airtable-api",
+            description: "Airtable database management",
+            emoji: "📊",
+        }),
+        "DROPBOX_TOKEN" => Some(SkillMetadata {
+            name: "dropbox-api",
+            description: "Dropbox file management",
+            emoji: "📦",
+        }),
+        "GITLAB_TOKEN" => Some(SkillMetadata {
+            name: "gitlab-api",
+            description: "GitLab project and issue management",
+            emoji: "🦊",
+        }),
+        _ => None,
+    }
+}
+
+/// OpenClaw 내장 도구인지 확인 (스킬 등록 불필요)
+fn is_builtin_tool(env_var: &str) -> bool {
+    matches!(env_var, "BRAVE_API_KEY" | "FIRECRAWL_API_KEY")
+}
+
+/// SKILL.md 전체 내용 생성
+fn generate_skill_md(env_var: &str) -> Option<String> {
+    let metadata = get_skill_metadata(env_var)?;
+    let usage = get_tool_template(env_var)?;
+    
+    Some(format!(
+        r#"---
+name: {}
+description: {}
+metadata:
+  {{
+    "openclaw":
+      {{
+        "emoji": "{}",
+        "requires": {{ "bins": ["curl"], "env": ["{}"] }},
+        "primaryEnv": "{}"
+      }}
+  }}
+---
+
+# {}
+
+{}
+"#,
+        metadata.name,
+        metadata.description,
+        metadata.emoji,
+        env_var,
+        env_var,
+        metadata.description,
+        usage.trim()
+    ))
+}
+
+/// 스킬 폴더 생성
+fn create_skill_folder(env_var: &str) -> Result<(), String> {
+    let metadata = match get_skill_metadata(env_var) {
+        Some(m) => m,
+        None => return Ok(()), // 매핑 없으면 무시
+    };
+    
+    let skill_md = match generate_skill_md(env_var) {
+        Some(md) => md,
+        None => return Ok(()),
+    };
+    
+    let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
+    let skill_dir = home.join(".openclaw").join("skills").join(metadata.name);
+    
+    // 폴더 생성
+    std::fs::create_dir_all(&skill_dir)
+        .map_err(|e| format!("스킬 폴더 생성 실패: {}", e))?;
+    
+    // SKILL.md 작성
+    let skill_path = skill_dir.join("SKILL.md");
+    std::fs::write(&skill_path, skill_md)
+        .map_err(|e| format!("SKILL.md 작성 실패: {}", e))?;
+    
+    Ok(())
+}
+
+/// 스킬 폴더 삭제
+fn delete_skill_folder(env_var: &str) -> Result<(), String> {
+    let metadata = match get_skill_metadata(env_var) {
+        Some(m) => m,
+        None => return Ok(()),
+    };
+    
+    let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
+    let skill_dir = home.join(".openclaw").join("skills").join(metadata.name);
+    
+    if skill_dir.exists() {
+        std::fs::remove_dir_all(&skill_dir)
+            .map_err(|e| format!("스킬 폴더 삭제 실패: {}", e))?;
+    }
+    
+    Ok(())
+}
+
+/// config.skills.entries에 스킬 추가
+fn add_skill_entry(config: &mut Value, skill_name: &str) {
+    set_nested_value(config, &["skills", "entries", skill_name, "enabled"], json!(true));
+}
+
+/// config.skills.entries에서 스킬 삭제
+fn remove_skill_entry(config: &mut Value, skill_name: &str) {
+    if let Some(skills) = config.get_mut("skills") {
+        if let Some(entries) = skills.get_mut("entries") {
+            if let Some(obj) = entries.as_object_mut() {
+                obj.remove(skill_name);
+            }
+        }
     }
 }
 
