@@ -969,12 +969,12 @@ async fn install_with_go(cmd: &str) -> Result<String, String> {
     #[cfg(windows)]
     {
         // Windows: 터미널 창을 열어서 설치 진행 상황 표시
-        let install_script = format!(
-            "{} && echo. && echo 설치 완료! && timeout /t 3",
+        let full_cmd = format!(
+            "start cmd /k \"{} && echo. && echo 설치 완료! && timeout /t 3\"",
             cmd
         );
         Command::new("cmd")
-            .args(["/c", "start", "cmd", "/k", &install_script])
+            .args(["/c", &full_cmd])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
@@ -1007,12 +1007,12 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
     #[cfg(windows)]
     {
         // Windows: 터미널 창을 열어서 설치 진행 상황 표시
-        let install_script = format!(
-            "{} && echo. && echo 설치 완료! && timeout /t 3",
+        let full_cmd = format!(
+            "start cmd /k \"{} && echo. && echo 설치 완료! && timeout /t 3\"",
             cmd
         );
         Command::new("cmd")
-            .args(["/c", "start", "cmd", "/k", &install_script])
+            .args(["/c", &full_cmd])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
@@ -1045,12 +1045,12 @@ async fn install_with_uv(cmd: &str) -> Result<String, String> {
     #[cfg(windows)]
     {
         // Windows: 터미널 창을 열어서 설치 진행 상황 표시
-        let install_script = format!(
-            "{} && echo. && echo 설치 완료! && timeout /t 3",
+        let full_cmd = format!(
+            "start cmd /k \"{} && echo. && echo 설치 완료! && timeout /t 3\"",
             cmd
         );
         Command::new("cmd")
-            .args(["/c", "start", "cmd", "/k", &install_script])
+            .args(["/c", &full_cmd])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
@@ -1082,12 +1082,12 @@ async fn install_with_winget(cmd: &str) -> Result<String, String> {
     #[cfg(windows)]
     {
         // Windows: 터미널 창을 열어서 설치 진행 상황 표시
-        let install_script = format!(
-            "{} && echo. && echo 설치 완료! && timeout /t 3",
+        let full_cmd = format!(
+            "start cmd /k \"{} && echo. && echo 설치 완료! && timeout /t 3\"",
             cmd
         );
         Command::new("cmd")
-            .args(["/c", "start", "cmd", "/k", &install_script])
+            .args(["/c", &full_cmd])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
