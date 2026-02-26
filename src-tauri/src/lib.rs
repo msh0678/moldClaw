@@ -38,6 +38,101 @@ fn macos_async_cmd(program: &str) -> tokio::process::Command {
     cmd
 }
 
+// ===== 앱 삭제 =====
+
+/// moldClaw만 삭제 (OpenClaw 데이터 유지)
+#[tauri::command]
+async fn uninstall_moldclaw_only() -> Result<String, String> {
+    // Gateway 중지
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", "Stop-Process -Name 'openclaw' -Force -ErrorAction SilentlyContinue"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new("pkill")
+            .args(["-9", "-f", "openclaw.*gateway"])
+            .output();
+    }
+    
+    Ok("moldClaw 삭제 준비 완료. 시스템 설정에서 앱을 삭제하세요.\nOpenClaw 설정은 유지됩니다.".into())
+}
+
+/// OpenClaw 데이터까지 전부 삭제
+#[tauri::command]
+async fn uninstall_with_openclaw() -> Result<String, String> {
+    let mut results = Vec::new();
+    
+    // 1. Gateway 중지
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", "Stop-Process -Name 'openclaw' -Force -ErrorAction SilentlyContinue"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new("pkill")
+            .args(["-9", "-f", "openclaw.*gateway"])
+            .output();
+    }
+    results.push("Gateway 중지됨".to_string());
+    
+    // 2. OpenClaw 폴더 삭제 (~/.openclaw)
+    if let Some(home) = dirs::home_dir() {
+        let openclaw_dir = home.join(".openclaw");
+        if openclaw_dir.exists() {
+            match std::fs::remove_dir_all(&openclaw_dir) {
+                Ok(_) => results.push(format!("{} 삭제됨", openclaw_dir.display())),
+                Err(e) => results.push(format!("{} 삭제 실패: {}", openclaw_dir.display(), e)),
+            }
+        }
+    }
+    
+    // 3. OpenClaw npm 글로벌 패키지 제거 (선택적)
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        let output = std::process::Command::new("cmd")
+            .args(["/C", "npm uninstall -g openclaw"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        
+        if output.is_ok() && output.unwrap().status.success() {
+            results.push("OpenClaw npm 패키지 제거됨".to_string());
+        }
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let output = std::process::Command::new("npm")
+            .args(["uninstall", "-g", "openclaw"])
+            .output();
+        
+        if output.is_ok() && output.unwrap().status.success() {
+            results.push("OpenClaw npm 패키지 제거됨".to_string());
+        }
+    }
+    
+    results.push("시스템 설정에서 moldClaw 앱을 삭제하세요.".to_string());
+    
+    Ok(results.join("\n"))
+}
+
 // ===== 환경 체크 =====
 
 #[tauri::command]
@@ -2017,6 +2112,9 @@ pub fn run() {
             skills::delete_camsnap_camera,
             skills::save_obsidian_vault,
             skills::get_obsidian_vault,
+            // 앱 삭제
+            uninstall_moldclaw_only,
+            uninstall_with_openclaw,
         ])
         .setup(|_app| {
             eprintln!("moldClaw 시작됨");
