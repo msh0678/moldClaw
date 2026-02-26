@@ -442,6 +442,17 @@ export default function SkillsSettings({
           );
         }
         
+        if (setup.type === 'config') {
+          return (
+            <div className="space-y-3">
+              <h4 className="font-medium text-forge-text">설정 파일 필요</h4>
+              <p className="text-sm text-forge-muted">아래 경로에 설정 파일을 생성해야 합니다:</p>
+              <code className="block text-xs bg-[#1a1c24] p-2 rounded font-mono text-forge-muted break-all">{setup.path}</code>
+              <p className="text-xs text-forge-muted">스킬 문서를 참고하여 설정을 완료해주세요.</p>
+            </div>
+          );
+        }
+        
         if (setup.type === 'hardware') {
           return (
             <div className="bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
