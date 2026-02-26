@@ -971,10 +971,14 @@ async fn install_with_brew(cmd: &str) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     return Err("Windows에서는 brew를 사용할 수 없습니다".into());
 
+    // brew 비대화형 모드: NONINTERACTIVE=1, HOMEBREW_NO_AUTO_UPDATE=1
+    // 프롬프트 없이 자동 진행
+    let noninteractive_cmd = format!("NONINTERACTIVE=1 HOMEBREW_NO_AUTO_UPDATE=1 {}", cmd);
+
     #[cfg(target_os = "macos")]
     {
         // macOS: 확장 PATH로 brew 명령 실행
-        let output = macos_sh(cmd)
+        let output = macos_sh(&noninteractive_cmd)
             .output()
             .map_err(|e| e.to_string())?;
 
@@ -988,7 +992,7 @@ async fn install_with_brew(cmd: &str) -> Result<String, String> {
     #[cfg(target_os = "linux")]
     {
         // Linux: 확장 PATH로 brew 명령 실행
-        let output = linux_sh(cmd)
+        let output = linux_sh(&noninteractive_cmd)
             .output()
             .map_err(|e| e.to_string())?;
 
