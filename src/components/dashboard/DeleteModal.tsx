@@ -126,7 +126,7 @@ export default function DeleteModal({ isOpen, onClose }: DeleteModalProps) {
               {/* moldClaw만 삭제 */}
               <button
                 onClick={() => handleSelectOption('moldclaw')}
-                className="w-full p-4 bg-forge-surface border border-white/20 rounded-xl hover:border-forge-copper/50 transition-colors text-left"
+                className="w-full p-4 bg-forge-surface border border-white/20 rounded-xl hover:border-white/60 transition-colors text-left"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-xl">📦</span>
@@ -142,7 +142,7 @@ export default function DeleteModal({ isOpen, onClose }: DeleteModalProps) {
               {/* OpenClaw까지 삭제 */}
               <button
                 onClick={() => handleSelectOption('all')}
-                className="w-full p-4 bg-forge-error/10 border border-white/20 rounded-xl hover:border-forge-error/60 transition-colors text-left"
+                className="w-full p-4 bg-forge-error/10 border border-white/20 rounded-xl hover:border-white/60 transition-colors text-left"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-xl">🗑️</span>
