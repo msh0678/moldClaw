@@ -333,12 +333,51 @@ fn get_current_platform() -> &'static str {
     return "unknown";
 }
 
-/// 바이너리 존재 확인 (macOS/Linux: 확장 PATH 사용)
+/// 바이너리 존재 확인 (모든 플랫폼: 확장 경로 포함)
 fn check_binary_exists(name: &str) -> bool {
     #[cfg(windows)]
     {
-        windows_cmd("where").arg(name).output()
-            .map(|o| o.status.success()).unwrap_or(false)
+        // 1. where 명령으로 PATH에서 검색
+        if windows_cmd("where").arg(name).output()
+            .map(|o| o.status.success()).unwrap_or(false) {
+            return true;
+        }
+        
+        // 2. 일반 설치 경로들 직접 확인
+        if let Some(home) = dirs::home_dir() {
+            let common_paths = [
+                // uv tool install 경로
+                home.join(".local").join("bin").join(format!("{}.exe", name)),
+                home.join(".local").join("bin").join(name),
+                // go install 경로
+                home.join("go").join("bin").join(format!("{}.exe", name)),
+                home.join("go").join("bin").join(name),
+                // cargo install 경로
+                home.join(".cargo").join("bin").join(format!("{}.exe", name)),
+                home.join(".cargo").join("bin").join(name),
+            ];
+            
+            for path in &common_paths {
+                if path.exists() {
+                    return true;
+                }
+            }
+        }
+        
+        // 3. npm 글로벌 경로 (%APPDATA%\npm)
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let npm_paths = [
+                std::path::PathBuf::from(&appdata).join("npm").join(format!("{}.cmd", name)),
+                std::path::PathBuf::from(&appdata).join("npm").join(format!("{}.exe", name)),
+            ];
+            for path in &npm_paths {
+                if path.exists() {
+                    return true;
+                }
+            }
+        }
+        
+        false
     }
     
     #[cfg(target_os = "macos")]
