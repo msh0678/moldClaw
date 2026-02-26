@@ -181,6 +181,32 @@ fn linux_cmd(program: &str) -> Command {
     cmd
 }
 
+// ===== Windows 콘솔 창 숨기기 =====
+// Windows에서 Command 실행 시 cmd 창이 뜨지 않도록 CREATE_NO_WINDOW 플래그 사용
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// Windows에서 콘솔 창 없이 명령 실행
+#[cfg(windows)]
+fn windows_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
+/// Windows에서 cmd /C로 명령 실행 (콘솔 창 숨김)
+#[cfg(windows)]
+fn windows_shell(script: &str) -> Command {
+    let mut cmd = Command::new("cmd");
+    cmd.args(["/C", script]);
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
 /// 스킬 설치 방법
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -311,7 +337,7 @@ fn get_current_platform() -> &'static str {
 fn check_binary_exists(name: &str) -> bool {
     #[cfg(windows)]
     {
-        Command::new("where").arg(name).output()
+        windows_cmd("where").arg(name).output()
             .map(|o| o.status.success()).unwrap_or(false)
     }
     
@@ -339,7 +365,7 @@ fn get_binary_version(name: &str, version_arg: &str) -> Option<String> {
     let output = linux_cmd(name).arg(version_arg).output().ok()?;
     
     #[cfg(windows)]
-    let output = Command::new(name).arg(version_arg).output().ok()?;
+    let output = windows_cmd(name).arg(version_arg).output().ok()?;
     
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -922,8 +948,7 @@ async fn install_with_go(cmd: &str) -> Result<String, String> {
     }
 
     #[cfg(windows)]
-    let output = Command::new("cmd")
-        .args(["/C", cmd])
+    let output = windows_shell(cmd)
         .output()
         .map_err(|e| e.to_string())?;
 
@@ -950,8 +975,7 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
     }
 
     #[cfg(windows)]
-    let output = Command::new("cmd")
-        .args(["/C", cmd])
+    let output = windows_shell(cmd)
         .output()
         .map_err(|e| e.to_string())?;
 
@@ -978,8 +1002,7 @@ async fn install_with_uv(cmd: &str) -> Result<String, String> {
     }
 
     #[cfg(windows)]
-    let output = Command::new("cmd")
-        .args(["/C", cmd])
+    let output = windows_shell(cmd)
         .output()
         .map_err(|e| e.to_string())?;
 
@@ -1006,8 +1029,7 @@ async fn install_with_winget(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        let output = Command::new("cmd")
-            .args(["/C", cmd])
+        let output = windows_shell(cmd)
             .output()
             .map_err(|e| e.to_string())?;
 
@@ -1152,7 +1174,7 @@ pub async fn disconnect_skill(skill_id: String) -> Result<String, String> {
     // 1. 로그아웃 명령어 실행
     if let Some(ref logout_cmd) = skill.disconnect.logout_command {
         #[cfg(windows)]
-        let output = Command::new("cmd").args(["/C", logout_cmd]).output();
+        let output = windows_shell(logout_cmd).output();
         
         #[cfg(target_os = "macos")]
         let output = macos_sh(logout_cmd).output();
