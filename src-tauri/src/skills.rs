@@ -968,8 +968,12 @@ async fn install_with_go(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 터미널 창을 열어서 설치 진행 상황 표시 (install_go와 동일한 패턴)
-        let install_script = format!("{} && echo. && echo 설치 완료! && pause", cmd);
+        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
+        // & 사용 (이전 명령 성공 여부와 관계없이 pause 실행)
+        let install_script = format!(
+            "echo 실행 명령: {} & echo. & {} & echo. & echo 완료 또는 에러 확인 후 아무 키나 누르세요 & pause",
+            cmd, cmd
+        );
         Command::new("cmd")
             .args(["/c", "start", "cmd", "/k", &install_script])
             .spawn()
@@ -1003,8 +1007,12 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 터미널 창을 열어서 설치 진행 상황 표시 (install_go와 동일한 패턴)
-        let install_script = format!("{} && echo. && echo 설치 완료! && pause", cmd);
+        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
+        // & 사용 (이전 명령 성공 여부와 관계없이 pause 실행)
+        let install_script = format!(
+            "echo 실행 명령: {} & echo. & {} & echo. & echo 완료 또는 에러 확인 후 아무 키나 누르세요 & pause",
+            cmd, cmd
+        );
         Command::new("cmd")
             .args(["/c", "start", "cmd", "/k", &install_script])
             .spawn()
@@ -1038,8 +1046,13 @@ async fn install_with_uv(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 터미널 창을 열어서 설치 진행 상황 표시 (install_go와 동일한 패턴)
-        let install_script = format!("{} && echo. && echo 설치 완료! && pause", cmd);
+        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
+        // & 사용 (이전 명령 성공 여부와 관계없이 pause 실행)
+        // echo 명령어로 실행 명령 표시 (디버그용)
+        let install_script = format!(
+            "echo 실행 명령: {} & echo. & {} & echo. & echo 완료 또는 에러 확인 후 아무 키나 누르세요 & pause",
+            cmd, cmd
+        );
         Command::new("cmd")
             .args(["/c", "start", "cmd", "/k", &install_script])
             .spawn()
@@ -1072,8 +1085,12 @@ async fn install_with_winget(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 터미널 창을 열어서 설치 진행 상황 표시 (install_go와 동일한 패턴)
-        let install_script = format!("{} && echo. && echo 설치 완료! && pause", cmd);
+        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
+        // & 사용 (이전 명령 성공 여부와 관계없이 pause 실행)
+        let install_script = format!(
+            "echo 실행 명령: {} & echo. & {} & echo. & echo 완료 또는 에러 확인 후 아무 키나 누르세요 & pause",
+            cmd, cmd
+        );
         Command::new("cmd")
             .args(["/c", "start", "cmd", "/k", &install_script])
             .spawn()
