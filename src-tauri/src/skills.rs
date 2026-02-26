@@ -1015,12 +1015,16 @@ pub async fn open_skill_login_terminal(skill_id: String) -> Result<String, Strin
 
     #[cfg(target_os = "macos")]
     {
+        // 확장 PATH 포함하여 명령 실행 (homebrew 경로 보장)
+        let extended_path = get_macos_extended_path();
+        let full_command = format!("export PATH='{}'; {}", extended_path, command);
+        
         let script = format!(
             r#"tell application "Terminal"
                 activate
                 do script "{}"
             end tell"#,
-            command.replace("\"", "\\\"")
+            full_command.replace("\"", "\\\"").replace("'", "'\\''")
         );
         
         Command::new("osascript")
@@ -1039,15 +1043,21 @@ pub async fn open_skill_login_terminal(skill_id: String) -> Result<String, Strin
 
     #[cfg(target_os = "linux")]
     {
+        // 확장 PATH 가져오기 (linuxbrew 등 포함)
+        let extended_path = get_linux_extended_path();
+        // PATH 설정 후 명령 실행
+        let full_command = format!("export PATH='{}'; {}; exec bash", extended_path, command);
+        
         // Try common terminal emulators
-        let terminals = ["gnome-terminal", "konsole", "xterm", "x-terminal-emulator"];
+        let terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "xterm", "x-terminal-emulator"];
         let mut success = false;
         
         for term in &terminals {
             let result = match *term {
-                "gnome-terminal" => Command::new(term).args(["--", "bash", "-c", &format!("{}; exec bash", command)]).spawn(),
-                "konsole" => Command::new(term).args(["-e", "bash", "-c", &format!("{}; exec bash", command)]).spawn(),
-                _ => Command::new(term).args(["-e", &format!("bash -c '{}; exec bash'", command)]).spawn(),
+                "gnome-terminal" => Command::new(term).args(["--", "bash", "-c", &full_command]).spawn(),
+                "konsole" => Command::new(term).args(["-e", "bash", "-c", &full_command]).spawn(),
+                "xfce4-terminal" => Command::new(term).args(["-e", &format!("bash -c '{}'", full_command)]).spawn(),
+                _ => Command::new(term).args(["-e", &format!("bash -c '{}'", full_command)]).spawn(),
             };
             
             if result.is_ok() {
