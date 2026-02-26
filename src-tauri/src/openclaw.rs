@@ -3921,6 +3921,154 @@ curl "https://api.weatherapi.com/v1/current.json?key=$WEATHER_API_KEY&q=<도시�
 curl "https://api.weatherapi.com/v1/forecast.json?key=$WEATHER_API_KEY&q=<도시명>&days=3"
 ```
 "#),
+        // ===== API 연동 스킬 =====
+        "NOTION_API_KEY" => Some(r#"### Notion API
+Notion 페이지/데이터베이스 조회 및 수정이 필요하면 Notion API를 사용하세요.
+```bash
+# 페이지 조회
+curl "https://api.notion.com/v1/pages/<page_id>" \
+  -H "Authorization: Bearer $NOTION_API_KEY" \
+  -H "Notion-Version: 2022-06-28"
+
+# 데이터베이스 쿼리
+curl -X POST "https://api.notion.com/v1/databases/<database_id>/query" \
+  -H "Authorization: Bearer $NOTION_API_KEY" \
+  -H "Notion-Version: 2022-06-28" \
+  -H "Content-Type: application/json"
+```
+"#),
+        "GITHUB_TOKEN" => Some(r#"### GitHub API
+GitHub 레포지토리, 이슈, PR 관리가 필요하면 GitHub API를 사용하세요.
+```bash
+# 레포지토리 정보
+curl "https://api.github.com/repos/<owner>/<repo>" \
+  -H "Authorization: Bearer $GITHUB_TOKEN"
+
+# 이슈 목록
+curl "https://api.github.com/repos/<owner>/<repo>/issues" \
+  -H "Authorization: Bearer $GITHUB_TOKEN"
+
+# 이슈 생성
+curl -X POST "https://api.github.com/repos/<owner>/<repo>/issues" \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "<제목>", "body": "<내용>"}'
+```
+"#),
+        "TODOIST_API_TOKEN" => Some(r#"### Todoist API
+할 일 관리가 필요하면 Todoist API를 사용하세요.
+```bash
+# 모든 태스크 조회
+curl "https://api.todoist.com/rest/v2/tasks" \
+  -H "Authorization: Bearer $TODOIST_API_TOKEN"
+
+# 태스크 생성
+curl -X POST "https://api.todoist.com/rest/v2/tasks" \
+  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "<할 일 내용>"}'
+```
+"#),
+        "LINEAR_API_KEY" => Some(r#"### Linear API
+Linear 이슈 관리가 필요하면 Linear GraphQL API를 사용하세요.
+```bash
+curl -X POST "https://api.linear.app/graphql" \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ issues { nodes { id title state { name } } } }"}'
+```
+"#),
+        "TRELLO_API_KEY" => Some(r#"### Trello API
+Trello 보드/카드 관리가 필요하면 Trello API를 사용하세요.
+참고: TRELLO_TOKEN도 필요합니다.
+```bash
+# 보드 목록
+curl "https://api.trello.com/1/members/me/boards?key=$TRELLO_API_KEY&token=$TRELLO_TOKEN"
+
+# 카드 생성
+curl -X POST "https://api.trello.com/1/cards?key=$TRELLO_API_KEY&token=$TRELLO_TOKEN&idList=<list_id>&name=<카드명>"
+```
+"#),
+        "FIGMA_ACCESS_TOKEN" => Some(r#"### Figma API
+Figma 파일/프로젝트 정보가 필요하면 Figma API를 사용하세요.
+```bash
+# 파일 정보
+curl "https://api.figma.com/v1/files/<file_key>" \
+  -H "X-Figma-Token: $FIGMA_ACCESS_TOKEN"
+
+# 프로젝트 파일 목록
+curl "https://api.figma.com/v1/projects/<project_id>/files" \
+  -H "X-Figma-Token: $FIGMA_ACCESS_TOKEN"
+```
+"#),
+        "JIRA_API_TOKEN" => Some(r#"### Jira API
+Jira 이슈 관리가 필요하면 Jira REST API를 사용하세요.
+참고: JIRA_EMAIL, JIRA_DOMAIN도 필요합니다.
+```bash
+# 이슈 조회
+curl "https://<domain>.atlassian.net/rest/api/3/issue/<issue_key>" \
+  -u "<email>:$JIRA_API_TOKEN"
+
+# 이슈 검색 (JQL)
+curl "https://<domain>.atlassian.net/rest/api/3/search?jql=project=<PROJECT>" \
+  -u "<email>:$JIRA_API_TOKEN"
+```
+"#),
+        "ASANA_TOKEN" => Some(r#"### Asana API
+Asana 태스크 관리가 필요하면 Asana API를 사용하세요.
+```bash
+# 내 태스크 목록
+curl "https://app.asana.com/api/1.0/users/me/user_task_list" \
+  -H "Authorization: Bearer $ASANA_TOKEN"
+
+# 태스크 생성
+curl -X POST "https://app.asana.com/api/1.0/tasks" \
+  -H "Authorization: Bearer $ASANA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"name": "<태스크명>", "projects": ["<project_id>"]}}'
+```
+"#),
+        "AIRTABLE_API_KEY" => Some(r#"### Airtable API
+Airtable 베이스/테이블 조회가 필요하면 Airtable API를 사용하세요.
+```bash
+# 레코드 조회
+curl "https://api.airtable.com/v0/<base_id>/<table_name>" \
+  -H "Authorization: Bearer $AIRTABLE_API_KEY"
+
+# 레코드 생성
+curl -X POST "https://api.airtable.com/v0/<base_id>/<table_name>" \
+  -H "Authorization: Bearer $AIRTABLE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"fields": {"Name": "<값>"}}'
+```
+"#),
+        "DROPBOX_TOKEN" => Some(r#"### Dropbox API
+Dropbox 파일 관리가 필요하면 Dropbox API를 사용하세요.
+```bash
+# 파일 목록
+curl -X POST "https://api.dropboxapi.com/2/files/list_folder" \
+  -H "Authorization: Bearer $DROPBOX_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"path": ""}'
+
+# 파일 다운로드
+curl -X POST "https://content.dropboxapi.com/2/files/download" \
+  -H "Authorization: Bearer $DROPBOX_TOKEN" \
+  -H "Dropbox-API-Arg: {\"path\": \"/<파일경로>\"}"
+```
+"#),
+        "GITLAB_TOKEN" => Some(r#"### GitLab API
+GitLab 프로젝트/이슈 관리가 필요하면 GitLab API를 사용하세요.
+```bash
+# 프로젝트 목록
+curl "https://gitlab.com/api/v4/projects?membership=true" \
+  -H "PRIVATE-TOKEN: $GITLAB_TOKEN"
+
+# 이슈 목록
+curl "https://gitlab.com/api/v4/projects/<project_id>/issues" \
+  -H "PRIVATE-TOKEN: $GITLAB_TOKEN"
+```
+"#),
         _ => None,
     }
 }
