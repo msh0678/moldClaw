@@ -18,8 +18,8 @@ interface MenuItem {
   description: string;
 }
 
-// '일반' 항목 제거, 모든 항목 동일 레벨로 표시
 const MENU_ITEMS: MenuItem[] = [
+  { id: 'general', icon: '⚙️', label: '일반', description: '주요 설정 및 앱 관리' },
   { id: 'model', icon: '🤖', label: 'AI 모델', description: 'AI 서비스 설정' },
   { id: 'messenger', icon: '💬', label: '메신저', description: '채널 연결 관리' },
   { id: 'tools', icon: '🔧', label: '도구', description: '외부 도구 연동' },
