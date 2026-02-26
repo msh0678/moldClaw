@@ -333,21 +333,59 @@ export default function SkillsSettings({
 
   // CLI 스킬: 상세 모달
   const openCliSkillModal = (skill: SkillDefinition) => {
-    const status = cliStatuses[skill.id];
+    const initialStatus = cliStatuses[skill.id];
     const prereqCheck = prerequisites ? needsPrerequisite(skill, platform, prerequisites) : { needed: false, missing: null };
     
     const CliSkillModal = () => {
+      // 로컬 상태로 관리 (실시간 업데이트)
+      const [localStatus, setLocalStatus] = useState(initialStatus);
       const [installing, setInstalling] = useState(false);
       const [disconnecting, setDisconnecting] = useState(false);
+      const [isPolling, setIsPolling] = useState(false);
       const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
       const [error, setError] = useState<string | null>(null);
+
+      const wizardConfig = getSkillWizardConfig(skill.id);
+      const hasWizard = !!wizardConfig;
+
+      // 상태 새로고침 함수
+      const refreshStatus = async () => {
+        try {
+          const res = await invoke<SkillsStatusResponse>('get_skills_status');
+          setLocalStatus(res.skills[skill.id]);
+          return res.skills[skill.id];
+        } catch {
+          return localStatus;
+        }
+      };
+
+      // login 타입 마법사 polling (터미널 비동기 완료 감지)
+      useEffect(() => {
+        if (!isPolling) return;
+        
+        const interval = setInterval(async () => {
+          const newStatus = await refreshStatus();
+          if (newStatus?.configured) {
+            setIsPolling(false);
+          }
+        }, 2000);
+        
+        return () => clearInterval(interval);
+      }, [isPolling]);
 
       const handleInstall = async () => {
         setInstalling(true);
         setError(null);
         try {
           await invoke('install_skill', { skillId: skill.id });
+          // 설치 후 즉시 상태 조회
+          const newStatus = await refreshStatus();
           await loadCliSkills();
+          
+          // 마법사가 있고 login 타입이면 polling 시작
+          if (hasWizard && wizardConfig?.type === 'login' && newStatus?.installed && !newStatus?.configured) {
+            setIsPolling(true);
+          }
         } catch (err) {
           setError(String(err));
         } finally {
@@ -360,6 +398,7 @@ export default function SkillsSettings({
         setError(null);
         try {
           await invoke('configure_skill_api_key', { skillId: skill.id, apiKeys: apiKeyInputs });
+          await refreshStatus();
           await loadCliSkills();
           setApiKeyInputs({});
         } catch (err) {
@@ -370,6 +409,8 @@ export default function SkillsSettings({
       const handleOpenLogin = async () => {
         try {
           await invoke('open_skill_login_terminal', { skillId: skill.id });
+          // 터미널 열린 후 polling 시작
+          setIsPolling(true);
         } catch (err) {
           setError(String(err));
         }
@@ -391,12 +432,161 @@ export default function SkillsSettings({
         }
       };
 
-      const renderSetupUI = () => {
-        if (!status?.installed) return null;
-        const setup = skill.setup as SetupRequirement;
-        
-        if (setup.type === 'api_key') {
-          return (
+      // 마법사 완료 핸들러
+      const handleWizardComplete = async () => {
+        await refreshStatus();
+        await loadCliSkills();
+        closeModal();
+      };
+
+      // 마법사 열기
+      const openWizard = () => {
+        if (!wizardConfig) return;
+        openModal(wizardConfig.title, (
+          <SkillWizard 
+            config={wizardConfig} 
+            onComplete={handleWizardComplete} 
+            onCancel={closeModal} 
+          />
+        ));
+      };
+
+      const effectiveMethod = getEffectiveInstallMethod(skill, platform);
+      const effectiveCommand = platform === 'windows' && skill.windows_install_command 
+        ? skill.windows_install_command 
+        : skill.install_command;
+
+      // ===== UI 분기 로직 =====
+      
+      // 1. 미설치 상태
+      if (!localStatus?.installed) {
+        return (
+          <div className="space-y-4">
+            {/* 설명 */}
+            <div className="bg-[#252836] p-3 rounded-lg">
+              <p className="text-sm text-forge-text">{skill.description}</p>
+            </div>
+
+            {/* Prerequisite 경고 */}
+            {prereqCheck.missing && (
+              <div className="bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
+                <p className="text-sm text-forge-amber mb-2">⚠️ {prereqCheck.missing}가 설치되어 있지 않습니다</p>
+                <button 
+                  onClick={() => installPrerequisite(prereqCheck.missing!.toLowerCase())} 
+                  disabled={!!installingPrereq}
+                  className="px-3 py-1.5 bg-forge-amber text-[#1a1c24] rounded text-xs font-medium hover:bg-forge-amber/80 disabled:opacity-50"
+                >
+                  {installingPrereq === prereqCheck.missing?.toLowerCase() ? '설치 중...' : `${prereqCheck.missing} 설치`}
+                </button>
+              </div>
+            )}
+
+            {/* 설치 UI */}
+            {effectiveCommand && !prereqCheck.missing && (
+              <div className="space-y-3">
+                <h4 className="font-medium text-forge-text text-sm">설치 ({effectiveMethod})</h4>
+                <code className="block p-3 bg-[#1a1c24] rounded-lg text-xs font-mono text-forge-muted overflow-x-auto">{effectiveCommand}</code>
+                <button onClick={handleInstall} disabled={installing} className="w-full px-4 py-2 bg-forge-copper rounded-lg text-sm font-medium hover:bg-forge-copper/80 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {installing ? <><div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> 설치 중...</> : '설치'}
+                </button>
+              </div>
+            )}
+
+            {error && <div className="p-3 bg-forge-error/20 text-forge-error rounded-lg text-sm">{error}</div>}
+          </div>
+        );
+      }
+
+      // 2. 설치됨 + 설정 완료 (연결 해제 UI)
+      if (localStatus?.configured) {
+        return (
+          <div className="space-y-4">
+            {/* 상태 뱃지 */}
+            <div className="flex gap-2">
+              <span className="px-3 py-1 rounded text-xs bg-forge-success/20 text-forge-success">✓ 설치됨</span>
+              <span className="px-3 py-1 rounded text-xs bg-forge-success/20 text-forge-success">✓ 설정 완료</span>
+            </div>
+
+            {/* 설명 */}
+            <div className="bg-[#252836] p-3 rounded-lg">
+              <p className="text-sm text-forge-text">{skill.description}</p>
+            </div>
+
+            {/* 연결 해제 */}
+            <div className="pt-4 border-t border-[#2a2d3e]">
+              <button onClick={handleDisconnect} disabled={disconnecting} className="w-full px-4 py-2 bg-forge-error/10 text-forge-error border border-forge-error/30 rounded-lg text-sm hover:bg-forge-error/20 disabled:opacity-50 flex items-center justify-center gap-2">
+                {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-forge-error/30 border-t-forge-error rounded-full" /> 연결 해제 중...</> : '연결 해제'}
+              </button>
+              <p className="text-xs text-forge-muted mt-2 text-center">바이너리는 유지됩니다</p>
+            </div>
+
+            {error && <div className="p-3 bg-forge-error/20 text-forge-error rounded-lg text-sm">{error}</div>}
+          </div>
+        );
+      }
+
+      // 3. 설치됨 + 마법사 있음 + 미설정 (마법사 UI)
+      if (hasWizard) {
+        return (
+          <div className="space-y-4">
+            {/* 상태 뱃지 */}
+            <div className="flex gap-2">
+              <span className="px-3 py-1 rounded text-xs bg-forge-success/20 text-forge-success">✓ 설치됨</span>
+              <span className="px-3 py-1 rounded text-xs bg-forge-amber/20 text-forge-amber">설정 필요</span>
+              {isPolling && <span className="px-3 py-1 rounded text-xs bg-forge-copper/20 text-forge-copper animate-pulse">감지 중...</span>}
+            </div>
+
+            {/* 설명 */}
+            <div className="bg-[#252836] p-3 rounded-lg">
+              <p className="text-sm text-forge-text">{skill.description}</p>
+            </div>
+
+            {/* 마법사 UI */}
+            <div className="bg-[#252836] border border-[#2a2d3e] rounded-xl p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-forge-copper/20 flex items-center justify-center">
+                  <span className="text-xl">{wizardConfig?.type === 'login' ? '🔐' : wizardConfig?.type === 'token' ? '🔑' : '⚙️'}</span>
+                </div>
+                <div>
+                  <h4 className="font-medium text-forge-text">
+                    {wizardConfig?.type === 'login' ? '로그인 필요' : wizardConfig?.type === 'token' ? '토큰 입력 필요' : '설정 필요'}
+                  </h4>
+                  <p className="text-sm text-forge-muted">마법사로 간편하게 설정하세요</p>
+                </div>
+              </div>
+              <div className="flex justify-center">
+                <button 
+                  onClick={openWizard}
+                  className="px-6 py-2.5 bg-forge-copper border-2 border-forge-amber rounded-lg text-sm font-medium hover:bg-forge-copper/80 transition-colors"
+                >
+                  🧙 설정 마법사 열기
+                </button>
+              </div>
+            </div>
+
+            {error && <div className="p-3 bg-forge-error/20 text-forge-error rounded-lg text-sm">{error}</div>}
+          </div>
+        );
+      }
+
+      // 4. 설치됨 + 마법사 없음 + 미설정 (수동 설정 UI)
+      const setup = skill.setup as SetupRequirement;
+      return (
+        <div className="space-y-4">
+          {/* 상태 뱃지 */}
+          <div className="flex gap-2">
+            <span className="px-3 py-1 rounded text-xs bg-forge-success/20 text-forge-success">✓ 설치됨</span>
+            <span className="px-3 py-1 rounded text-xs bg-forge-amber/20 text-forge-amber">설정 필요</span>
+            {isPolling && <span className="px-3 py-1 rounded text-xs bg-forge-copper/20 text-forge-copper animate-pulse">감지 중...</span>}
+          </div>
+
+          {/* 설명 */}
+          <div className="bg-[#252836] p-3 rounded-lg">
+            <p className="text-sm text-forge-text">{skill.description}</p>
+          </div>
+
+          {/* 수동 설정 UI */}
+          {setup.type === 'api_key' && (
             <div className="space-y-3">
               <h4 className="font-medium text-forge-text">API 키 설정</h4>
               {setup.vars.map(varName => (
@@ -412,13 +602,9 @@ export default function SkillsSettings({
               ))}
               <button onClick={handleSaveApiKey} className="px-4 py-2 bg-forge-copper rounded-lg text-sm font-medium hover:bg-forge-copper/80">저장</button>
             </div>
-          );
-        }
-        
-        if (setup.type === 'login') {
-          const wizardConfig = getSkillWizardConfig(skill.id);
-          
-          return (
+          )}
+
+          {setup.type === 'login' && (
             <div className="bg-[#252836] border border-[#2a2d3e] rounded-xl p-5">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-lg bg-forge-copper/20 flex items-center justify-center">
@@ -426,37 +612,18 @@ export default function SkillsSettings({
                 </div>
                 <div>
                   <h4 className="font-medium text-forge-text">로그인 필요</h4>
-                  <p className="text-sm text-forge-muted">
-                    {wizardConfig ? '마법사로 간편하게 설정하세요' : '터미널에서 로그인을 완료해주세요'}
-                  </p>
+                  <p className="text-sm text-forge-muted">터미널에서 로그인을 완료해주세요</p>
                 </div>
               </div>
               <div className="flex justify-center">
-                {wizardConfig ? (
-                  <button 
-                    onClick={() => openModal(wizardConfig.title, (
-                      <SkillWizard 
-                        config={wizardConfig} 
-                        onComplete={() => { closeModal(); loadCliSkills(); }} 
-                        onCancel={closeModal} 
-                      />
-                    ))} 
-                    className="px-6 py-2.5 bg-forge-copper border-2 border-forge-amber rounded-lg text-sm font-medium hover:bg-forge-copper/80 transition-colors"
-                  >
-                    🧙 설정 마법사 열기
-                  </button>
-                ) : (
-                  <button onClick={handleOpenLogin} className="px-6 py-2.5 bg-forge-copper border-2 border-forge-amber rounded-lg text-sm font-medium hover:bg-forge-copper/80 transition-colors">
-                    로그인 터미널 열기
-                  </button>
-                )}
+                <button onClick={handleOpenLogin} className="px-6 py-2.5 bg-forge-copper border-2 border-forge-amber rounded-lg text-sm font-medium hover:bg-forge-copper/80 transition-colors">
+                  로그인 터미널 열기
+                </button>
               </div>
             </div>
-          );
-        }
-        
-        if (setup.type === 'mac_permission') {
-          return (
+          )}
+
+          {setup.type === 'mac_permission' && (
             <div className="space-y-3">
               <h4 className="font-medium text-forge-text">macOS 권한 필요</h4>
               <ul className="text-sm text-forge-muted space-y-1">
@@ -468,135 +635,30 @@ export default function SkillsSettings({
               </ul>
               <p className="text-xs text-forge-muted">시스템 설정 → 개인정보 보호 및 보안에서 허용</p>
             </div>
-          );
-        }
-        
-        if (setup.type === 'config') {
-          const wizardConfig = getSkillWizardConfig(skill.id);
-          
-          if (wizardConfig) {
-            return (
-              <div className="bg-[#252836] border border-[#2a2d3e] rounded-xl p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-forge-copper/20 flex items-center justify-center">
-                    <span className="text-xl">⚙️</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-forge-text">설정 필요</h4>
-                    <p className="text-sm text-forge-muted">마법사로 간편하게 설정하세요</p>
-                  </div>
-                </div>
-                <div className="flex justify-center">
-                  <button 
-                    onClick={() => openModal(wizardConfig.title, (
-                      <SkillWizard 
-                        config={wizardConfig} 
-                        onComplete={() => { closeModal(); loadCliSkills(); }} 
-                        onCancel={closeModal} 
-                      />
-                    ))} 
-                    className="px-6 py-2.5 bg-forge-copper border-2 border-forge-amber rounded-lg text-sm font-medium hover:bg-forge-copper/80 transition-colors"
-                  >
-                    🧙 설정 마법사 열기
-                  </button>
-                </div>
-              </div>
-            );
-          }
-          
-          return (
+          )}
+
+          {setup.type === 'config' && (
             <div className="space-y-3">
               <h4 className="font-medium text-forge-text">설정 파일 필요</h4>
               <p className="text-sm text-forge-muted">아래 경로에 설정 파일을 생성해야 합니다:</p>
               <code className="block text-xs bg-[#1a1c24] p-2 rounded font-mono text-forge-muted break-all">{setup.path}</code>
               <p className="text-xs text-forge-muted">스킬 문서를 참고하여 설정을 완료해주세요.</p>
             </div>
-          );
-        }
-        
-        if (setup.type === 'hardware') {
-          return (
+          )}
+
+          {setup.type === 'hardware' && (
             <div className="bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
               <p className="text-sm text-forge-amber">🔌 {setup.description}</p>
             </div>
-          );
-        }
-        
-        if (setup.type === 'custom') {
-          return (
+          )}
+
+          {setup.type === 'custom' && (
             <div className="bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
               <p className="text-sm text-forge-amber">⚙️ {setup.description}</p>
             </div>
-          );
-        }
-        
-        return null;
-      };
-
-      const effectiveMethod = getEffectiveInstallMethod(skill, platform);
-      const effectiveCommand = platform === 'windows' && skill.windows_install_command 
-        ? skill.windows_install_command 
-        : skill.install_command;
-
-      return (
-        <div className="space-y-4">
-          {/* 상태 뱃지 */}
-          <div className="flex gap-2">
-            <span className={`px-3 py-1 rounded text-xs ${status?.installed ? 'bg-forge-success/20 text-forge-success' : 'bg-[#252836] text-forge-muted'}`}>
-              {status?.installed ? '✓ 설치됨' : '미설치'}
-            </span>
-            {status?.installed && (
-              <span className={`px-3 py-1 rounded text-xs ${status?.configured ? 'bg-forge-success/20 text-forge-success' : 'bg-forge-amber/20 text-forge-amber'}`}>
-                {status?.configured ? '✓ 설정 완료' : '설정 필요'}
-              </span>
-            )}
-          </div>
-
-          {/* 설명 */}
-          <div className="bg-[#252836] p-3 rounded-lg">
-            <p className="text-sm text-forge-text">{skill.description}</p>
-          </div>
-
-          {/* Prerequisite 경고 */}
-          {prereqCheck.missing && (
-            <div className="bg-forge-amber/10 border border-forge-amber/30 p-3 rounded-lg">
-              <p className="text-sm text-forge-amber mb-2">⚠️ {prereqCheck.missing}가 설치되어 있지 않습니다</p>
-              <button 
-                onClick={() => installPrerequisite(prereqCheck.missing!.toLowerCase())} 
-                disabled={!!installingPrereq}
-                className="px-3 py-1.5 bg-forge-amber text-[#1a1c24] rounded text-xs font-medium hover:bg-forge-amber/80 disabled:opacity-50"
-              >
-                {installingPrereq === prereqCheck.missing?.toLowerCase() ? '설치 중...' : `${prereqCheck.missing} 설치`}
-              </button>
-            </div>
           )}
 
-          {/* 설치 */}
-          {!status?.installed && effectiveCommand && !prereqCheck.missing && (
-            <div className="space-y-3">
-              <h4 className="font-medium text-forge-text text-sm">설치 ({effectiveMethod})</h4>
-              <code className="block p-3 bg-[#1a1c24] rounded-lg text-xs font-mono text-forge-muted overflow-x-auto">{effectiveCommand}</code>
-              <button onClick={handleInstall} disabled={installing} className="w-full px-4 py-2 bg-forge-copper rounded-lg text-sm font-medium hover:bg-forge-copper/80 disabled:opacity-50 flex items-center justify-center gap-2">
-                {installing ? <><div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> 설치 중...</> : '설치'}
-              </button>
-            </div>
-          )}
-
-          {/* 설정 UI */}
-          {renderSetupUI()}
-
-          {/* 에러 */}
           {error && <div className="p-3 bg-forge-error/20 text-forge-error rounded-lg text-sm">{error}</div>}
-
-          {/* 연결 해제 */}
-          {status?.installed && status?.configured && (
-            <div className="pt-4 border-t border-[#2a2d3e]">
-              <button onClick={handleDisconnect} disabled={disconnecting} className="w-full px-4 py-2 bg-forge-error/10 text-forge-error border border-forge-error/30 rounded-lg text-sm hover:bg-forge-error/20 disabled:opacity-50 flex items-center justify-center gap-2">
-                {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-forge-error/30 border-t-forge-error rounded-full" /> 연결 해제 중...</> : '연결 해제'}
-              </button>
-              <p className="text-xs text-forge-muted mt-2 text-center">바이너리는 유지됩니다</p>
-            </div>
-          )}
         </div>
       );
     };
