@@ -1007,14 +1007,18 @@ async fn install_with_go(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 각 인자를 별도로 전달 (Rust의 따옴표 이스케이프 문제 방지)
-        let install_script = format!("{} & pause", cmd);
-        Command::new("cmd")
-            .args(["/c", "start", "", "cmd", "/k", &install_script])
-            .spawn()
-            .map_err(|e| format!("터미널 실행 실패: {}", e))?;
+        // Windows: 숨김 창에서 실행 + 완료 대기 (go install은 프롬프트 없음)
+        let output = windows_shell(cmd)
+            .output()
+            .map_err(|e| format!("설치 실행 실패: {}", e))?;
         
-        return Ok("터미널에서 설치가 진행됩니다.\n완료 후 새로고침해주세요.".into());
+        if output.status.success() {
+            return Ok("설치 완료".into());
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!("설치 실패: {}{}", stderr, stdout));
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -1042,14 +1046,18 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 각 인자를 별도로 전달 (Rust의 따옴표 이스케이프 문제 방지)
-        let install_script = format!("{} & pause", cmd);
-        Command::new("cmd")
-            .args(["/c", "start", "", "cmd", "/k", &install_script])
-            .spawn()
-            .map_err(|e| format!("터미널 실행 실패: {}", e))?;
+        // Windows: 숨김 창에서 실행 + 완료 대기 (npm install -g는 프롬프트 없음)
+        let output = windows_shell(cmd)
+            .output()
+            .map_err(|e| format!("설치 실행 실패: {}", e))?;
         
-        return Ok("터미널에서 설치가 진행됩니다.\n완료 후 새로고침해주세요.".into());
+        if output.status.success() {
+            return Ok("설치 완료".into());
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!("설치 실패: {}{}", stderr, stdout));
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -1077,14 +1085,18 @@ async fn install_with_uv(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 각 인자를 별도로 전달 (Rust의 따옴표 이스케이프 문제 방지)
-        let install_script = format!("{} & pause", cmd);
-        Command::new("cmd")
-            .args(["/c", "start", "", "cmd", "/k", &install_script])
-            .spawn()
-            .map_err(|e| format!("터미널 실행 실패: {}", e))?;
+        // Windows: 숨김 창에서 실행 + 완료 대기 (uv tool install은 프롬프트 없음)
+        let output = windows_shell(cmd)
+            .output()
+            .map_err(|e| format!("설치 실행 실패: {}", e))?;
         
-        return Ok("터미널에서 설치가 진행됩니다.\n완료 후 새로고침해주세요.".into());
+        if output.status.success() {
+            return Ok("설치 완료".into());
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!("설치 실패: {}{}", stderr, stdout));
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -1111,14 +1123,25 @@ async fn install_with_winget(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 각 인자를 별도로 전달 (Rust의 따옴표 이스케이프 문제 방지)
-        let install_script = format!("{} & pause", cmd);
-        Command::new("cmd")
-            .args(["/c", "start", "", "cmd", "/k", &install_script])
-            .spawn()
-            .map_err(|e| format!("터미널 실행 실패: {}", e))?;
+        // winget 명령에 자동 확인 플래그 추가 (없으면)
+        let full_cmd = if cmd.contains("--accept") {
+            cmd.to_string()
+        } else {
+            format!("{} --accept-source-agreements --accept-package-agreements", cmd)
+        };
         
-        Ok("터미널에서 설치가 진행됩니다.\n완료 후 새로고침해주세요.".into())
+        // Windows: 숨김 창에서 실행 + 완료 대기
+        let output = windows_shell(&full_cmd)
+            .output()
+            .map_err(|e| format!("설치 실행 실패: {}", e))?;
+        
+        if output.status.success() {
+            Ok("설치 완료".into())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            Err(format!("설치 실패: {}{}", stderr, stdout))
+        }
     }
 }
 
