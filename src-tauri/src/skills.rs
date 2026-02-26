@@ -968,14 +968,10 @@ async fn install_with_go(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
-        // & 사용 (이전 명령 성공 여부와 관계없이 pause 실행)
-        let install_script = format!(
-            "echo 실행 명령: {} & echo. & {} & echo. & echo 완료 또는 에러 확인 후 아무 키나 누르세요 & pause",
-            cmd, cmd
-        );
+        // Windows: start "" 로 빈 제목 지정 (첫 따옴표 인자가 제목으로 해석되는 문제 방지)
+        let full_cmd = format!("start \"\" cmd /k \"{} & pause\"", cmd);
         Command::new("cmd")
-            .args(["/c", "start", "cmd", "/k", &install_script])
+            .args(["/c", &full_cmd])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
@@ -1007,14 +1003,10 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
-        // & 사용 (이전 명령 성공 여부와 관계없이 pause 실행)
-        let install_script = format!(
-            "echo 실행 명령: {} & echo. & {} & echo. & echo 완료 또는 에러 확인 후 아무 키나 누르세요 & pause",
-            cmd, cmd
-        );
+        // Windows: start "" 로 빈 제목 지정 (첫 따옴표 인자가 제목으로 해석되는 문제 방지)
+        let full_cmd = format!("start \"\" cmd /k \"{} & pause\"", cmd);
         Command::new("cmd")
-            .args(["/c", "start", "cmd", "/k", &install_script])
+            .args(["/c", &full_cmd])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
@@ -1046,15 +1038,10 @@ async fn install_with_uv(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
-        // & 사용 (이전 명령 성공 여부와 관계없이 pause 실행)
-        // echo 명령어로 실행 명령 표시 (디버그용)
-        let install_script = format!(
-            "echo 실행 명령: {} & echo. & {} & echo. & echo 완료 또는 에러 확인 후 아무 키나 누르세요 & pause",
-            cmd, cmd
-        );
+        // Windows: start "" 로 빈 제목 지정 (첫 따옴표 인자가 제목으로 해석되는 문제 방지)
+        let full_cmd = format!("start \"\" cmd /k \"{} & pause\"", cmd);
         Command::new("cmd")
-            .args(["/c", "start", "cmd", "/k", &install_script])
+            .args(["/c", &full_cmd])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
@@ -1085,14 +1072,10 @@ async fn install_with_winget(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        // Windows: 터미널 창을 열어서 설치 진행 상황 표시
-        // & 사용 (이전 명령 성공 여부와 관계없이 pause 실행)
-        let install_script = format!(
-            "echo 실행 명령: {} & echo. & {} & echo. & echo 완료 또는 에러 확인 후 아무 키나 누르세요 & pause",
-            cmd, cmd
-        );
+        // Windows: start "" 로 빈 제목 지정 (첫 따옴표 인자가 제목으로 해석되는 문제 방지)
+        let full_cmd = format!("start \"\" cmd /k \"{} & pause\"", cmd);
         Command::new("cmd")
-            .args(["/c", "start", "cmd", "/k", &install_script])
+            .args(["/c", &full_cmd])
             .spawn()
             .map_err(|e| format!("터미널 실행 실패: {}", e))?;
         
