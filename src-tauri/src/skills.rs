@@ -81,6 +81,84 @@ fn macos_cmd(program: &str) -> Command {
     cmd
 }
 
+// ===== Linux PATH 해결 =====
+// Linux GUI 앱 (Tauri, AppImage 등)에서도 shell profile PATH 상속 안 됨
+
+#[cfg(target_os = "linux")]
+fn get_linux_extended_path() -> String {
+    use std::sync::OnceLock;
+    static CACHED_PATH: OnceLock<String> = OnceLock::new();
+
+    CACHED_PATH.get_or_init(|| {
+        // 1. 로그인 셸에서 PATH 가져오기 시도
+        let shells = ["/bin/bash", "/bin/zsh", "/bin/sh"];
+        for shell in &shells {
+            if let Ok(output) = std::process::Command::new(shell)
+                .args(["-l", "-c", "echo $PATH"])
+                .output()
+            {
+                if output.status.success() {
+                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !path.is_empty() && path.contains('/') {
+                        return path;
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback: 알려진 경로 목록 조합
+        let home = std::env::var("HOME").unwrap_or_default();
+        let known_paths = vec![
+            "/home/linuxbrew/.linuxbrew/bin".to_string(),   // 시스템 Linuxbrew
+            "/home/linuxbrew/.linuxbrew/sbin".to_string(),
+            format!("{}/.linuxbrew/bin", home),              // 사용자 Linuxbrew
+            format!("{}/.linuxbrew/sbin", home),
+            "/usr/local/bin".to_string(),
+            "/usr/local/sbin".to_string(),
+            format!("{}/go/bin", home),                      // Go binaries
+            format!("{}/.cargo/bin", home),                  // Rust/Cargo
+            format!("{}/.local/bin", home),                  // pipx, uv, pip --user
+            format!("{}/.npm-global/bin", home),             // npm global
+            "/snap/bin".to_string(),                         // Snap packages
+            "/usr/bin".to_string(),
+            "/bin".to_string(),
+            "/usr/sbin".to_string(),
+            "/sbin".to_string(),
+        ];
+
+        let current = std::env::var("PATH").unwrap_or_default();
+        let mut all: Vec<String> = known_paths;
+        for p in current.split(':') {
+            if !p.is_empty() {
+                all.push(p.to_string());
+            }
+        }
+        
+        // 중복 제거
+        let mut seen = std::collections::HashSet::new();
+        let deduped: Vec<String> = all.into_iter().filter(|p| seen.insert(p.clone())).collect();
+        deduped.join(":")
+    }).clone()
+}
+
+/// Linux에서 확장 PATH로 명령 실행
+#[cfg(target_os = "linux")]
+fn linux_sh(script: &str) -> Command {
+    let extended_path = get_linux_extended_path();
+    let full_script = format!("export PATH=\"{}\"; {}", extended_path, script);
+    let mut cmd = Command::new("/bin/sh");
+    cmd.args(["-c", &full_script]);
+    cmd
+}
+
+/// Linux에서 확장 PATH로 프로그램 직접 실행
+#[cfg(target_os = "linux")]
+fn linux_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    cmd.env("PATH", get_linux_extended_path());
+    cmd
+}
+
 /// 스킬 설치 방법
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -207,7 +285,7 @@ fn get_current_platform() -> &'static str {
     return "unknown";
 }
 
-/// 바이너리 존재 확인 (macOS: 확장 PATH 사용)
+/// 바이너리 존재 확인 (macOS/Linux: 확장 PATH 사용)
 fn check_binary_exists(name: &str) -> bool {
     #[cfg(windows)]
     {
@@ -224,17 +302,21 @@ fn check_binary_exists(name: &str) -> bool {
     
     #[cfg(target_os = "linux")]
     {
-        Command::new("which").arg(name).output()
+        // Linux GUI 앱에서도 확장 PATH로 which 실행
+        linux_cmd("which").arg(name).output()
             .map(|o| o.status.success()).unwrap_or(false)
     }
 }
 
-/// 바이너리 버전 확인 (macOS: 확장 PATH 사용)
+/// 바이너리 버전 확인 (macOS/Linux: 확장 PATH 사용)
 fn get_binary_version(name: &str, version_arg: &str) -> Option<String> {
     #[cfg(target_os = "macos")]
     let output = macos_cmd(name).arg(version_arg).output().ok()?;
     
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    let output = linux_cmd(name).arg(version_arg).output().ok()?;
+    
+    #[cfg(windows)]
     let output = Command::new(name).arg(version_arg).output().ok()?;
     
     if output.status.success() {
@@ -610,8 +692,8 @@ async fn install_uv() -> Result<String, String> {
     
     #[cfg(target_os = "linux")]
     {
-        let output = Command::new("sh")
-            .args(["-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"])
+        // Linux: 확장 PATH로 curl 실행
+        let output = linux_sh("curl -LsSf https://astral.sh/uv/install.sh | sh")
             .output()
             .map_err(|e| format!("설치 스크립트 실행 실패: {}", e))?;
 
@@ -734,8 +816,8 @@ async fn install_with_brew(cmd: &str) -> Result<String, String> {
     
     #[cfg(target_os = "linux")]
     {
-        let output = Command::new("sh")
-            .args(["-c", cmd])
+        // Linux: 확장 PATH로 brew 명령 실행
+        let output = linux_sh(cmd)
             .output()
             .map_err(|e| e.to_string())?;
 
@@ -764,8 +846,7 @@ async fn install_with_go(cmd: &str) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     
     #[cfg(target_os = "linux")]
-    let output = Command::new("sh")
-        .args(["-c", cmd])
+    let output = linux_sh(cmd)
         .output()
         .map_err(|e| e.to_string())?;
 
@@ -793,8 +874,7 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     
     #[cfg(target_os = "linux")]
-    let output = Command::new("sh")
-        .args(["-c", cmd])
+    let output = linux_sh(cmd)
         .output()
         .map_err(|e| e.to_string())?;
 
@@ -822,8 +902,7 @@ async fn install_with_uv(cmd: &str) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     
     #[cfg(target_os = "linux")]
-    let output = Command::new("sh")
-        .args(["-c", cmd])
+    let output = linux_sh(cmd)
         .output()
         .map_err(|e| e.to_string())?;
 
@@ -982,7 +1061,7 @@ pub async fn disconnect_skill(skill_id: String) -> Result<String, String> {
         let output = macos_sh(logout_cmd).output();
         
         #[cfg(target_os = "linux")]
-        let output = Command::new("sh").args(["-c", logout_cmd]).output();
+        let output = linux_sh(logout_cmd).output();
         
         match output {
             Ok(o) if o.status.success() => results.push("로그아웃 완료".to_string()),
