@@ -494,7 +494,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_command: None,
             binary_name: Some("gog".into()),
             platform: PlatformSupport { windows: false, macos: true, linux: false },
-            setup: SetupRequirement::Login { command: "gog auth add <email> --services gmail,calendar,drive".into() },
+            setup: SetupRequirement::Login { command: "read -p 'Google 이메일 주소: ' email && gog auth add \"$email\" --services gmail,calendar,drive".into() },
             disconnect: DisconnectConfig {
                 logout_command: Some("gog auth remove-all".into()),
                 // gog 인증 완료 시 accounts.json 생성
@@ -828,7 +828,7 @@ pub static SKILL_DEFINITIONS: Lazy<Vec<SkillDefinition>> = Lazy::new(|| {
             windows_install_command: None,
             binary_name: Some("grizzly".into()),
             platform: PlatformSupport { windows: false, macos: true, linux: false },
-            setup: SetupRequirement::Login { command: "Bear 앱 → Help → API Token 복사 → ~/.config/grizzly/token 저장".into() },
+            setup: SetupRequirement::Custom { description: "Bear 앱에서 API Token을 발급받아 입력".into() },
             disconnect: DisconnectConfig {
                 logout_command: None,
                 config_paths: vec!["~/.config/grizzly/token".into()],
