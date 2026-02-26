@@ -2102,6 +2102,7 @@ pub fn run() {
             skills::configure_skill_api_key,
             skills::open_skill_login_terminal,
             skills::disconnect_skill,
+            skills::uninstall_skill,
             skills::disable_skill,
             skills::enable_skill,
             // 스킬 마법사 지원 함수들

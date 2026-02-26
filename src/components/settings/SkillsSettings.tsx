@@ -341,12 +341,18 @@ export default function SkillsSettings({
       const [localStatus, setLocalStatus] = useState(initialStatus);
       const [installing, setInstalling] = useState(false);
       const [disconnecting, setDisconnecting] = useState(false);
+      const [uninstalling, setUninstalling] = useState(false);
+      const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
+      const [uninstallResult, setUninstallResult] = useState<{ success: boolean; message: string; manual_command: string | null } | null>(null);
       const [isPolling, setIsPolling] = useState(false);
       const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
       const [error, setError] = useState<string | null>(null);
 
       const wizardConfig = getSkillWizardConfig(skill.id);
       const hasWizard = !!wizardConfig;
+      
+      // SetupRequirement::None 인지 확인 (연결 개념 없음)
+      const isNoSetupRequired = skill.setup.type === 'none';
 
       // 상태 새로고침 함수
       const refreshStatus = async () => {
@@ -439,6 +445,31 @@ export default function SkillsSettings({
         }
       };
 
+      // 삭제 핸들러
+      const handleUninstall = () => {
+        setShowUninstallConfirm(true);
+      };
+
+      const confirmUninstall = async () => {
+        setShowUninstallConfirm(false);
+        setUninstalling(true);
+        setError(null);
+        setUninstallResult(null);
+        try {
+          const result = await invoke<{ success: boolean; message: string; manual_command: string | null }>('uninstall_skill', { skillId: skill.id });
+          setUninstallResult(result);
+          if (result.success) {
+            // 성공 시 상태 새로고침 → installed: false가 되어 설치 UI로 전환
+            await refreshStatus();
+            await loadCliSkills();
+          }
+        } catch (err) {
+          setError(String(err));
+        } finally {
+          setUninstalling(false);
+        }
+      };
+
       // 마법사 완료 핸들러
       const handleWizardComplete = async () => {
         await refreshStatus();
@@ -504,14 +535,14 @@ export default function SkillsSettings({
         );
       }
 
-      // 2. 설치됨 + 설정 완료 (연결 해제 UI)
+      // 2. 설치됨 + 설정 완료 (연결 해제/삭제 UI)
       if (localStatus?.configured) {
         return (
           <div className="space-y-4">
             {/* 상태 뱃지 */}
             <div className="flex gap-2">
               <span className="px-3 py-1 rounded text-xs bg-forge-success/20 text-forge-success">✓ 설치됨</span>
-              <span className="px-3 py-1 rounded text-xs bg-forge-success/20 text-forge-success">✓ 설정 완료</span>
+              {!isNoSetupRequired && <span className="px-3 py-1 rounded text-xs bg-forge-success/20 text-forge-success">✓ 설정 완료</span>}
             </div>
 
             {/* 설명 */}
@@ -519,21 +550,60 @@ export default function SkillsSettings({
               <p className="text-sm text-forge-text">{skill.description}</p>
             </div>
 
-            {/* 연결 해제 결과 */}
-            {disconnectResult && (
+            {/* 삭제 결과 */}
+            {uninstallResult && (
+              <div className={`p-3 rounded-lg text-sm ${uninstallResult.success ? 'bg-forge-success/20 text-forge-success' : 'bg-forge-error/20 text-forge-error'}`}>
+                <p className="font-medium mb-1">{uninstallResult.success ? '✓ 삭제 완료' : '✗ 삭제 실패'}</p>
+                <p className="text-xs whitespace-pre-line">{uninstallResult.message}</p>
+                {uninstallResult.manual_command && (
+                  <div className="mt-2 p-2 bg-black/20 rounded text-xs">
+                    <p className="text-forge-muted mb-1">수동으로 삭제하려면:</p>
+                    <code className="text-forge-text">{uninstallResult.manual_command}</code>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 삭제 확인 모달 */}
+            {showUninstallConfirm && (
+              <div className="p-4 bg-forge-error/10 border border-forge-error/30 rounded-xl">
+                <p className="text-sm text-forge-text mb-3">
+                  <span className="font-medium text-forge-error">{skill.name}</span>을(를) 삭제하시겠습니까?
+                </p>
+                <p className="text-xs text-forge-muted mb-4">바이너리와 설정 파일이 모두 삭제됩니다.</p>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setShowUninstallConfirm(false)} 
+                    className="flex-1 px-3 py-2 bg-[#252836] text-forge-text rounded-lg text-sm hover:bg-[#2d3142]"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    onClick={confirmUninstall}
+                    disabled={uninstalling}
+                    className="flex-1 px-3 py-2 bg-forge-error text-white rounded-lg text-sm hover:bg-forge-error/80 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {uninstalling ? <><div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> 삭제 중...</> : '삭제'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 연결 해제 결과 (SetupRequirement 있는 경우만) */}
+            {!isNoSetupRequired && disconnectResult && (
               <div className="p-3 bg-forge-success/20 text-forge-success rounded-lg text-sm">
                 <p className="font-medium mb-1">✓ 연결 해제 완료</p>
                 <p className="text-xs whitespace-pre-line">{disconnectResult}</p>
               </div>
             )}
 
-            {/* 연결 해제 확인 모달 */}
-            {showDisconnectConfirm && (
-              <div className="p-4 bg-forge-error/10 border border-forge-error/30 rounded-xl">
+            {/* 연결 해제 확인 모달 (SetupRequirement 있는 경우만) */}
+            {!isNoSetupRequired && showDisconnectConfirm && (
+              <div className="p-4 bg-forge-amber/10 border border-forge-amber/30 rounded-xl">
                 <p className="text-sm text-forge-text mb-3">
-                  <span className="font-medium text-forge-error">{skill.name}</span> 연결을 해제하시겠습니까?
+                  <span className="font-medium text-forge-amber">{skill.name}</span> 연결을 해제하시겠습니까?
                 </p>
-                <p className="text-xs text-forge-muted mb-4">설정과 인증 정보가 삭제됩니다.</p>
+                <p className="text-xs text-forge-muted mb-4">설정과 인증 정보가 삭제됩니다. 바이너리는 유지됩니다.</p>
                 <div className="flex gap-2">
                   <button 
                     onClick={() => setShowDisconnectConfirm(false)} 
@@ -544,21 +614,36 @@ export default function SkillsSettings({
                   <button 
                     onClick={confirmDisconnect}
                     disabled={disconnecting}
-                    className="flex-1 px-3 py-2 bg-forge-error text-white rounded-lg text-sm hover:bg-forge-error/80 disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="flex-1 px-3 py-2 bg-forge-amber text-[#1a1c24] rounded-lg text-sm hover:bg-forge-amber/80 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> 해제 중...</> : '연결 해제'}
+                    {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-[#1a1c24]/30 border-t-[#1a1c24] rounded-full" /> 해제 중...</> : '연결 해제'}
                   </button>
                 </div>
               </div>
             )}
 
-            {/* 연결 해제 버튼 */}
-            {!showDisconnectConfirm && !disconnectResult && (
-              <div className="pt-4 border-t border-[#2a2d3e]">
-                <button onClick={handleDisconnect} disabled={disconnecting} className="w-full px-4 py-2 bg-forge-error/10 text-forge-error border border-forge-error/30 rounded-lg text-sm hover:bg-forge-error/20 disabled:opacity-50 flex items-center justify-center gap-2">
-                  {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-forge-error/30 border-t-forge-error rounded-full" /> 연결 해제 중...</> : '연결 해제'}
+            {/* 버튼 영역 */}
+            {!showDisconnectConfirm && !showUninstallConfirm && !disconnectResult && !uninstallResult && (
+              <div className="pt-4 border-t border-[#2a2d3e] space-y-2">
+                {/* SetupRequirement 있는 경우: 연결 해제 + 삭제 */}
+                {!isNoSetupRequired && (
+                  <button 
+                    onClick={handleDisconnect} 
+                    disabled={disconnecting || uninstalling} 
+                    className="w-full px-4 py-2 bg-forge-amber/10 text-forge-amber border border-forge-amber/30 rounded-lg text-sm hover:bg-forge-amber/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-forge-amber/30 border-t-forge-amber rounded-full" /> 연결 해제 중...</> : '연결 해제'}
+                  </button>
+                )}
+                {/* 삭제 버튼 (모든 스킬) */}
+                <button 
+                  onClick={handleUninstall} 
+                  disabled={disconnecting || uninstalling} 
+                  className="w-full px-4 py-2 bg-forge-error/10 text-forge-error border border-forge-error/30 rounded-lg text-sm hover:bg-forge-error/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {uninstalling ? <><div className="animate-spin w-4 h-4 border-2 border-forge-error/30 border-t-forge-error rounded-full" /> 삭제 중...</> : '삭제'}
                 </button>
-                <p className="text-xs text-forge-muted mt-2 text-center">바이너리는 유지됩니다</p>
+                {!isNoSetupRequired && <p className="text-xs text-forge-muted text-center">연결 해제: 설정만 삭제 / 삭제: 바이너리까지 삭제</p>}
               </div>
             )}
 

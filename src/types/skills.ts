@@ -90,6 +90,13 @@ export interface SkillsStatusResponse {
   platform: 'windows' | 'macos' | 'linux';
 }
 
+// 스킬 삭제 결과
+export interface UninstallResult {
+  success: boolean;
+  message: string;
+  manual_command: string | null;
+}
+
 // 카테고리 정의
 export const SKILL_CATEGORIES: Record<string, { name: string; emoji: string }> = {
   builtin: { name: '내장', emoji: '⚙️' },

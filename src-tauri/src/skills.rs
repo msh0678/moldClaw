@@ -1364,6 +1364,240 @@ pub async fn disconnect_skill(skill_id: String) -> Result<String, String> {
     }
 }
 
+/// 스킬 삭제 결과
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UninstallResult {
+    pub success: bool,
+    pub message: String,
+    pub manual_command: Option<String>,
+}
+
+/// 스킬 바이너리 삭제
+#[tauri::command]
+pub async fn uninstall_skill(skill_id: String) -> Result<UninstallResult, String> {
+    let skill = SKILL_DEFINITIONS
+        .iter()
+        .find(|s| s.id == skill_id)
+        .ok_or_else(|| format!("스킬을 찾을 수 없음: {}", skill_id))?;
+
+    // 바이너리 이름 확인
+    let binary_name = match &skill.binary_name {
+        Some(name) => name.clone(),
+        None => return Err("바이너리 이름이 정의되지 않은 스킬입니다".into()),
+    };
+
+    // 1. 삭제 전 바이너리 존재 확인
+    if !check_binary_exists(&binary_name) {
+        return Ok(UninstallResult {
+            success: true,
+            message: "이미 삭제됨".into(),
+            manual_command: None,
+        });
+    }
+
+    // 2. 삭제 명령어 생성 및 실행
+    let install_method = get_effective_install_method(skill);
+    let (uninstall_cmd, manual_cmd) = get_uninstall_command(skill, &install_method);
+    
+    let output = execute_uninstall(&uninstall_cmd, &install_method).await;
+
+    // 3. 삭제 후 바이너리 존재 확인
+    // 잠시 대기 (파일시스템 동기화)
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    
+    let exists_after = check_binary_exists(&binary_name);
+
+    if !exists_after {
+        // 성공: 바이너리 없음
+        // config 파일도 함께 삭제
+        for path in &skill.disconnect.config_paths {
+            let expanded = shellexpand::tilde(path);
+            let path_buf = PathBuf::from(expanded.as_ref());
+            if path_buf.exists() {
+                if path_buf.is_dir() {
+                    let _ = std::fs::remove_dir_all(&path_buf);
+                } else {
+                    let _ = std::fs::remove_file(&path_buf);
+                }
+            }
+        }
+        
+        Ok(UninstallResult {
+            success: true,
+            message: "삭제 완료".into(),
+            manual_command: None,
+        })
+    } else if let Err(e) = &output {
+        // 실패: 바이너리 있음 + 명령 에러
+        Ok(UninstallResult {
+            success: false,
+            message: format!("삭제 실패: {}", e),
+            manual_command: Some(manual_cmd),
+        })
+    } else if let Ok(out) = &output {
+        if !out.status.success() {
+            // 실패: 바이너리 있음 + exit code 실패
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            Ok(UninstallResult {
+                success: false,
+                message: format!("삭제 실패: {}", stderr),
+                manual_command: Some(manual_cmd),
+            })
+        } else {
+            // 이상함: 바이너리 있음 + exit 성공
+            Ok(UninstallResult {
+                success: false,
+                message: "삭제 명령은 성공했으나 바이너리가 남아있습니다".into(),
+                manual_command: Some(manual_cmd),
+            })
+        }
+    } else {
+        Ok(UninstallResult {
+            success: false,
+            message: "알 수 없는 오류".into(),
+            manual_command: Some(manual_cmd),
+        })
+    }
+}
+
+/// 삭제 명령어 생성
+fn get_uninstall_command(skill: &SkillDefinition, method: &InstallMethod) -> (String, String) {
+    let binary = skill.binary_name.as_deref().unwrap_or(&skill.id);
+    
+    // install_command에서 패키지 이름 추출 시도
+    let package_name = extract_package_name(skill);
+    
+    match method {
+        InstallMethod::Npm => {
+            let pkg = package_name.unwrap_or_else(|| binary.to_string());
+            (
+                format!("npm uninstall -g {}", pkg),
+                format!("sudo npm uninstall -g {}", pkg),
+            )
+        }
+        InstallMethod::Go => {
+            let home = dirs::home_dir().map(|h| h.display().to_string()).unwrap_or_default();
+            #[cfg(windows)]
+            let bin_path = format!("{}\\go\\bin\\{}.exe", home, binary);
+            #[cfg(not(windows))]
+            let bin_path = format!("{}/go/bin/{}", home, binary);
+            (
+                format!("rm \"{}\"", bin_path),
+                format!("rm \"{}\"", bin_path),
+            )
+        }
+        InstallMethod::Uv => {
+            let pkg = package_name.unwrap_or_else(|| binary.to_string());
+            (
+                format!("uv tool uninstall {}", pkg),
+                format!("uv tool uninstall {}", pkg),
+            )
+        }
+        InstallMethod::Brew => {
+            let pkg = package_name.unwrap_or_else(|| binary.to_string());
+            (
+                format!("brew uninstall {}", pkg),
+                format!("brew uninstall {}", pkg),
+            )
+        }
+        InstallMethod::Winget => {
+            let pkg = package_name.unwrap_or_else(|| binary.to_string());
+            (
+                format!("winget uninstall {}", pkg),
+                format!("winget uninstall {}", pkg),
+            )
+        }
+        _ => {
+            (String::new(), format!("수동으로 {} 바이너리를 삭제해주세요", binary))
+        }
+    }
+}
+
+/// install_command에서 패키지 이름 추출
+fn extract_package_name(skill: &SkillDefinition) -> Option<String> {
+    let cmd = get_effective_install_command(skill)?;
+    
+    // npm install -g <package>
+    if cmd.contains("npm install -g ") {
+        return cmd.split("npm install -g ").nth(1).map(|s| s.trim().to_string());
+    }
+    
+    // uv tool install <package>
+    if cmd.contains("uv tool install ") {
+        return cmd.split("uv tool install ").nth(1).map(|s| s.trim().to_string());
+    }
+    
+    // brew install <package>
+    if cmd.contains("brew install ") {
+        return cmd.split("brew install ").nth(1).map(|s| s.split_whitespace().next().unwrap_or("").to_string());
+    }
+    
+    // winget install <package>
+    if cmd.contains("winget install ") {
+        // winget install --id Package.Name -e ... → Package.Name 추출
+        if let Some(rest) = cmd.split("--id ").nth(1) {
+            return rest.split_whitespace().next().map(|s| s.to_string());
+        }
+        return cmd.split("winget install ").nth(1).map(|s| s.split_whitespace().next().unwrap_or("").to_string());
+    }
+    
+    None
+}
+
+/// 삭제 명령 실행
+async fn execute_uninstall(cmd: &str, method: &InstallMethod) -> Result<std::process::Output, String> {
+    if cmd.is_empty() {
+        return Err("삭제 명령어가 없습니다".into());
+    }
+    
+    match method {
+        InstallMethod::Go => {
+            // Go는 rm 명령 사용
+            #[cfg(windows)]
+            {
+                let path = cmd.replace("rm \"", "").replace("\"", "");
+                std::fs::remove_file(&path)
+                    .map_err(|e| e.to_string())?;
+                // 가짜 성공 Output 반환
+                Ok(std::process::Output {
+                    status: std::process::ExitStatus::default(),
+                    stdout: vec![],
+                    stderr: vec![],
+                })
+            }
+            #[cfg(not(windows))]
+            {
+                // Unix에서는 rm 명령 실행
+                let path = cmd.replace("rm \"", "").replace("\"", "");
+                std::fs::remove_file(&path)
+                    .map_err(|e| e.to_string())?;
+                Ok(std::process::Output {
+                    status: std::process::ExitStatus::default(),
+                    stdout: vec![],
+                    stderr: vec![],
+                })
+            }
+        }
+        InstallMethod::Brew => {
+            let full_cmd = format!("NONINTERACTIVE=1 {}", cmd);
+            #[cfg(target_os = "macos")]
+            return macos_sh(&full_cmd).output().map_err(|e| e.to_string());
+            #[cfg(target_os = "linux")]
+            return linux_sh(&full_cmd).output().map_err(|e| e.to_string());
+            #[cfg(windows)]
+            return Err("Windows에서는 brew를 사용할 수 없습니다".into());
+        }
+        _ => {
+            #[cfg(windows)]
+            return windows_shell(cmd).output().map_err(|e| e.to_string());
+            #[cfg(target_os = "macos")]
+            return macos_sh(cmd).output().map_err(|e| e.to_string());
+            #[cfg(target_os = "linux")]
+            return linux_sh(cmd).output().map_err(|e| e.to_string());
+        }
+    }
+}
+
 /// 스킬 비활성화
 #[tauri::command]
 pub async fn disable_skill(skill_id: String) -> Result<String, String> {
