@@ -54,26 +54,32 @@ fn macos_async_cmd(program: &str) -> tokio::process::Command {
 
 // ===== 앱 삭제 =====
 
-/// 앱 종료 후 자기 자신을 삭제하는 스크립트 실행
-/// Windows 레지스트리에서 UninstallString 찾기 (NSIS/MSI 모두 지원)
+/// Windows: 레지스트리에서 MSI ProductCode 가져오기
 #[cfg(target_os = "windows")]
-fn get_uninstall_string_from_registry() -> Option<String> {
+fn get_msi_product_code() -> Option<String> {
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
     
-    // PowerShell로 DisplayName에서 moldClaw 검색 (더 확실함)
+    // 레지스트리에서 moldClaw의 UninstallString 찾기
+    // MSI는 "MsiExec.exe /X{GUID}" 형식
     let ps_script = r#"
         $paths = @(
             'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
             'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
             'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
         )
-        Get-ItemProperty $paths -ErrorAction SilentlyContinue | 
+        $app = Get-ItemProperty $paths -ErrorAction SilentlyContinue | 
             Where-Object { $_.DisplayName -like '*moldClaw*' } | 
-            Select-Object -First 1 -ExpandProperty UninstallString
+            Select-Object -First 1
+        if ($app.UninstallString) {
+            $app.UninstallString
+        }
     "#;
     
     if let Ok(output) = Command::new("powershell")
         .args(["-NoProfile", "-Command", ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
     {
         if output.status.success() {
@@ -93,74 +99,42 @@ fn spawn_self_delete_script() -> Result<(), String> {
     
     #[cfg(target_os = "windows")]
     {
-        // 방법 1: 레지스트리에서 UninstallString 찾기 (가장 확실)
-        let uninstall_string = get_uninstall_string_from_registry();
-        
-        if let Some(uninstall_cmd) = uninstall_string {
-            use std::os::windows::process::CommandExt;
-            const DETACHED_PROCESS: u32 = 0x00000008;
+        // MSI ProductCode로 msiexec 실행
+        if let Some(uninstall_cmd) = get_msi_product_code() {
+            // uninstall_cmd = "MsiExec.exe /X{GUID}" 형식
+            // 또는 "MsiExec.exe /I{GUID}" 형식일 수 있음
             
-            // msiexec 직접 실행 (UAC 자동 트리거)
-            // msiexec는 자체적으로 UAC 요청함
-            // 2초 후 실행 (앱 종료 후)
-            let delay_script = format!(
-                r#"Start-Sleep 2; {}"#,
-                uninstall_cmd
-            );
+            // GUID 추출 ({...} 부분)
+            if let Some(start) = uninstall_cmd.find('{') {
+                if let Some(end) = uninstall_cmd.find('}') {
+                    let product_code = &uninstall_cmd[start..=end];
+                    
+                    // msiexec 직접 실행 - UAC 자동 요청됨
+                    // spawn()은 즉시 리턴되고, 앱 종료 후 msiexec가 파일 삭제
+                    std::process::Command::new("msiexec")
+                        .args(["/x", product_code])
+                        .spawn()
+                        .map_err(|e| format!("msiexec 실행 실패: {}", e))?;
+                    
+                    return Ok(());
+                }
+            }
             
-            // 창 보이게 실행 (UAC 정상 표시)
-            std::process::Command::new("powershell")
-                .args(["-NoProfile", "-Command", &delay_script])
-                .creation_flags(DETACHED_PROCESS)
+            // GUID 추출 실패시 UninstallString 그대로 실행 시도
+            // "MsiExec.exe /X{GUID}" 전체를 cmd로 실행
+            std::process::Command::new("cmd")
+                .args(["/C", &uninstall_cmd])
                 .spawn()
-                .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
+                .map_err(|e| format!("언인스톨 실행 실패: {}", e))?;
             
             return Ok(());
         }
         
-        // 방법 2: 파일 시스템에서 직접 찾기 (fallback)
-        let possible_dirs: Vec<std::path::PathBuf> = vec![
-            exe.parent().map(|p| p.to_path_buf()).unwrap_or_default(),
-            std::path::PathBuf::from(r"C:\Program Files\moldClaw"),
-            dirs::data_local_dir().map(|p| p.join("moldClaw")).unwrap_or_default(),
-        ];
-        
-        let uninstaller_names = [
-            "Uninstall moldClaw.exe",
-            "Uninstall moldClaw",
-            "uninstall.exe",
-            "Uninstall.exe",
-        ];
-        
-        let uninstaller = possible_dirs.iter()
-            .filter(|dir| dir.exists())
-            .flat_map(|dir| uninstaller_names.iter().map(move |name| dir.join(name)))
-            .find(|path| path.exists());
-        
-        if let Some(uninstaller) = uninstaller {
-            // 2초 후 언인스톨러 실행 (앱 종료 후 실행되도록)
-            let uninstaller_path = uninstaller.display().to_string();
-            
-            use std::os::windows::process::CommandExt;
-            const DETACHED_PROCESS: u32 = 0x00000008;
-            
-            // PowerShell로 2초 대기 후 관리자 권한으로 실행 (UAC 표시됨)
-            std::process::Command::new("powershell")
-                .args([
-                    "-NoProfile",
-                    "-Command",
-                    &format!("Start-Sleep -Seconds 2; Start-Process '{}' -Verb RunAs", uninstaller_path)
-                ])
-                .creation_flags(DETACHED_PROCESS)  // 부모 종료해도 살아있음, 창은 보임
-                .spawn()
-                .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
-        } else {
-            // 언인스톨러 못 찾으면 설정 앱 열기
-            let _ = std::process::Command::new("cmd")
-                .args(["/c", "start", "ms-settings:appsfeatures"])
-                .spawn();
-            return Err("언인스톨러를 찾을 수 없습니다. 설정 > 앱에서 직접 삭제해주세요.".into());
-        }
+        // ProductCode 못 찾으면 설정 앱으로 안내
+        let _ = std::process::Command::new("cmd")
+            .args(["/c", "start", "ms-settings:appsfeatures"])
+            .spawn();
+        return Err("MSI 정보를 찾을 수 없습니다. 설정 > 앱에서 직접 삭제해주세요.".into());
     }
     
     #[cfg(target_os = "macos")]
@@ -296,15 +270,11 @@ async fn uninstall_moldclaw_only(app: tauri::AppHandle) -> Result<String, String
             .output();
     }
     
-    // 앱 자동 삭제 스크립트 실행
+    // 1. msiexec spawn (비동기 - 즉시 리턴)
     spawn_self_delete_script()?;
     
-    // 응답 먼저 반환하고, 비동기로 앱 종료
-    let app_handle = app.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-        app_handle.exit(0);
-    });
+    // 2. 바로 앱 종료
+    app.exit(0);
     
     Ok("moldClaw 삭제 준비 완료".into())
 }
@@ -358,15 +328,11 @@ async fn uninstall_with_openclaw(app: tauri::AppHandle) -> Result<String, String
             .output();
     }
     
-    // 4. 앱 자동 삭제 스크립트 실행
+    // 4. msiexec spawn (비동기 - 즉시 리턴)
     spawn_self_delete_script()?;
     
-    // 응답 먼저 반환하고, 비동기로 앱 종료
-    let app_handle = app.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-        app_handle.exit(0);
-    });
+    // 5. 바로 앱 종료
+    app.exit(0);
     
     Ok("전체 삭제 완료".into())
 }
