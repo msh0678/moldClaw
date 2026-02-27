@@ -83,15 +83,19 @@ fn spawn_self_delete_script() -> Result<(), String> {
             .ok_or_else(|| "앱 번들 경로를 찾을 수 없습니다".to_string())?;
         
         let app_path = app_bundle.display().to_string();
+        // 경로 내 특수문자 이스케이프 (작은따옴표 → '\'' 로 변환)
+        let escaped_path = app_path.replace("'", "'\\''");
         
         // /Applications에 있으면 권한 필요할 수 있음 → osascript로 권한 요청
         let script = if app_path.starts_with("/Applications") {
+            // osascript는 이중 이스케이프 필요: 쉘 → osascript → 쉘
+            let double_escaped = app_path.replace("\\", "\\\\").replace("\"", "\\\"");
             format!(
-                "sleep 2 && osascript -e 'do shell script \"rm -rf '{}'\" with administrator privileges' 2>/dev/null || rm -rf '{}'",
-                app_path, app_path
+                "sleep 2 && osascript -e 'do shell script \"rm -rf \\\"{}\\\"\" with administrator privileges' 2>/dev/null || rm -rf '{}'",
+                double_escaped, escaped_path
             )
         } else {
-            format!("sleep 2 && rm -rf '{}'", app_path)
+            format!("sleep 2 && rm -rf '{}'", escaped_path)
         };
         
         std::process::Command::new("bash")
@@ -103,21 +107,23 @@ fn spawn_self_delete_script() -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
         let exe_path = exe.display().to_string();
+        // 경로 내 특수문자 이스케이프 (작은따옴표 → '\'' 로 변환)
+        let escaped_path = exe_path.replace("'", "'\\''");
         
         // 설치 방식에 따른 삭제 명령 결정
         let script = if exe_path.contains(".AppImage") || exe_path.starts_with("/tmp/.mount_") {
             // AppImage: 단순 파일 삭제
-            format!("sleep 2 && rm -f '{}'", exe_path)
+            format!("sleep 2 && rm -f '{}'", escaped_path)
         } else if exe_path.starts_with("/usr") || exe_path.starts_with("/opt") {
             // 시스템 경로: 패키지 매니저로 설치됐을 가능성
             // DEB/RPM 제거 시도, 실패하면 sudo rm
             format!(
                 "sleep 2 && (dpkg -r moldclaw 2>/dev/null || rpm -e moldclaw 2>/dev/null || sudo rm -f '{}')",
-                exe_path
+                escaped_path
             )
         } else {
             // 사용자 경로: 단순 삭제
-            format!("sleep 2 && rm -f '{}'", exe_path)
+            format!("sleep 2 && rm -f '{}'", escaped_path)
         };
         
         std::process::Command::new("bash")
