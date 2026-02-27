@@ -495,7 +495,6 @@ export default function SkillsSettings({
         : skill.install_command;
 
       // ===== UI 분기 로직 =====
-      console.log('[DEBUG] Skill:', skill.id, 'status:', localStatus, 'setup:', skill.setup, 'hasWizard:', hasWizard);
       
       // 1. 미설치 상태
       if (!localStatus?.installed) {
