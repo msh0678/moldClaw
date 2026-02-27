@@ -53,9 +53,9 @@ fn spawn_self_delete_script() -> Result<(), String> {
         let uninstaller = install_dir.join("Uninstall.exe");
         
         if uninstaller.exists() {
-            // NSIS 언인스톨러: start로 새 창 열어서 UAC 표시
+            // NSIS 언인스톨러: start로 직접 실행 (UAC 표시)
             let script = format!(
-                "ping -n 3 127.0.0.1 >nul & start \"\" cmd /c \"\"{}\" /S\"",
+                "ping -n 3 127.0.0.1 >nul & start \"\" \"{}\" /S",
                 uninstaller.display()
             );
             std::process::Command::new("cmd")
