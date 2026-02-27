@@ -28,6 +28,10 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [loading, setLoading] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
   
+  // Rust에서 직접 config 수정 시 플래그 (SkillsSettings에서 사용)
+  // commitConfig를 우회해서 config 변경 시 이 플래그로 Gateway 재시작 트리거
+  const [configDirty, setConfigDirty] = useState(false);
+  
   // 변경 트래킹 refs
   // initialConfigRef: 설정 패널 열 때의 상태 (불변, 비교 기준)
   const initialConfigRef = useRef<FullConfig>(defaultFullConfig);
@@ -116,12 +120,19 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
     console.log('[Settings] 설정 저장 완료:', newConfig);
   };
 
+  // Rust에서 직접 config 수정 시 호출 (Gateway 재시작 필요 표시)
+  const markConfigDirty = useCallback(() => {
+    console.log('[Settings] Config dirty 플래그 설정 (Rust 직접 수정)');
+    setConfigDirty(true);
+  }, []);
+
   // 현재 섹션 렌더링
   const renderSection = () => {
     const sectionProps = {
       config,
       updateConfig,
       commitConfig,  // 저장 완료 시 호출
+      markConfigDirty, // Rust 직접 수정 시 호출
       mode,
       openModal,
       closeModal,
@@ -160,11 +171,12 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
       
       console.log('[Settings] 변경 여부 체크:', {
         hasRealChanges,
+        configDirty,
         initial: initialConfigRef.current,
         saved: savedConfigRef.current,
       });
       
-      if (hasRealChanges) {
+      if (hasRealChanges || configDirty) {
         // 변경사항 있으면 Gateway 정지만 하고 대시보드에서 처리
         // stop_gateway는 비동기로 실행하고 기다리지 않음 (Fire-and-forget)
         console.log('[Settings] 설정 변경 감지 - Gateway 정지 (비동기)');

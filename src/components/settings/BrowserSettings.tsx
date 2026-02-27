@@ -13,6 +13,7 @@ interface BrowserSettingsProps {
   config: FullConfig;
   updateConfig: (updates: Partial<FullConfig>) => void;
   commitConfig: (newConfig: FullConfig) => void;
+  markConfigDirty: () => void;
   mode: SettingsMode;
   openModal: (title: string, component: React.ReactNode) => void;
   closeModal: () => void;
@@ -28,6 +29,7 @@ export default function BrowserSettings({
   config: _config,
   updateConfig: _updateConfig,
   commitConfig: _commitConfig,
+  markConfigDirty: _markConfigDirty,
   mode: _mode,
   openModal: _openModal,
   closeModal: _closeModal,

@@ -20,6 +20,7 @@ interface SkillsSettingsProps {
   config: FullConfig;
   updateConfig: (updates: Partial<FullConfig>) => void;
   commitConfig: (newConfig: FullConfig) => void;
+  markConfigDirty: () => void;  // Rust에서 직접 config 수정 시 호출
   mode: SettingsMode;
   openModal: (title: string, component: React.ReactNode) => void;
   closeModal: () => void;
@@ -160,6 +161,7 @@ export default function SkillsSettings({
   config,
   updateConfig: _updateConfig,
   commitConfig,
+  markConfigDirty,
   mode: _mode,
   openModal,
   closeModal,
@@ -322,6 +324,7 @@ export default function SkillsSettings({
       const newIntegrations = { ...config.integrations };
       delete newIntegrations[disconnectTarget.envVar];
       commitConfig({ ...config, integrations: newIntegrations });
+      markConfigDirty(); // Rust에서 config 직접 수정했으므로 Gateway 재시작 필요
       setDisconnectTarget(null);
     } catch (err) {
       alert(`연결 해제 실패: ${err}`);
@@ -387,6 +390,7 @@ export default function SkillsSettings({
         setError(null);
         try {
           await invoke('install_skill', { skillId: skill.id });
+          markConfigDirty(); // Rust에서 config 직접 수정 → Gateway 재시작 필요
           // 설치 후 즉시 상태 조회
           const newStatus = await refreshStatus();
           await loadCliSkills();
@@ -407,6 +411,7 @@ export default function SkillsSettings({
         setError(null);
         try {
           await invoke('configure_skill_api_key', { skillId: skill.id, apiKeys: apiKeyInputs });
+          markConfigDirty(); // Rust에서 config 직접 수정 → Gateway 재시작 필요
           await refreshStatus();
           await loadCliSkills();
           setApiKeyInputs({});
@@ -439,6 +444,7 @@ export default function SkillsSettings({
         try {
           const result = await invoke<string>('disconnect_skill', { skillId: skill.id });
           setDisconnectResult(result);
+          markConfigDirty(); // Rust에서 config 직접 수정 → Gateway 재시작 필요
           await refreshStatus();
           await loadCliSkills();
         } catch (err) {
@@ -462,6 +468,7 @@ export default function SkillsSettings({
           const result = await invoke<{ success: boolean; message: string; manual_command: string | null }>('uninstall_skill', { skillId: skill.id });
           setUninstallResult(result);
           if (result.success) {
+            markConfigDirty(); // Rust에서 config 직접 수정 → Gateway 재시작 필요
             // 성공 시 상태 새로고침 → installed: false가 되어 설치 UI로 전환
             await refreshStatus();
             await loadCliSkills();
@@ -475,6 +482,7 @@ export default function SkillsSettings({
 
       // 마법사 완료 핸들러
       const handleWizardComplete = async () => {
+        markConfigDirty(); // 마법사에서 config 수정됐을 수 있음 → Gateway 재시작 필요
         await refreshStatus();
         await loadCliSkills();
         closeModal();
