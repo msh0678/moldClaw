@@ -1665,18 +1665,30 @@ pub async fn disconnect_skill(skill_id: String) -> Result<String, String> {
         }
     }
 
-    // 3. 환경변수 제거 (openclaw.json에서)
-    if !skill.disconnect.env_vars.is_empty() {
-        let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
-        let config_path = home.join(".openclaw").join("openclaw.json");
+    // 3. API 키 제거 (openclaw.json에서)
+    let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
+    let config_path = home.join(".openclaw").join("openclaw.json");
+    
+    if config_path.exists() {
+        let content = std::fs::read_to_string(&config_path)
+            .map_err(|e| format!("설정 파일 읽기 실패: {}", e))?;
         
-        if config_path.exists() {
-            let content = std::fs::read_to_string(&config_path)
-                .map_err(|e| format!("설정 파일 읽기 실패: {}", e))?;
-            
-            let mut config: serde_json::Value = serde_json::from_str(&content)
-                .map_err(|e| format!("설정 파일 파싱 실패: {}", e))?;
-            
+        let mut config: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| format!("설정 파일 파싱 실패: {}", e))?;
+        
+        // 3a. skills.entries.{skill_id} 삭제 (apiKey 저장 위치)
+        if let Some(skills) = config.get_mut("skills") {
+            if let Some(entries) = skills.get_mut("entries") {
+                if let Some(entries_obj) = entries.as_object_mut() {
+                    if entries_obj.remove(&skill_id).is_some() {
+                        results.push(format!("skills.entries.{} 제거됨", skill_id));
+                    }
+                }
+            }
+        }
+        
+        // 3b. env.vars에서도 삭제 (이전 버전 호환)
+        if !skill.disconnect.env_vars.is_empty() {
             if let Some(env) = config.get_mut("env") {
                 if let Some(vars) = env.get_mut("vars") {
                     if let Some(vars_obj) = vars.as_object_mut() {
@@ -1688,16 +1700,16 @@ pub async fn disconnect_skill(skill_id: String) -> Result<String, String> {
                     }
                 }
             }
-            
-            let content = serde_json::to_string_pretty(&config)
-                .map_err(|e| format!("설정 직렬화 실패: {}", e))?;
-            
-            std::fs::write(&config_path, content)
-                .map_err(|e| format!("설정 파일 저장 실패: {}", e))?;
-            
-            // TOOLS.md 업데이트 (실패해도 무시)
-            crate::openclaw::update_tools_md().ok();
         }
+        
+        let content = serde_json::to_string_pretty(&config)
+            .map_err(|e| format!("설정 직렬화 실패: {}", e))?;
+        
+        std::fs::write(&config_path, content)
+            .map_err(|e| format!("설정 파일 저장 실패: {}", e))?;
+        
+        // TOOLS.md 업데이트 (실패해도 무시)
+        crate::openclaw::update_tools_md().ok();
     }
 
     // 4. macOS 권한 안내 (자동 취소 불가)
