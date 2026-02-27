@@ -1789,6 +1789,39 @@ pub async fn uninstall_skill(skill_id: String) -> Result<UninstallResult, String
             }
         }
         
+        // API key도 삭제 (skills.entries + env.vars)
+        if let Some(home) = dirs::home_dir() {
+            let config_path = home.join(".openclaw").join("openclaw.json");
+            if config_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&config_path) {
+                    if let Ok(mut config) = serde_json::from_str::<serde_json::Value>(&content) {
+                        // skills.entries.{skill_id} 삭제
+                        if let Some(skills) = config.get_mut("skills") {
+                            if let Some(entries) = skills.get_mut("entries") {
+                                if let Some(obj) = entries.as_object_mut() {
+                                    obj.remove(&skill_id);
+                                }
+                            }
+                        }
+                        // env.vars 삭제
+                        if let Some(env) = config.get_mut("env") {
+                            if let Some(vars) = env.get_mut("vars") {
+                                if let Some(obj) = vars.as_object_mut() {
+                                    for var in &skill.disconnect.env_vars {
+                                        obj.remove(var);
+                                    }
+                                }
+                            }
+                        }
+                        // 저장
+                        if let Ok(content) = serde_json::to_string_pretty(&config) {
+                            let _ = std::fs::write(&config_path, content);
+                        }
+                    }
+                }
+            }
+        }
+        
         Ok(UninstallResult {
             success: true,
             message: "삭제 완료".into(),
