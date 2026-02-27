@@ -61,12 +61,24 @@ fn spawn_self_delete_script() -> Result<(), String> {
     
     #[cfg(target_os = "windows")]
     {
-        // Tauri NSIS 언인스톨러 찾기 (설치 폴더에 "Uninstall moldClaw.exe" 존재)
+        // Tauri NSIS 언인스톨러 찾기
         let install_dir = exe.parent()
             .ok_or_else(|| "설치 폴더를 찾을 수 없습니다".to_string())?;
-        let uninstaller = install_dir.join("Uninstall moldClaw.exe");
         
-        if uninstaller.exists() {
+        // 가능한 언인스톨러 이름들 (Tauri 버전에 따라 다름)
+        let uninstaller_names = [
+            "Uninstall moldClaw.exe",
+            "Uninstall moldClaw",
+            "uninstall.exe",
+            "Uninstall.exe",
+        ];
+        
+        let uninstaller = uninstaller_names
+            .iter()
+            .map(|name| install_dir.join(name))
+            .find(|path| path.exists());
+        
+        if let Some(uninstaller) = uninstaller {
             // NSIS 언인스톨러: GUI 모드로 실행 (/S 제거 → 언인스톨 마법사 표시)
             let script = format!(
                 "ping -n 2 127.0.0.1 >nul & start \"\" \"{}\"",
