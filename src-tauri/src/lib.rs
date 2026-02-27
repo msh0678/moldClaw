@@ -79,16 +79,10 @@ fn spawn_self_delete_script() -> Result<(), String> {
             .find(|path| path.exists());
         
         if let Some(uninstaller) = uninstaller {
-            // NSIS 언인스톨러: PowerShell로 실행 (경로에 공백 있어도 안전)
-            let uninstaller_path = uninstaller.display().to_string();
-            std::process::Command::new("powershell")
-                .args([
-                    "-NoProfile",
-                    "-Command",
-                    &format!("Start-Sleep -Seconds 1; Start-Process -FilePath '{}'", uninstaller_path)
-                ])
+            // NSIS 언인스톨러 직접 실행
+            std::process::Command::new(&uninstaller)
                 .spawn()
-                .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
+                .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
         } else {
             // 언인스톨러 없으면 cmd 창 열어서 삭제 (진행 상황 표시)
             let exe_path = exe.display().to_string();
