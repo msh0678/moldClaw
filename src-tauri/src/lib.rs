@@ -55,20 +55,75 @@ fn macos_async_cmd(program: &str) -> tokio::process::Command {
 // ===== 앱 삭제 =====
 
 /// 앱 종료 후 자기 자신을 삭제하는 스크립트 실행
+/// Windows 레지스트리에서 UninstallString 찾기
+#[cfg(target_os = "windows")]
+fn get_uninstall_string_from_registry() -> Option<String> {
+    use std::process::Command;
+    
+    // HKLM과 HKCU 모두 확인
+    let reg_paths = [
+        r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\moldClaw",
+        r"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\moldClaw",
+        r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\moldClaw",
+    ];
+    
+    for reg_path in &reg_paths {
+        if let Ok(output) = Command::new("reg")
+            .args(["query", reg_path, "/v", "UninstallString"])
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                // REG_SZ 값에서 경로 추출
+                if let Some(line) = stdout.lines().find(|l| l.contains("UninstallString")) {
+                    if let Some(path) = line.split("REG_SZ").nth(1) {
+                        let path = path.trim();
+                        if !path.is_empty() {
+                            return Some(path.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    None
+}
+
 fn spawn_self_delete_script() -> Result<(), String> {
     let exe = std::env::current_exe()
         .map_err(|e| format!("실행 파일 경로를 찾을 수 없습니다: {}", e))?;
     
     #[cfg(target_os = "windows")]
     {
-        // 가능한 설치 경로들
+        // 방법 1: 레지스트리에서 UninstallString 찾기 (가장 확실)
+        let uninstall_string = get_uninstall_string_from_registry();
+        
+        if let Some(uninstall_cmd) = uninstall_string {
+            use std::os::windows::process::CommandExt;
+            const DETACHED_PROCESS: u32 = 0x00000008;
+            
+            // 2초 후 언인스톨러 실행
+            std::process::Command::new("powershell")
+                .args([
+                    "-NoProfile",
+                    "-Command",
+                    &format!("Start-Sleep -Seconds 2; Start-Process '{}' -Verb RunAs", uninstall_cmd)
+                ])
+                .creation_flags(DETACHED_PROCESS)
+                .spawn()
+                .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
+            
+            return Ok(());
+        }
+        
+        // 방법 2: 파일 시스템에서 직접 찾기 (fallback)
         let possible_dirs: Vec<std::path::PathBuf> = vec![
             exe.parent().map(|p| p.to_path_buf()).unwrap_or_default(),
             std::path::PathBuf::from(r"C:\Program Files\moldClaw"),
             dirs::data_local_dir().map(|p| p.join("moldClaw")).unwrap_or_default(),
         ];
         
-        // 가능한 언인스톨러 이름들
         let uninstaller_names = [
             "Uninstall moldClaw.exe",
             "Uninstall moldClaw",
@@ -76,7 +131,6 @@ fn spawn_self_delete_script() -> Result<(), String> {
             "Uninstall.exe",
         ];
         
-        // 모든 경로 + 이름 조합에서 찾기
         let uninstaller = possible_dirs.iter()
             .filter(|dir| dir.exists())
             .flat_map(|dir| uninstaller_names.iter().map(move |name| dir.join(name)))
