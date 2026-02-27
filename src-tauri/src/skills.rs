@@ -80,7 +80,8 @@ fn get_macos_extended_path() -> String {
             "/opt/homebrew/sbin".to_string(),
             "/usr/local/bin".to_string(),           // Intel brew
             "/usr/local/sbin".to_string(),
-            format!("{}/go/bin", home),             // Go binaries
+            "/usr/local/go/bin".to_string(),        // Go 공식 설치 경로
+            format!("{}/go/bin", home),             // Go binaries (go install)
             format!("{}/.cargo/bin", home),         // Rust/Cargo
             format!("{}/.local/bin", home),         // pipx, uv 등
             format!("{}/Library/npm/bin", home),    // npm global
@@ -169,7 +170,8 @@ fn get_linux_extended_path() -> String {
             format!("{}/.linuxbrew/sbin", home),
             "/usr/local/bin".to_string(),
             "/usr/local/sbin".to_string(),
-            format!("{}/go/bin", home),                      // Go binaries
+            "/usr/local/go/bin".to_string(),                 // Go 공식 설치 경로
+            format!("{}/go/bin", home),                      // Go binaries (go install)
             format!("{}/.cargo/bin", home),                  // Rust/Cargo
             format!("{}/.local/bin", home),                  // pipx, uv, pip --user
             format!("{}/.npm-global/bin", home),             // npm global
@@ -614,13 +616,26 @@ fn check_binary_exists(name: &str) -> bool {
             return true;
         }
         
-        // 2. 일반 설치 경로들 직접 확인
+        // 2. 시스템 표준 경로 확인 (Go, winget 등)
+        let system_paths = [
+            // Go 표준 설치 경로 (winget, 공식 설치)
+            std::path::PathBuf::from(r"C:\Program Files\Go\bin").join(format!("{}.exe", name)),
+            std::path::PathBuf::from(r"C:\Go\bin").join(format!("{}.exe", name)),
+        ];
+        
+        for path in &system_paths {
+            if path.exists() {
+                return true;
+            }
+        }
+        
+        // 3. 사용자 경로 확인
         if let Some(home) = dirs::home_dir() {
             let common_paths = [
                 // uv tool install 경로
                 home.join(".local").join("bin").join(format!("{}.exe", name)),
                 home.join(".local").join("bin").join(name),
-                // go install 경로
+                // go install 경로 (설치한 바이너리)
                 home.join("go").join("bin").join(format!("{}.exe", name)),
                 home.join("go").join("bin").join(name),
                 // cargo install 경로
