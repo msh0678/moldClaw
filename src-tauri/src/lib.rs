@@ -118,10 +118,10 @@ fn spawn_self_delete_script() -> Result<(), String> {
             // AppImage: 단순 파일 삭제
             format!("sleep 2 && rm -f '{}'", escaped_path)
         } else if exe_path.starts_with("/usr") || exe_path.starts_with("/opt") {
-            // 시스템 경로: 패키지 매니저로 설치됐을 가능성
-            // DEB/RPM 제거 시도, 실패하면 sudo rm
+            // 시스템 경로: 패키지 매니저로 설치됨
+            // pkexec로 GUI 비밀번호 프롬프트 표시
             format!(
-                "sleep 2 && (dpkg -r moldclaw 2>/dev/null || rpm -e moldclaw 2>/dev/null || sudo rm -f '{}')",
+                "sleep 2 && (pkexec dpkg -r moldclaw 2>/dev/null || pkexec rpm -e moldclaw 2>/dev/null || pkexec rm -f '{}')",
                 escaped_path
             )
         } else {
