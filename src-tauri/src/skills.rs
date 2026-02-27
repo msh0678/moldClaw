@@ -1469,6 +1469,7 @@ async fn install_with_winget(cmd: &str, binary_name: &str) -> Result<String, Str
 }
 
 /// 스킬 API 키 설정
+/// OpenClaw가 스킬을 인식하려면 skills.entries.{skill_id}에 저장해야 함
 #[tauri::command]
 pub async fn configure_skill_api_key(skill_id: String, api_keys: HashMap<String, String>) -> Result<String, String> {
     let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
@@ -1491,21 +1492,43 @@ pub async fn configure_skill_api_key(skill_id: String, api_keys: HashMap<String,
         serde_json::json!({})
     };
     
-    // env.vars에 API 키 추가
-    let env = config.as_object_mut()
+    // skills.entries.{skill_id}에 API 키 저장 (OpenClaw 스킬 인식 위치)
+    let skills = config.as_object_mut()
         .ok_or("설정이 객체가 아닙니다")?
-        .entry("env")
+        .entry("skills")
         .or_insert(serde_json::json!({}));
     
-    let vars = env.as_object_mut()
-        .ok_or("env가 객체가 아닙니다")?
-        .entry("vars")
+    let entries = skills.as_object_mut()
+        .ok_or("skills가 객체가 아닙니다")?
+        .entry("entries")
         .or_insert(serde_json::json!({}));
     
-    for (key, value) in api_keys {
-        vars.as_object_mut()
-            .ok_or("vars가 객체가 아닙니다")?
-            .insert(key, serde_json::Value::String(value));
+    let skill_entry = entries.as_object_mut()
+        .ok_or("entries가 객체가 아닙니다")?
+        .entry(&skill_id)
+        .or_insert(serde_json::json!({}));
+    
+    let skill_obj = skill_entry.as_object_mut()
+        .ok_or("skill entry가 객체가 아닙니다")?;
+    
+    // enabled: true 설정
+    skill_obj.insert("enabled".into(), serde_json::Value::Bool(true));
+    
+    // API 키가 하나면 apiKey로, 여러 개면 env에 저장
+    let api_keys_vec: Vec<_> = api_keys.into_iter().collect();
+    if api_keys_vec.len() == 1 {
+        // 단일 API 키 → apiKey 필드 사용 (primaryEnv 대응)
+        let (_, value) = &api_keys_vec[0];
+        skill_obj.insert("apiKey".into(), serde_json::Value::String(value.clone()));
+    } else {
+        // 여러 API 키 → env 객체 사용
+        let env_obj = skill_obj.entry("env")
+            .or_insert(serde_json::json!({}));
+        for (key, value) in api_keys_vec {
+            env_obj.as_object_mut()
+                .ok_or("env가 객체가 아닙니다")?
+                .insert(key, serde_json::Value::String(value));
+        }
     }
     
     // 설정 파일 저장
