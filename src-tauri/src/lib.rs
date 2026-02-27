@@ -79,37 +79,29 @@ fn spawn_self_delete_script() -> Result<(), String> {
             .find(|path| path.exists());
         
         if let Some(uninstaller) = uninstaller {
-            // NSIS 언인스톨러를 관리자 권한으로 실행 (UAC 다이얼로그 표시)
+            // 2초 후 언인스톨러 실행 (앱 종료 후 실행되도록)
+            // runas로 관리자 권한 요청 → UAC 다이얼로그 표시
             let uninstaller_path = uninstaller.display().to_string();
-            std::process::Command::new("powershell")
-                .args([
-                    "-NoProfile",
-                    "-Command",
-                    &format!("Start-Process -FilePath '{}' -Verb RunAs", uninstaller_path)
-                ])
-                .spawn()
-                .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
-        } else {
-            // 언인스톨러 없으면 cmd 창 열어서 삭제 (진행 상황 표시)
-            let exe_path = exe.display().to_string();
             let script = format!(
-                r#"@echo off
-echo ====================================
-echo   moldClaw 삭제 중...
-echo ====================================
-ping -n 3 127.0.0.1 >nul
-del /f /q "{}"
-echo.
-echo 삭제 완료!
-echo 이 창은 자동으로 닫힙니다...
-ping -n 3 127.0.0.1 >nul"#,
-                exe_path
+                r#"ping -n 3 127.0.0.1 >nul & powershell -Command "Start-Process '{}' -Verb RunAs""#,
+                uninstaller_path
             );
+            
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            const DETACHED_PROCESS: u32 = 0x00000008;
             
             std::process::Command::new("cmd")
                 .args(["/c", &script])
+                .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
                 .spawn()
-                .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
+                .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
+        } else {
+            // 언인스톨러 못 찾으면 설정 앱 열기
+            let _ = std::process::Command::new("cmd")
+                .args(["/c", "start", "ms-settings:appsfeatures"])
+                .spawn();
+            return Err("언인스톨러를 찾을 수 없습니다. 설정 > 앱에서 직접 삭제해주세요.".into());
         }
     }
     
