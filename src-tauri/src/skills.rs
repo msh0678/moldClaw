@@ -925,11 +925,13 @@ fn get_effective_install_command(skill: &SkillDefinition) -> Option<&String> {
 /// 단일 스킬 상태 확인
 fn get_skill_status(skill: &SkillDefinition, config: &serde_json::Value, prereqs: &PrerequisiteStatus) -> SkillStatus {
     // 1. 바이너리 설치 확인
-    let installed = if let Some(ref binary) = skill.binary_name {
+    let method = get_effective_install_method(skill);
+    let installed = if matches!(method, InstallMethod::Builtin) {
+        true // Builtin 스킬 (OpenClaw 내장)은 항상 설치됨
+    } else if let Some(ref binary) = skill.binary_name {
         check_binary_exists(binary)
     } else {
-        let method = get_effective_install_method(skill);
-        matches!(method, InstallMethod::Builtin)
+        false
     };
 
     // 2. 설정 완료 확인
