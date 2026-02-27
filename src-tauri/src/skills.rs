@@ -6,6 +6,21 @@ use std::time::{Duration, Instant};
 
 use crate::skill_definitions::SKILL_DEFINITIONS;
 
+// ===== 플랫폼별 성공 ExitStatus 생성 =====
+// ExitStatus::default()는 Windows에서 정의되지 않으므로 명시적으로 생성
+
+#[cfg(unix)]
+fn success_exit_status() -> std::process::ExitStatus {
+    use std::os::unix::process::ExitStatusExt;
+    std::process::ExitStatus::from_raw(0)
+}
+
+#[cfg(windows)]
+fn success_exit_status() -> std::process::ExitStatus {
+    use std::os::windows::process::ExitStatusExt;
+    std::process::ExitStatus::from_raw(0)
+}
+
 // ===== macOS PATH 해결 =====
 // macOS GUI 앱에서 shell 명령 실행 시 brew, npm 등을 찾을 수 있도록 PATH 확장
 
@@ -1808,21 +1823,22 @@ async fn execute_uninstall(cmd: &str, method: &InstallMethod) -> Result<std::pro
                 let path = cmd.replace("rm \"", "").replace("\"", "");
                 std::fs::remove_file(&path)
                     .map_err(|e| e.to_string())?;
-                // 가짜 성공 Output 반환
+                // 성공 Output 반환 (exit code 0)
                 Ok(std::process::Output {
-                    status: std::process::ExitStatus::default(),
+                    status: success_exit_status(),
                     stdout: vec![],
                     stderr: vec![],
                 })
             }
             #[cfg(not(windows))]
             {
-                // Unix에서는 rm 명령 실행
+                // Unix에서는 파일 직접 삭제
                 let path = cmd.replace("rm \"", "").replace("\"", "");
                 std::fs::remove_file(&path)
                     .map_err(|e| e.to_string())?;
+                // 성공 Output 반환 (exit code 0)
                 Ok(std::process::Output {
-                    status: std::process::ExitStatus::default(),
+                    status: success_exit_status(),
                     stdout: vec![],
                     stderr: vec![],
                 })
