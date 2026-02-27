@@ -50,17 +50,20 @@ fn spawn_self_delete_script() -> Result<(), String> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
-        let exe_path = exe.display().to_string();
+        // Tauri NSIS 언인스톨러 찾기 (설치 폴더에 Uninstall.exe 존재)
+        let install_dir = exe.parent()
+            .ok_or_else(|| "설치 폴더를 찾을 수 없습니다".to_string())?;
+        let uninstaller = install_dir.join("Uninstall.exe");
         
-        // Program Files에 있으면 MSI/설치 프로그램으로 설치됐을 가능성
-        // winget uninstall 시도 후 실패하면 직접 삭제
-        let script = if exe_path.contains("Program Files") {
+        let script = if uninstaller.exists() {
+            // NSIS 언인스톨러 실행 (/S = silent mode)
             format!(
-                "ping -n 4 127.0.0.1 >nul & (winget uninstall moldClaw --silent 2>nul || del /f /q \"{}\")",
-                exe_path
+                "ping -n 3 127.0.0.1 >nul & \"{}\" /S",
+                uninstaller.display()
             )
         } else {
-            // 포터블 설치: 단순 파일 삭제
+            // 언인스톨러 없으면 직접 삭제 시도
+            let exe_path = exe.display().to_string();
             format!(
                 "ping -n 4 127.0.0.1 >nul & del /f /q \"{}\"",
                 exe_path
