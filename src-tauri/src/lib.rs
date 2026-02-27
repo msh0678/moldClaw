@@ -79,13 +79,10 @@ fn spawn_self_delete_script() -> Result<(), String> {
             .find(|path| path.exists());
         
         if let Some(uninstaller) = uninstaller {
-            // NSIS 언인스톨러: start로 새 창 열어서 UAC 표시 (이전 작동 방식)
-            let script = format!(
-                "ping -n 2 127.0.0.1 >nul & start \"\" cmd /c \"\"{}\" /S\"",
-                uninstaller.display()
-            );
+            // NSIS 언인스톨러 실행 (UAC 자동 요청됨)
+            let uninstaller_path = uninstaller.display().to_string();
             std::process::Command::new("cmd")
-                .args(["/c", &script])
+                .args(["/c", "start", "", &uninstaller_path])
                 .spawn()
                 .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
         } else {
