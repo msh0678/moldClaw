@@ -67,9 +67,9 @@ fn spawn_self_delete_script() -> Result<(), String> {
         let uninstaller = install_dir.join("Uninstall.exe");
         
         if uninstaller.exists() {
-            // NSIS 언인스톨러: start로 직접 실행 (UAC 표시)
+            // NSIS 언인스톨러: GUI 모드로 실행 (/S 제거 → 언인스톨 마법사 표시)
             let script = format!(
-                "ping -n 3 127.0.0.1 >nul & start \"\" \"{}\" /S",
+                "ping -n 2 127.0.0.1 >nul & start \"\" \"{}\"",
                 uninstaller.display()
             );
             std::process::Command::new("cmd")
@@ -77,19 +77,24 @@ fn spawn_self_delete_script() -> Result<(), String> {
                 .spawn()
                 .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
         } else {
-            // 언인스톨러 없으면 직접 삭제 (UAC 불필요 → 숨겨진 창 OK)
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-            
+            // 언인스톨러 없으면 cmd 창 열어서 삭제 (진행 상황 표시)
             let exe_path = exe.display().to_string();
             let script = format!(
-                "ping -n 4 127.0.0.1 >nul & del /f /q \"{}\"",
+                r#"@echo off
+echo ====================================
+echo   moldClaw 삭제 중...
+echo ====================================
+ping -n 3 127.0.0.1 >nul
+del /f /q "{}"
+echo.
+echo 삭제 완료!
+echo 이 창은 자동으로 닫힙니다...
+ping -n 3 127.0.0.1 >nul"#,
                 exe_path
             );
             
             std::process::Command::new("cmd")
                 .args(["/c", &script])
-                .creation_flags(CREATE_NO_WINDOW)
                 .spawn()
                 .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
         }
@@ -104,23 +109,34 @@ fn spawn_self_delete_script() -> Result<(), String> {
             .ok_or_else(|| "앱 번들 경로를 찾을 수 없습니다".to_string())?;
         
         let app_path = app_bundle.display().to_string();
-        // 경로 내 특수문자 이스케이프 (작은따옴표 → '\'' 로 변환)
         let escaped_path = app_path.replace("'", "'\\''");
         
-        // /Applications에 있으면 권한 필요할 수 있음 → osascript로 권한 요청
-        let script = if app_path.starts_with("/Applications") {
-            // osascript는 이중 이스케이프 필요: 쉘 → osascript → 쉘
-            let double_escaped = app_path.replace("\\", "\\\\").replace("\"", "\\\"");
+        // Terminal.app 열어서 삭제 진행 (사용자에게 진행 상황 표시)
+        let delete_script = if app_path.starts_with("/Applications") {
+            // /Applications: sudo 필요
             format!(
-                "sleep 2 && osascript -e 'do shell script \"rm -rf \\\"{}\\\"\" with administrator privileges' 2>/dev/null || rm -rf '{}'",
-                double_escaped, escaped_path
+                r#"echo '🗑️ moldClaw 삭제 중...'; echo ''; echo '경로: {}'; echo ''; sudo rm -rf '{}' && echo '✅ 삭제 완료!' || echo '❌ 삭제 실패'; echo ''; read -p '아무 키나 누르면 창이 닫힙니다...'"#,
+                escaped_path, escaped_path
             )
         } else {
-            format!("sleep 2 && rm -rf '{}'", escaped_path)
+            // 사용자 경로: sudo 불필요
+            format!(
+                r#"echo '🗑️ moldClaw 삭제 중...'; echo ''; echo '경로: {}'; echo ''; rm -rf '{}' && echo '✅ 삭제 완료!' || echo '❌ 삭제 실패'; echo ''; read -p '아무 키나 누르면 창이 닫힙니다...'"#,
+                escaped_path, escaped_path
+            )
         };
         
-        std::process::Command::new("bash")
-            .args(["-c", &script])
+        // osascript로 Terminal.app 열기
+        let applescript = format!(
+            r#"tell application "Terminal"
+    activate
+    do script "{}"
+end tell"#,
+            delete_script.replace("\"", "\\\"")
+        );
+        
+        std::process::Command::new("osascript")
+            .args(["-e", &applescript])
             .spawn()
             .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
     }
@@ -128,29 +144,68 @@ fn spawn_self_delete_script() -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
         let exe_path = exe.display().to_string();
-        // 경로 내 특수문자 이스케이프 (작은따옴표 → '\'' 로 변환)
         let escaped_path = exe_path.replace("'", "'\\''");
         
-        // 설치 방식에 따른 삭제 명령 결정
-        let script = if exe_path.contains(".AppImage") || exe_path.starts_with("/tmp/.mount_") {
-            // AppImage: 단순 파일 삭제
-            format!("sleep 2 && rm -f '{}'", escaped_path)
+        // 설치 방식에 따른 삭제 명령
+        let delete_cmd = if exe_path.contains(".AppImage") || exe_path.starts_with("/tmp/.mount_") {
+            format!("rm -f '{}'", escaped_path)
         } else if exe_path.starts_with("/usr") || exe_path.starts_with("/opt") {
-            // 시스템 경로: 패키지 매니저로 설치됨
-            // pkexec로 GUI 비밀번호 프롬프트 표시
-            format!(
-                "sleep 2 && (pkexec dpkg -r moldclaw 2>/dev/null || pkexec rpm -e moldclaw 2>/dev/null || pkexec rm -f '{}')",
-                escaped_path
-            )
+            format!("sudo dpkg -r moldclaw 2>/dev/null || sudo rpm -e moldclaw 2>/dev/null || sudo rm -f '{}'", escaped_path)
         } else {
-            // 사용자 경로: 단순 삭제
-            format!("sleep 2 && rm -f '{}'", escaped_path)
+            format!("rm -f '{}'", escaped_path)
         };
         
-        std::process::Command::new("bash")
-            .args(["-c", &script])
-            .spawn()
-            .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
+        // 터미널에서 보이게 실행
+        let terminal_script = format!(
+            r#"echo '🗑️ moldClaw 삭제 중...'
+echo ''
+echo '경로: {}'
+echo ''
+{}
+echo ''
+echo '✅ 삭제 완료!'
+echo ''
+read -p '아무 키나 누르면 창이 닫힙니다...'"#,
+            escaped_path, delete_cmd
+        );
+        
+        // 여러 터미널 에뮬레이터 시도
+        let terminals = [
+            ("gnome-terminal", vec!["--", "bash", "-c"]),
+            ("konsole", vec!["-e", "bash", "-c"]),
+            ("xfce4-terminal", vec!["-e", "bash -c"]),
+            ("xterm", vec!["-e", "bash", "-c"]),
+        ];
+        
+        let mut launched = false;
+        for (term, base_args) in &terminals {
+            if std::process::Command::new("which")
+                .arg(term)
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+            {
+                let mut args: Vec<&str> = base_args.clone();
+                args.push(&terminal_script);
+                
+                if std::process::Command::new(term)
+                    .args(&args)
+                    .spawn()
+                    .is_ok()
+                {
+                    launched = true;
+                    break;
+                }
+            }
+        }
+        
+        if !launched {
+            // 터미널 못 찾으면 백그라운드로라도 실행
+            std::process::Command::new("bash")
+                .args(["-c", &format!("sleep 2 && {}", delete_cmd)])
+                .spawn()
+                .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
+        }
     }
     
     Ok(())
