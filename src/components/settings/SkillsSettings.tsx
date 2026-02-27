@@ -353,6 +353,9 @@ export default function SkillsSettings({
       
       // SetupRequirement::None 인지 확인 (연결 개념 없음)
       const isNoSetupRequired = skill.setup.type === 'none';
+      
+      // Builtin 스킬인지 확인 (삭제 불가, 연결 해제만 가능)
+      const isBuiltin = skill.install_method === 'builtin';
 
       // 상태 새로고침 함수
       const refreshStatus = async () => {
@@ -635,15 +638,17 @@ export default function SkillsSettings({
                     {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-forge-amber/30 border-t-forge-amber rounded-full" /> 연결 해제 중...</> : '연결 해제'}
                   </button>
                 )}
-                {/* 삭제 버튼 (모든 스킬) */}
-                <button 
-                  onClick={handleUninstall} 
-                  disabled={disconnecting || uninstalling} 
-                  className="w-full px-4 py-2 bg-forge-error/10 text-forge-error border border-forge-error/30 rounded-lg text-sm hover:bg-forge-error/20 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {uninstalling ? <><div className="animate-spin w-4 h-4 border-2 border-forge-error/30 border-t-forge-error rounded-full" /> 삭제 중...</> : '삭제'}
-                </button>
-                {!isNoSetupRequired && <p className="text-xs text-forge-muted text-center">연결 해제: 설정만 삭제 / 삭제: 바이너리까지 삭제</p>}
+                {/* 삭제 버튼 (Builtin 스킬 제외) */}
+                {!isBuiltin && (
+                  <button 
+                    onClick={handleUninstall} 
+                    disabled={disconnecting || uninstalling} 
+                    className="w-full px-4 py-2 bg-forge-error/10 text-forge-error border border-forge-error/30 rounded-lg text-sm hover:bg-forge-error/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {uninstalling ? <><div className="animate-spin w-4 h-4 border-2 border-forge-error/30 border-t-forge-error rounded-full" /> 삭제 중...</> : '삭제'}
+                  </button>
+                )}
+                {!isNoSetupRequired && !isBuiltin && <p className="text-xs text-forge-muted text-center">연결 해제: 설정만 삭제 / 삭제: 바이너리까지 삭제</p>}
               </div>
             )}
 
