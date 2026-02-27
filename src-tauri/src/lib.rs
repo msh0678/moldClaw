@@ -73,25 +73,20 @@ fn spawn_self_delete_script() -> Result<(), String> {
             "Uninstall.exe",
         ];
         
-        // 디버그: 어떤 파일을 찾고 있는지 로그
-        eprintln!("[DEBUG] Install dir: {:?}", install_dir);
-        for name in &uninstaller_names {
-            let path = install_dir.join(name);
-            eprintln!("[DEBUG] Checking: {} -> exists: {}", path.display(), path.exists());
-        }
-        
         let uninstaller = uninstaller_names
             .iter()
             .map(|name| install_dir.join(name))
             .find(|path| path.exists());
         
-        eprintln!("[DEBUG] Found uninstaller: {:?}", uninstaller);
-        
         if let Some(uninstaller) = uninstaller {
-            // NSIS 언인스톨러 실행 (UAC 자동 요청됨)
+            // NSIS 언인스톨러를 관리자 권한으로 실행 (UAC 다이얼로그 표시)
             let uninstaller_path = uninstaller.display().to_string();
-            std::process::Command::new("cmd")
-                .args(["/c", "start", "", &uninstaller_path])
+            std::process::Command::new("powershell")
+                .args([
+                    "-NoProfile",
+                    "-Command",
+                    &format!("Start-Process -FilePath '{}' -Verb RunAs", uninstaller_path)
+                ])
                 .spawn()
                 .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
         } else {
