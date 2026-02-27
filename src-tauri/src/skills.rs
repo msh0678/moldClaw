@@ -32,23 +32,12 @@ fn safe_remove_file(path: &std::path::Path) -> Result<(), String> {
     }
     
     // 읽기전용 속성 제거 시도 (Windows에서 필요할 수 있음)
+    // readonly() / set_readonly()는 크로스 플랫폼 메서드
     if let Ok(metadata) = std::fs::metadata(path) {
         let mut perms = metadata.permissions();
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::PermissionsExt;
-            // FILE_ATTRIBUTE_READONLY 제거
-            if perms.readonly() {
-                perms.set_readonly(false);
-                let _ = std::fs::set_permissions(path, perms);
-            }
-        }
-        #[cfg(not(windows))]
-        {
-            if perms.readonly() {
-                perms.set_readonly(false);
-                let _ = std::fs::set_permissions(path, perms);
-            }
+        if perms.readonly() {
+            perms.set_readonly(false);
+            let _ = std::fs::set_permissions(path, perms);
         }
     }
     
