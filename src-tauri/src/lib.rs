@@ -76,16 +76,7 @@ fn spawn_self_delete_script() -> Result<(), String> {
             "Uninstall.exe",
         ];
         
-        // 모든 경로 + 이름 조합에서 찾기 (디버그 로그 포함)
-        let mut debug_info = String::new();
-        for dir in &possible_dirs {
-            debug_info.push_str(&format!("Dir: {} (exists: {})\n", dir.display(), dir.exists()));
-            for name in &uninstaller_names {
-                let path = dir.join(name);
-                debug_info.push_str(&format!("  -> {} (exists: {})\n", path.display(), path.exists()));
-            }
-        }
-        
+        // 모든 경로 + 이름 조합에서 찾기
         let uninstaller = possible_dirs.iter()
             .filter(|dir| dir.exists())
             .flat_map(|dir| uninstaller_names.iter().map(move |name| dir.join(name)))
@@ -113,7 +104,7 @@ fn spawn_self_delete_script() -> Result<(), String> {
             let _ = std::process::Command::new("cmd")
                 .args(["/c", "start", "ms-settings:appsfeatures"])
                 .spawn();
-            return Err(format!("언인스톨러를 찾을 수 없습니다.\n\n검색 결과:\n{}", debug_info));
+            return Err("언인스톨러를 찾을 수 없습니다. 설정 > 앱에서 직접 삭제해주세요.".into());
         }
     }
     
