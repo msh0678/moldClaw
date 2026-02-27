@@ -52,27 +52,33 @@ fn spawn_self_delete_script() -> Result<(), String> {
             .ok_or_else(|| "설치 폴더를 찾을 수 없습니다".to_string())?;
         let uninstaller = install_dir.join("Uninstall.exe");
         
-        let script = if uninstaller.exists() {
-            // NSIS 언인스톨러 실행 (/S = silent mode)
-            // UAC 프롬프트가 표시되어야 하므로 CREATE_NO_WINDOW 사용 안 함
-            format!(
-                "ping -n 3 127.0.0.1 >nul & \"{}\" /S",
+        if uninstaller.exists() {
+            // NSIS 언인스톨러: start로 새 창 열어서 UAC 표시
+            let script = format!(
+                "ping -n 3 127.0.0.1 >nul & start \"\" cmd /c \"\"{}\" /S\"",
                 uninstaller.display()
-            )
+            );
+            std::process::Command::new("cmd")
+                .args(["/c", &script])
+                .spawn()
+                .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
         } else {
-            // 언인스톨러 없으면 직접 삭제 시도
+            // 언인스톨러 없으면 직접 삭제 (UAC 불필요 → 숨겨진 창 OK)
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            
             let exe_path = exe.display().to_string();
-            format!(
+            let script = format!(
                 "ping -n 4 127.0.0.1 >nul & del /f /q \"{}\"",
                 exe_path
-            )
-        };
-        
-        // CREATE_NO_WINDOW 제거: UAC 프롬프트가 보여야 함
-        std::process::Command::new("cmd")
-            .args(["/c", &script])
-            .spawn()
-            .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
+            );
+            
+            std::process::Command::new("cmd")
+                .args(["/c", &script])
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn()
+                .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
+        }
     }
     
     #[cfg(target_os = "macos")]
