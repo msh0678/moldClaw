@@ -1455,7 +1455,14 @@ async fn install_with_winget(cmd: &str, binary_name: &str) -> Result<String, Str
 #[tauri::command]
 pub async fn configure_skill_api_key(skill_id: String, api_keys: HashMap<String, String>) -> Result<String, String> {
     let home = dirs::home_dir().ok_or("홈 디렉토리를 찾을 수 없습니다")?;
-    let config_path = home.join(".openclaw").join("openclaw.json");
+    let openclaw_dir = home.join(".openclaw");
+    let config_path = openclaw_dir.join("openclaw.json");
+    
+    // 디렉토리 없으면 생성
+    if !openclaw_dir.exists() {
+        std::fs::create_dir_all(&openclaw_dir)
+            .map_err(|e| format!("디렉토리 생성 실패: {}", e))?;
+    }
     
     // 기존 설정 읽기
     let mut config: serde_json::Value = if config_path.exists() {
