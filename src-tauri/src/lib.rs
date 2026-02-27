@@ -47,9 +47,6 @@ fn spawn_self_delete_script() -> Result<(), String> {
     
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        
         // Tauri NSIS 언인스톨러 찾기 (설치 폴더에 Uninstall.exe 존재)
         let install_dir = exe.parent()
             .ok_or_else(|| "설치 폴더를 찾을 수 없습니다".to_string())?;
@@ -57,6 +54,7 @@ fn spawn_self_delete_script() -> Result<(), String> {
         
         let script = if uninstaller.exists() {
             // NSIS 언인스톨러 실행 (/S = silent mode)
+            // UAC 프롬프트가 표시되어야 하므로 CREATE_NO_WINDOW 사용 안 함
             format!(
                 "ping -n 3 127.0.0.1 >nul & \"{}\" /S",
                 uninstaller.display()
@@ -70,9 +68,9 @@ fn spawn_self_delete_script() -> Result<(), String> {
             )
         };
         
+        // CREATE_NO_WINDOW 제거: UAC 프롬프트가 보여야 함
         std::process::Command::new("cmd")
             .args(["/c", &script])
-            .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
     }
