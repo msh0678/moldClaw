@@ -55,34 +55,31 @@ fn macos_async_cmd(program: &str) -> tokio::process::Command {
 // ===== 앱 삭제 =====
 
 /// 앱 종료 후 자기 자신을 삭제하는 스크립트 실행
-/// Windows 레지스트리에서 UninstallString 찾기
+/// Windows 레지스트리에서 UninstallString 찾기 (NSIS/MSI 모두 지원)
 #[cfg(target_os = "windows")]
 fn get_uninstall_string_from_registry() -> Option<String> {
     use std::process::Command;
     
-    // HKLM과 HKCU 모두 확인
-    let reg_paths = [
-        r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\moldClaw",
-        r"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\moldClaw",
-        r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\moldClaw",
-    ];
+    // PowerShell로 DisplayName에서 moldClaw 검색 (더 확실함)
+    let ps_script = r#"
+        $paths = @(
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+        )
+        Get-ItemProperty $paths -ErrorAction SilentlyContinue | 
+            Where-Object { $_.DisplayName -like '*moldClaw*' } | 
+            Select-Object -First 1 -ExpandProperty UninstallString
+    "#;
     
-    for reg_path in &reg_paths {
-        if let Ok(output) = Command::new("reg")
-            .args(["query", reg_path, "/v", "UninstallString"])
-            .output()
-        {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                // REG_SZ 값에서 경로 추출
-                if let Some(line) = stdout.lines().find(|l| l.contains("UninstallString")) {
-                    if let Some(path) = line.split("REG_SZ").nth(1) {
-                        let path = path.trim();
-                        if !path.is_empty() {
-                            return Some(path.to_string());
-                        }
-                    }
-                }
+    if let Ok(output) = Command::new("powershell")
+        .args(["-NoProfile", "-Command", ps_script])
+        .output()
+    {
+        if output.status.success() {
+            let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !result.is_empty() {
+                return Some(result);
             }
         }
     }
@@ -103,13 +100,26 @@ fn spawn_self_delete_script() -> Result<(), String> {
             use std::os::windows::process::CommandExt;
             const DETACHED_PROCESS: u32 = 0x00000008;
             
-            // 2초 후 언인스톨러 실행
+            // MSI인지 확인 (msiexec로 시작하면 MSI)
+            let ps_command = if uninstall_cmd.to_lowercase().contains("msiexec") {
+                // MSI: msiexec.exe /x {ProductCode} 형태
+                // Start-Process로 msiexec 실행, 인자는 ArgumentList로 전달
+                let parts: Vec<&str> = uninstall_cmd.splitn(2, ' ').collect();
+                if parts.len() == 2 {
+                    format!(
+                        "Start-Sleep -Seconds 2; Start-Process '{}' -ArgumentList '{}' -Verb RunAs",
+                        parts[0], parts[1]
+                    )
+                } else {
+                    format!("Start-Sleep -Seconds 2; Start-Process '{}' -Verb RunAs", uninstall_cmd)
+                }
+            } else {
+                // NSIS: 실행 파일 경로
+                format!("Start-Sleep -Seconds 2; Start-Process '{}' -Verb RunAs", uninstall_cmd)
+            };
+            
             std::process::Command::new("powershell")
-                .args([
-                    "-NoProfile",
-                    "-Command",
-                    &format!("Start-Sleep -Seconds 2; Start-Process '{}' -Verb RunAs", uninstall_cmd)
-                ])
+                .args(["-NoProfile", "-Command", &ps_command])
                 .creation_flags(DETACHED_PROCESS)
                 .spawn()
                 .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
