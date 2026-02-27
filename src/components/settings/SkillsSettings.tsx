@@ -614,9 +614,9 @@ export default function SkillsSettings({
                   <button 
                     onClick={confirmDisconnect}
                     disabled={disconnecting}
-                    className="flex-1 px-3 py-2 bg-forge-amber text-[#1a1c24] rounded-lg text-sm hover:bg-forge-amber/80 disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="flex-1 px-3 py-2 bg-forge-amber text-[#1a1c24] font-bold rounded-lg text-sm hover:bg-forge-amber/80 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-[#1a1c24]/30 border-t-[#1a1c24] rounded-full" /> 해제 중...</> : '연결 해제'}
+                    {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-[#1a1c24]/30 border-t-[#1a1c24] rounded-full" /> 해제 중...</> : '⚠️ 연결 해제'}
                   </button>
                 </div>
               </div>
@@ -727,7 +727,7 @@ export default function SkillsSettings({
                   />
                 </div>
               ))}
-              <button onClick={handleSaveApiKey} className="px-4 py-2 bg-forge-copper rounded-lg text-sm font-medium hover:bg-forge-copper/80">저장</button>
+              <button onClick={handleSaveApiKey} className="px-4 py-2 bg-forge-copper border-2 border-forge-amber text-white rounded-lg text-sm font-bold hover:bg-forge-copper/80 shadow-lg">💾 저장</button>
             </div>
           )}
 
