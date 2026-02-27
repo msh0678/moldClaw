@@ -61,11 +61,14 @@ fn spawn_self_delete_script() -> Result<(), String> {
     
     #[cfg(target_os = "windows")]
     {
-        // Tauri NSIS 언인스톨러 찾기
-        let install_dir = exe.parent()
-            .ok_or_else(|| "설치 폴더를 찾을 수 없습니다".to_string())?;
+        // 가능한 설치 경로들
+        let possible_dirs: Vec<std::path::PathBuf> = vec![
+            exe.parent().map(|p| p.to_path_buf()).unwrap_or_default(),
+            std::path::PathBuf::from(r"C:\Program Files\moldClaw"),
+            dirs::data_local_dir().map(|p| p.join("moldClaw")).unwrap_or_default(),
+        ];
         
-        // 가능한 언인스톨러 이름들 (Tauri 버전에 따라 다름)
+        // 가능한 언인스톨러 이름들
         let uninstaller_names = [
             "Uninstall moldClaw.exe",
             "Uninstall moldClaw",
@@ -73,9 +76,10 @@ fn spawn_self_delete_script() -> Result<(), String> {
             "Uninstall.exe",
         ];
         
-        let uninstaller = uninstaller_names
-            .iter()
-            .map(|name| install_dir.join(name))
+        // 모든 경로 + 이름 조합에서 찾기
+        let uninstaller = possible_dirs.iter()
+            .filter(|dir| dir.exists())
+            .flat_map(|dir| uninstaller_names.iter().map(move |name| dir.join(name)))
             .find(|path| path.exists());
         
         if let Some(uninstaller) = uninstaller {
