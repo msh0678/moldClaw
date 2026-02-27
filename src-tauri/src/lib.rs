@@ -79,8 +79,9 @@ fn spawn_self_delete_script() -> Result<(), String> {
             .find(|path| path.exists());
         
         if let Some(uninstaller) = uninstaller {
-            // NSIS 언인스톨러 직접 실행
-            std::process::Command::new(&uninstaller)
+            // NSIS 언인스톨러 실행 (explorer.exe 통해서 UAC 정상 표시)
+            std::process::Command::new("explorer.exe")
+                .arg(&uninstaller)
                 .spawn()
                 .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
         } else {
