@@ -1043,10 +1043,11 @@ async fn install_uv() -> Result<String, String> {
     #[cfg(windows)]
     {
         // Windows: PowerShell 창 열어서 uv 설치
+        // -ExecutionPolicy Bypass: irm | iex 스크립트 실행 허용 (Restricted 기본값 우회)
         let install_cmd = "irm https://astral.sh/uv/install.ps1 | iex; Write-Host ''; Write-Host 'uv 설치 완료! 앱을 재시작해주세요.' -ForegroundColor Green; Read-Host '아무 키나 누르세요'";
         
         Command::new("powershell")
-            .args(["-Command", &format!("Start-Process powershell -ArgumentList '-NoExit', '-Command', '{}'", install_cmd)])
+            .args(["-Command", &format!("Start-Process powershell -ArgumentList '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', '{}'", install_cmd)])
             .spawn()
             .map_err(|e| format!("PowerShell 실행 실패: {}", e))?;
         
