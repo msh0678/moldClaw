@@ -50,12 +50,22 @@ fn spawn_self_delete_script() -> Result<(), String> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
-        // Windows: 3초 대기 후 실행 파일 삭제
         let exe_path = exe.display().to_string();
-        let script = format!(
-            "ping -n 4 127.0.0.1 >nul & del /f /q \"{}\"",
-            exe_path
-        );
+        
+        // Program Files에 있으면 MSI/설치 프로그램으로 설치됐을 가능성
+        // winget uninstall 시도 후 실패하면 직접 삭제
+        let script = if exe_path.contains("Program Files") {
+            format!(
+                "ping -n 4 127.0.0.1 >nul & (winget uninstall moldClaw --silent 2>nul || del /f /q \"{}\")",
+                exe_path
+            )
+        } else {
+            // 포터블 설치: 단순 파일 삭제
+            format!(
+                "ping -n 4 127.0.0.1 >nul & del /f /q \"{}\"",
+                exe_path
+            )
+        };
         
         std::process::Command::new("cmd")
             .args(["/c", &script])
@@ -67,31 +77,48 @@ fn spawn_self_delete_script() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         // macOS: .app 번들 전체 삭제 (Contents/MacOS/binary → .app)
-        if let Some(app_bundle) = exe.parent()
+        let app_bundle = exe.parent()
             .and_then(|p| p.parent())
             .and_then(|p| p.parent())
-        {
-            let app_path = app_bundle.display().to_string();
-            let script = format!(
-                "sleep 2 && rm -rf '{}'",
-                app_path
-            );
-            
-            std::process::Command::new("bash")
-                .args(["-c", &script])
-                .spawn()
-                .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
-        }
+            .ok_or_else(|| "앱 번들 경로를 찾을 수 없습니다".to_string())?;
+        
+        let app_path = app_bundle.display().to_string();
+        
+        // /Applications에 있으면 권한 필요할 수 있음 → osascript로 권한 요청
+        let script = if app_path.starts_with("/Applications") {
+            format!(
+                "sleep 2 && osascript -e 'do shell script \"rm -rf '{}'\" with administrator privileges' 2>/dev/null || rm -rf '{}'",
+                app_path, app_path
+            )
+        } else {
+            format!("sleep 2 && rm -rf '{}'", app_path)
+        };
+        
+        std::process::Command::new("bash")
+            .args(["-c", &script])
+            .spawn()
+            .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
     }
     
     #[cfg(target_os = "linux")]
     {
-        // Linux: 실행 파일 또는 AppImage 삭제
         let exe_path = exe.display().to_string();
-        let script = format!(
-            "sleep 2 && rm -f '{}'",
-            exe_path
-        );
+        
+        // 설치 방식에 따른 삭제 명령 결정
+        let script = if exe_path.contains(".AppImage") || exe_path.starts_with("/tmp/.mount_") {
+            // AppImage: 단순 파일 삭제
+            format!("sleep 2 && rm -f '{}'", exe_path)
+        } else if exe_path.starts_with("/usr") || exe_path.starts_with("/opt") {
+            // 시스템 경로: 패키지 매니저로 설치됐을 가능성
+            // DEB/RPM 제거 시도, 실패하면 sudo rm
+            format!(
+                "sleep 2 && (dpkg -r moldclaw 2>/dev/null || rpm -e moldclaw 2>/dev/null || sudo rm -f '{}')",
+                exe_path
+            )
+        } else {
+            // 사용자 경로: 단순 삭제
+            format!("sleep 2 && rm -f '{}'", exe_path)
+        };
         
         std::process::Command::new("bash")
             .args(["-c", &script])
