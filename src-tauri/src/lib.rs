@@ -79,13 +79,14 @@ fn spawn_self_delete_script() -> Result<(), String> {
             .find(|path| path.exists());
         
         if let Some(uninstaller) = uninstaller {
-            // NSIS 언인스톨러: GUI 모드로 실행 (/S 제거 → 언인스톨 마법사 표시)
-            let script = format!(
-                "ping -n 2 127.0.0.1 >nul & start \"\" \"{}\"",
-                uninstaller.display()
-            );
-            std::process::Command::new("cmd")
-                .args(["/c", &script])
+            // NSIS 언인스톨러: PowerShell로 실행 (경로에 공백 있어도 안전)
+            let uninstaller_path = uninstaller.display().to_string();
+            std::process::Command::new("powershell")
+                .args([
+                    "-NoProfile",
+                    "-Command",
+                    &format!("Start-Sleep -Seconds 1; Start-Process -FilePath '{}'", uninstaller_path)
+                ])
                 .spawn()
                 .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
         } else {
@@ -245,14 +246,17 @@ async fn uninstall_moldclaw_only(app: tauri::AppHandle) -> Result<String, String
             .output();
     }
     
-    // 앱 자동 삭제 스크립트 실행 후 앱 종료
+    // 앱 자동 삭제 스크립트 실행
     spawn_self_delete_script()?;
     
-    // 잠시 대기 후 앱 종료
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-    app.exit(0);
+    // 응답 먼저 반환하고, 비동기로 앱 종료
+    let app_handle = app.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+        app_handle.exit(0);
+    });
     
-    Ok("moldClaw 삭제 완료".into())
+    Ok("moldClaw 삭제 준비 완료".into())
 }
 
 /// OpenClaw 데이터까지 전부 삭제
@@ -304,12 +308,15 @@ async fn uninstall_with_openclaw(app: tauri::AppHandle) -> Result<String, String
             .output();
     }
     
-    // 4. 앱 자동 삭제 스크립트 실행 후 앱 종료
+    // 4. 앱 자동 삭제 스크립트 실행
     spawn_self_delete_script()?;
     
-    // 잠시 대기 후 앱 종료
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-    app.exit(0);
+    // 응답 먼저 반환하고, 비동기로 앱 종료
+    let app_handle = app.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+        app_handle.exit(0);
+    });
     
     Ok("전체 삭제 완료".into())
 }
