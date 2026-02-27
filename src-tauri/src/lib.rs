@@ -80,20 +80,19 @@ fn spawn_self_delete_script() -> Result<(), String> {
         
         if let Some(uninstaller) = uninstaller {
             // 2초 후 언인스톨러 실행 (앱 종료 후 실행되도록)
-            // runas로 관리자 권한 요청 → UAC 다이얼로그 표시
             let uninstaller_path = uninstaller.display().to_string();
-            let script = format!(
-                r#"ping -n 3 127.0.0.1 >nul & powershell -Command "Start-Process '{}' -Verb RunAs""#,
-                uninstaller_path
-            );
             
             use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
             const DETACHED_PROCESS: u32 = 0x00000008;
             
-            std::process::Command::new("cmd")
-                .args(["/c", &script])
-                .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
+            // PowerShell로 2초 대기 후 관리자 권한으로 실행 (UAC 표시됨)
+            std::process::Command::new("powershell")
+                .args([
+                    "-NoProfile",
+                    "-Command",
+                    &format!("Start-Sleep -Seconds 2; Start-Process '{}' -Verb RunAs", uninstaller_path)
+                ])
+                .creation_flags(DETACHED_PROCESS)  // 부모 종료해도 살아있음, 창은 보임
                 .spawn()
                 .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
         } else {
