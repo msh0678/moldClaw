@@ -178,14 +178,17 @@ async fn uninstall_moldclaw_only(app: tauri::AppHandle) -> Result<String, String
             .output();
     }
     
-    // 앱 자동 삭제 스크립트 실행 후 앱 종료
+    // 앱 자동 삭제 스크립트 실행
     spawn_self_delete_script()?;
     
-    // 잠시 대기 후 앱 종료
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-    app.exit(0);
+    // 응답 반환 후 앱 종료 (비동기 스케줄링)
+    let app_handle = app.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
+        app_handle.exit(0);
+    });
     
-    Ok("moldClaw 삭제 완료".into())
+    Ok("moldClaw 삭제 준비 완료".into())
 }
 
 /// OpenClaw 데이터까지 전부 삭제
@@ -237,12 +240,15 @@ async fn uninstall_with_openclaw(app: tauri::AppHandle) -> Result<String, String
             .output();
     }
     
-    // 4. 앱 자동 삭제 스크립트 실행 후 앱 종료
+    // 4. 앱 자동 삭제 스크립트 실행
     spawn_self_delete_script()?;
     
-    // 잠시 대기 후 앱 종료
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-    app.exit(0);
+    // 응답 반환 후 앱 종료 (비동기 스케줄링)
+    let app_handle = app.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
+        app_handle.exit(0);
+    });
     
     Ok("전체 삭제 완료".into())
 }
