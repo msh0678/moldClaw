@@ -250,7 +250,8 @@ export default function DeleteModal({ isOpen, onClose }: DeleteModalProps) {
           {step === 'processing' && (
             <div className="flex flex-col items-center py-8">
               <div className="animate-spin w-10 h-10 border-3 border-forge-copper/30 border-t-forge-copper rounded-full mb-4" />
-              <p className="text-forge-text">삭제 중...</p>
+              <p className="text-forge-text mb-2">삭제 중...</p>
+              <p className="text-sm text-forge-muted">잠시 후 앱이 자동으로 종료됩니다</p>
             </div>
           )}
           

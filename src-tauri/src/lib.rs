@@ -40,9 +40,71 @@ fn macos_async_cmd(program: &str) -> tokio::process::Command {
 
 // ===== 앱 삭제 =====
 
+/// 앱 종료 후 자기 자신을 삭제하는 스크립트 실행
+fn spawn_self_delete_script() -> Result<(), String> {
+    let exe = std::env::current_exe()
+        .map_err(|e| format!("실행 파일 경로를 찾을 수 없습니다: {}", e))?;
+    
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        // Windows: 3초 대기 후 실행 파일 삭제
+        let exe_path = exe.display().to_string();
+        let script = format!(
+            "ping -n 4 127.0.0.1 >nul & del /f /q \"{}\"",
+            exe_path
+        );
+        
+        std::process::Command::new("cmd")
+            .args(["/c", &script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        // macOS: .app 번들 전체 삭제 (Contents/MacOS/binary → .app)
+        if let Some(app_bundle) = exe.parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.parent())
+        {
+            let app_path = app_bundle.display().to_string();
+            let script = format!(
+                "sleep 2 && rm -rf '{}'",
+                app_path
+            );
+            
+            std::process::Command::new("bash")
+                .args(["-c", &script])
+                .spawn()
+                .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
+        }
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        // Linux: 실행 파일 또는 AppImage 삭제
+        let exe_path = exe.display().to_string();
+        let script = format!(
+            "sleep 2 && rm -f '{}'",
+            exe_path
+        );
+        
+        std::process::Command::new("bash")
+            .args(["-c", &script])
+            .spawn()
+            .map_err(|e| format!("삭제 스크립트 실행 실패: {}", e))?;
+    }
+    
+    Ok(())
+}
+
 /// moldClaw만 삭제 (OpenClaw 데이터 유지)
 #[tauri::command]
-async fn uninstall_moldclaw_only() -> Result<String, String> {
+async fn uninstall_moldclaw_only(app: tauri::AppHandle) -> Result<String, String> {
     // Gateway 중지
     #[cfg(windows)]
     {
@@ -62,14 +124,19 @@ async fn uninstall_moldclaw_only() -> Result<String, String> {
             .output();
     }
     
-    Ok("moldClaw 삭제 준비 완료. 시스템 설정에서 앱을 삭제하세요.\nOpenClaw 설정은 유지됩니다.".into())
+    // 앱 자동 삭제 스크립트 실행 후 앱 종료
+    spawn_self_delete_script()?;
+    
+    // 잠시 대기 후 앱 종료
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    app.exit(0);
+    
+    Ok("moldClaw 삭제 완료".into())
 }
 
 /// OpenClaw 데이터까지 전부 삭제
 #[tauri::command]
-async fn uninstall_with_openclaw() -> Result<String, String> {
-    let mut results = Vec::new();
-    
+async fn uninstall_with_openclaw(app: tauri::AppHandle) -> Result<String, String> {
     // 1. Gateway 중지
     #[cfg(windows)]
     {
@@ -88,49 +155,42 @@ async fn uninstall_with_openclaw() -> Result<String, String> {
             .args(["-9", "-f", "openclaw.*gateway"])
             .output();
     }
-    results.push("Gateway 중지됨".to_string());
     
     // 2. OpenClaw 폴더 삭제 (~/.openclaw)
     if let Some(home) = dirs::home_dir() {
         let openclaw_dir = home.join(".openclaw");
         if openclaw_dir.exists() {
-            match std::fs::remove_dir_all(&openclaw_dir) {
-                Ok(_) => results.push(format!("{} 삭제됨", openclaw_dir.display())),
-                Err(e) => results.push(format!("{} 삭제 실패: {}", openclaw_dir.display(), e)),
-            }
+            let _ = std::fs::remove_dir_all(&openclaw_dir);
         }
     }
     
-    // 3. OpenClaw npm 글로벌 패키지 제거 (선택적)
+    // 3. OpenClaw npm 글로벌 패키지 제거
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
-        let output = std::process::Command::new("cmd")
+        let _ = std::process::Command::new("cmd")
             .args(["/C", "npm uninstall -g openclaw"])
             .creation_flags(CREATE_NO_WINDOW)
             .output();
-        
-        if output.is_ok() && output.unwrap().status.success() {
-            results.push("OpenClaw npm 패키지 제거됨".to_string());
-        }
     }
     
     #[cfg(not(windows))]
     {
-        let output = std::process::Command::new("npm")
+        let _ = std::process::Command::new("npm")
             .args(["uninstall", "-g", "openclaw"])
             .output();
-        
-        if output.is_ok() && output.unwrap().status.success() {
-            results.push("OpenClaw npm 패키지 제거됨".to_string());
-        }
     }
     
-    results.push("시스템 설정에서 moldClaw 앱을 삭제하세요.".to_string());
+    // 4. 앱 자동 삭제 스크립트 실행 후 앱 종료
+    spawn_self_delete_script()?;
     
-    Ok(results.join("\n"))
+    // 잠시 대기 후 앱 종료
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    app.exit(0);
+    
+    Ok("전체 삭제 완료".into())
 }
 
 // ===== 환경 체크 =====
