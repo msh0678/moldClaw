@@ -1060,7 +1060,12 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!("설치 실패: {}{}", stderr, stdout));
+            let combined = format!("{}{}", stderr, stdout);
+            // 권한 에러 감지 (Windows)
+            if combined.contains("EACCES") || combined.contains("Access is denied") || combined.contains("permission") {
+                return Err(format!("권한 에러: 관리자 권한으로 터미널을 실행한 후 설치해주세요.\n\n명령어:\n  {}", cmd));
+            }
+            return Err(format!("설치 실패: {}", combined));
         }
     }
 
@@ -1078,7 +1083,13 @@ async fn install_with_npm(cmd: &str) -> Result<String, String> {
     if output.status.success() {
         Ok("설치 완료".into())
     } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        // 권한 에러 감지 시 sudo 명령어 안내 (macOS/Linux)
+        if stderr.contains("EACCES") || stderr.contains("permission") || stderr.contains("Permission denied") || stderr.contains("operation was rejected") {
+            Err(format!("권한 에러: npm global 설치에 sudo가 필요합니다.\n\n수동으로 설치하려면:\n  sudo {}", cmd))
+        } else {
+            Err(stderr)
+        }
     }
 }
 
