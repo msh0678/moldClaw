@@ -102,35 +102,59 @@ export default function MessengerSettings({
       isWorkingRef.current = true;
       
       try {
-        const result = await invoke<string>('login_whatsapp');
+        // 터미널 열기 (비동기, 즉시 반환)
+        await invoke('open_whatsapp_login_terminal');
         
-        // 모달이 닫혔으면 무시
+        // Polling으로 연결 상태 확인 (2초 간격, 최대 5분)
+        const maxAttempts = 150; // 5분 = 300초 / 2초
+        let attempts = 0;
+        
+        const checkConnection = async (): Promise<boolean> => {
+          if (abortRef.current) return false;
+          
+          const linked = await invoke<boolean>('check_whatsapp_linked');
+          if (linked) return true;
+          
+          attempts++;
+          if (attempts >= maxAttempts) return false;
+          
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return checkConnection();
+        };
+        
+        const connected = await checkConnection();
+        
         if (abortRef.current) return;
         
-        console.log('WhatsApp 결과:', result);
-        setStatus('connected');
-        
-        const newConfig = {
-          ...config,
-          messenger: {
-            ...config.messenger,
-            type: 'whatsapp' as Messenger,
-            token: '',
-            dmPolicy: 'pairing' as const,
-          }
-        };
-        commitConfig(newConfig);
-        
-        // 1.5초 후 모달 자동 닫기
-        setTimeout(() => {
-          if (!abortRef.current) {
-            closeModal();
-          }
-        }, 1500);
+        if (connected) {
+          console.log('WhatsApp 연결 감지됨');
+          setStatus('connected');
+          
+          const newConfig = {
+            ...config,
+            messenger: {
+              ...config.messenger,
+              type: 'whatsapp' as Messenger,
+              token: '',
+              dmPolicy: 'pairing' as const,
+            }
+          };
+          commitConfig(newConfig);
+          
+          // 1.5초 후 모달 자동 닫기
+          setTimeout(() => {
+            if (!abortRef.current) {
+              closeModal();
+            }
+          }, 1500);
+        } else {
+          setErrorMsg('연결 시간 초과. 다시 시도해주세요.');
+          setStatus('error');
+        }
         
       } catch (err) {
         if (abortRef.current) return;
-        console.error('WhatsApp QR 실패:', err);
+        console.error('WhatsApp 연결 실패:', err);
         setErrorMsg(String(err));
         setStatus('error');
       } finally {

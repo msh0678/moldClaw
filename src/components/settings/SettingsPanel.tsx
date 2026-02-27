@@ -8,7 +8,6 @@ import { invoke } from '@tauri-apps/api/core';
 import type { SettingsSection, SettingsMode, FullConfig } from '../../types/config';
 import { defaultFullConfig } from '../../types/config';
 import SettingsSidebar from './SettingsSidebar';
-import GeneralSettings from './GeneralSettings';
 import ModelSettings from './ModelSettings';
 import MessengerSettings from './MessengerSettings';
 import SkillsSettings from './SkillsSettings';
@@ -23,7 +22,7 @@ interface SettingsPanelProps {
 }
 
 export default function SettingsPanel({ onClose }: SettingsPanelProps) {
-  const [section, setSection] = useState<SettingsSection>('general');
+  const [section, setSection] = useState<SettingsSection>('model');
   const [mode, setMode] = useState<SettingsMode>('advanced');
   const [config, setConfig] = useState<FullConfig>(defaultFullConfig);
   const [loading, setLoading] = useState(true);
@@ -129,8 +128,6 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
     };
 
     switch (section) {
-      case 'general':
-        return <GeneralSettings {...sectionProps} />;
       case 'model':
         return <ModelSettings {...sectionProps} />;
       case 'messenger':
@@ -146,7 +143,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
       case 'browser':
         return <BrowserSettings {...sectionProps} />;
       default:
-        return <GeneralSettings {...sectionProps} />;
+        return <ModelSettings {...sectionProps} />;
     }
   };
 
