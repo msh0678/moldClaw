@@ -614,9 +614,9 @@ export default function SkillsSettings({
                   <button 
                     onClick={confirmDisconnect}
                     disabled={disconnecting}
-                    className="flex-1 px-3 py-2 bg-forge-amber text-[#1a1c24] font-bold rounded-lg text-sm hover:bg-forge-amber/80 disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="flex-1 px-3 py-2 bg-forge-amber text-white font-bold rounded-lg text-sm hover:bg-forge-amber/80 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-[#1a1c24]/30 border-t-[#1a1c24] rounded-full" /> 해제 중...</> : '⚠️ 연결 해제'}
+                    {disconnecting ? <><div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> 해제 중...</> : '⚠️ 연결 해제'}
                   </button>
                 </div>
               </div>
