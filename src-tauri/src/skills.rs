@@ -828,7 +828,20 @@ fn check_env_var_configured(config: &serde_json::Value, skill_id: &str, var_name
         return true;
     }
     
-    // 3. 실제 환경 변수 확인
+    // 3. env.vars.{var_name} 확인 (moldClaw configure_skill_api_key에서 저장하는 위치)
+    let has_env_vars = config
+        .get("env")
+        .and_then(|e| e.get("vars"))
+        .and_then(|v| v.get(var_name))
+        .and_then(|v| v.as_str())
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    
+    if has_env_vars {
+        return true;
+    }
+    
+    // 4. 실제 환경 변수 확인
     std::env::var(var_name).map(|s| !s.is_empty()).unwrap_or(false)
 }
 
