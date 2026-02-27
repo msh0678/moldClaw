@@ -73,6 +73,85 @@ fn macos_sh(script: &str) -> Command {
     cmd
 }
 
+// ===== Linux PATH 해결 =====
+// Linux GUI 앱에서도 CLI 도구를 찾을 수 있도록 PATH 확장
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
+pub fn get_linux_path() -> String {
+    use std::sync::OnceLock;
+    static CACHED_PATH: OnceLock<String> = OnceLock::new();
+
+    CACHED_PATH.get_or_init(|| {
+        // 먼저 login shell에서 PATH 가져오기 시도
+        let shells = ["/bin/bash", "/bin/zsh", "/bin/sh"];
+        for shell in &shells {
+            if let Ok(output) = std::process::Command::new(shell)
+                .args(["-l", "-c", "echo $PATH"])
+                .output()
+            {
+                if output.status.success() {
+                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !path.is_empty() && path.contains('/') {
+                        return path;
+                    }
+                }
+            }
+        }
+
+        // Fallback: 알려진 경로들 + 현재 PATH 합치기
+        let home = std::env::var("HOME").unwrap_or_default();
+        let known_paths = vec![
+            // Linuxbrew
+            "/home/linuxbrew/.linuxbrew/bin".to_string(),
+            "/home/linuxbrew/.linuxbrew/sbin".to_string(),
+            format!("{}/.linuxbrew/bin", home),
+            format!("{}/.linuxbrew/sbin", home),
+            // fnm (Fast Node Manager)
+            format!("{}/.local/share/fnm", home),
+            // nvm
+            format!("{}/.nvm/versions/node/*/bin", home),
+            // npm global
+            format!("{}/.npm-global/bin", home),
+            format!("{}/.local/bin", home),
+            // 시스템 경로
+            "/usr/local/bin".to_string(),
+            "/usr/local/sbin".to_string(),
+            "/usr/bin".to_string(),
+            "/bin".to_string(),
+            "/usr/sbin".to_string(),
+            "/sbin".to_string(),
+        ];
+
+        let current = std::env::var("PATH").unwrap_or_default();
+        let mut all: Vec<String> = known_paths;
+        for p in current.split(':') {
+            if !p.is_empty() {
+                all.push(p.to_string());
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        let deduped: Vec<String> = all.into_iter().filter(|p| seen.insert(p.clone())).collect();
+        deduped.join(":")
+    }).clone()
+}
+
+/// Linux PATH가 적용된 Command 반환
+#[cfg(all(not(windows), not(target_os = "macos")))]
+pub fn linux_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    cmd.env("PATH", get_linux_path());
+    cmd
+}
+
+/// Linux에서 sh -c 명령 실행 (PATH 포함)
+#[cfg(all(not(windows), not(target_os = "macos")))]
+pub fn linux_sh(script: &str) -> Command {
+    let full_script = format!("export PATH=\"{}\"; {}", get_linux_path(), script);
+    let mut cmd = Command::new("/bin/sh");
+    cmd.args(["-c", &full_script]);
+    cmd
+}
+
 // Device Identity 생성에 필요한 imports
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;

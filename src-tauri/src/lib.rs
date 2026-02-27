@@ -30,6 +30,20 @@ fn macos_cmd(program: &str) -> std::process::Command {
     cmd
 }
 
+// Linux PATH 헬퍼 - openclaw 모듈에서 가져옴
+#[cfg(all(not(windows), not(target_os = "macos")))]
+fn get_linux_path() -> String {
+    openclaw::get_linux_path()
+}
+
+/// Linux에서 PATH가 적용된 Command 빌더 반환
+#[cfg(all(not(windows), not(target_os = "macos")))]
+fn linux_cmd(program: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    cmd.env("PATH", get_linux_path());
+    cmd
+}
+
 /// macOS에서 PATH가 적용된 tokio::process::Command 빌더 반환
 #[cfg(target_os = "macos")]
 fn macos_async_cmd(program: &str) -> tokio::process::Command {
@@ -1925,7 +1939,75 @@ fn install_nodejs() -> Result<String, String> {
 #[cfg(all(not(windows), not(target_os = "macos")))]
 #[tauri::command]
 fn install_nodejs() -> Result<String, String> {
-    Err("이 기능은 Windows에서만 사용 가능합니다".to_string())
+    // fnm 설치 스크립트 (Linuxbrew 없을 때 사용)
+    let fnm_install_script = r#"
+echo '🚀 fnm (Fast Node Manager) 설치 중...'
+curl -fsSL https://fnm.vercel.app/install | bash
+source ~/.bashrc 2>/dev/null || source ~/.zshrc 2>/dev/null || true
+export PATH="$HOME/.local/share/fnm:$PATH"
+eval "$(fnm env)"
+echo '📦 Node.js LTS 설치 중...'
+fnm install --lts
+fnm use --lts
+fnm default --lts
+echo ''
+echo '✅ Node.js 설치 완료!'
+node --version
+echo ''
+echo '⚠️ 이 창을 닫고 moldClaw를 재시작해주세요.'
+read -p '아무 키나 누르세요...'
+"#;
+
+    // 1. Linuxbrew 확인 → brew install node
+    let brew_available = linux_cmd("brew")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let install_script: &str;
+    if brew_available {
+        install_script = "brew install node@22 && brew link --overwrite --force node@22; echo '설치 완료! 이 창을 닫아주세요.'; read -p ''";
+    } else {
+        install_script = fnm_install_script;
+    }
+
+    // xfce4-terminal용 명령 (lifetime 문제 해결)
+    let xfce_cmd = format!("bash -c '{}'", install_script.replace("'", "'\\''"));
+
+    // 터미널 에뮬레이터 목록 (순서대로 시도)
+    let terminal_configs: Vec<(&str, Vec<&str>)> = vec![
+        ("gnome-terminal", vec!["--", "bash", "-c", install_script]),
+        ("konsole", vec!["-e", "bash", "-c", install_script]),
+        ("xterm", vec!["-e", "bash", "-c", install_script]),
+        ("tilix", vec!["-e", "bash", "-c", install_script]),
+        ("xfce4-terminal", vec!["--command", &xfce_cmd]),
+    ];
+
+    for (term, args) in &terminal_configs {
+        // 터미널이 설치되어 있는지 확인
+        if std::process::Command::new("which")
+            .arg(term)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            if linux_cmd(term).args(args.clone()).spawn().is_ok() {
+                if brew_available {
+                    return Ok("터미널에서 Homebrew로 Node.js 설치 중입니다.\n설치 완료 후 앱을 재시작해주세요.".to_string());
+                } else {
+                    return Ok("터미널에서 fnm으로 Node.js 설치 중입니다.\n설치 완료 후 앱을 재시작해주세요.".to_string());
+                }
+            }
+        }
+    }
+
+    // 최종 fallback → 브라우저로 nodejs.org 열기
+    let _ = std::process::Command::new("xdg-open")
+        .arg("https://nodejs.org/en/download/")
+        .spawn();
+
+    Err("터미널을 찾을 수 없습니다. 브라우저에서 Node.js를 다운로드해주세요.\n설치 후 앱을 재시작해주세요.".to_string())
 }
 
 /// 환경 변수 새로고침
