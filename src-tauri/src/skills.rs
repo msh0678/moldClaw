@@ -21,6 +21,59 @@ fn success_exit_status() -> std::process::ExitStatus {
     std::process::ExitStatus::from_raw(0)
 }
 
+// ===== 안전한 파일 삭제 (한글 경로 지원) =====
+// cmd.exe 우회하여 Rust std::fs 직접 사용
+// 읽기전용 파일 처리 + 상세 에러 메시지
+
+fn safe_remove_file(path: &std::path::Path) -> Result<(), String> {
+    // 파일 존재 확인
+    if !path.exists() {
+        return Ok(()); // 이미 없으면 성공으로 처리
+    }
+    
+    // 읽기전용 속성 제거 시도 (Windows에서 필요할 수 있음)
+    if let Ok(metadata) = std::fs::metadata(path) {
+        let mut perms = metadata.permissions();
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::PermissionsExt;
+            // FILE_ATTRIBUTE_READONLY 제거
+            if perms.readonly() {
+                perms.set_readonly(false);
+                let _ = std::fs::set_permissions(path, perms);
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            if perms.readonly() {
+                perms.set_readonly(false);
+                let _ = std::fs::set_permissions(path, perms);
+            }
+        }
+    }
+    
+    std::fs::remove_file(path).map_err(|e| {
+        #[cfg(windows)]
+        {
+            match e.raw_os_error() {
+                Some(32) => "파일이 사용 중입니다. 해당 프로그램을 종료 후 다시 시도하세요.".to_string(),
+                Some(5) => "권한이 없습니다. 관리자 권한으로 실행하거나 수동으로 삭제하세요.".to_string(),
+                Some(2) => "파일을 찾을 수 없습니다.".to_string(),
+                Some(3) => "경로를 찾을 수 없습니다.".to_string(),
+                _ => format!("삭제 실패: {}", e),
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            match e.kind() {
+                std::io::ErrorKind::PermissionDenied => "권한이 없습니다. sudo로 실행하거나 수동으로 삭제하세요.".to_string(),
+                std::io::ErrorKind::NotFound => "파일을 찾을 수 없습니다.".to_string(),
+                _ => format!("삭제 실패: {}", e),
+            }
+        }
+    })
+}
+
 // ===== macOS PATH 해결 =====
 // macOS GUI 앱에서 shell 명령 실행 시 brew, npm 등을 찾을 수 있도록 PATH 확장
 
@@ -1818,32 +1871,22 @@ async fn execute_uninstall(cmd: &str, method: &InstallMethod) -> Result<std::pro
     
     match method {
         InstallMethod::Go => {
-            // Go는 rm 명령 사용
-            #[cfg(windows)]
-            {
-                let path = cmd.replace("rm \"", "").replace("\"", "");
-                std::fs::remove_file(&path)
-                    .map_err(|e| e.to_string())?;
-                // 성공 Output 반환 (exit code 0)
-                Ok(std::process::Output {
-                    status: success_exit_status(),
-                    stdout: vec![],
-                    stderr: vec![],
-                })
-            }
-            #[cfg(not(windows))]
-            {
-                // Unix에서는 파일 직접 삭제
-                let path = cmd.replace("rm \"", "").replace("\"", "");
-                std::fs::remove_file(&path)
-                    .map_err(|e| e.to_string())?;
-                // 성공 Output 반환 (exit code 0)
-                Ok(std::process::Output {
-                    status: success_exit_status(),
-                    stdout: vec![],
-                    stderr: vec![],
-                })
-            }
+            // Go 바이너리: std::fs 직접 삭제 (한글 경로 안전 처리)
+            // cmd는 "rm \"경로\"" 형태이므로 경로만 추출
+            let path = cmd
+                .trim_start_matches("rm \"")
+                .trim_end_matches('"')
+                .to_string();
+            
+            let path = std::path::Path::new(&path);
+            safe_remove_file(path)?;
+            
+            // 성공 Output 반환 (exit code 0)
+            Ok(std::process::Output {
+                status: success_exit_status(),
+                stdout: vec![],
+                stderr: vec![],
+            })
         }
         InstallMethod::Brew => {
             let full_cmd = format!("NONINTERACTIVE=1 {}", cmd);
