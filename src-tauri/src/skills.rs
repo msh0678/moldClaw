@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use crate::skill_definitions::SKILL_DEFINITIONS;
 
@@ -205,6 +206,219 @@ fn windows_shell(script: &str) -> Command {
     cmd.args(["/C", script]);
     cmd.creation_flags(CREATE_NO_WINDOW);
     cmd
+}
+
+// ===== Xcode CLT 체크 (macOS) =====
+
+/// macOS에서 Xcode Command Line Tools 설치 여부 확인
+#[cfg(target_os = "macos")]
+fn is_xcode_clt_installed() -> bool {
+    Command::new("xcode-select")
+        .args(["-p"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+// ===== 터미널 + 폴링 기반 설치 =====
+// UAC, sudo 등 대화형 프롬프트가 필요한 명령은 터미널을 열고 폴링으로 완료 감지
+
+/// Windows: 터미널 열기 + 바이너리 폴링
+#[cfg(windows)]
+const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+
+#[cfg(windows)]
+async fn install_with_terminal_and_poll(
+    cmd: &str,
+    binary_name: &str,
+    timeout_secs: u64,
+) -> Result<String, String> {
+    // 1. 터미널 열기 (사용자가 UAC/프롬프트 응답 가능)
+    let full_cmd = format!(
+        "{} && echo. && echo [설치 완료] && timeout /t 3",
+        cmd
+    );
+    
+    Command::new("cmd")
+        .args(["/c", "start", "cmd", "/k", &full_cmd])
+        .spawn()
+        .map_err(|e| format!("터미널 열기 실패: {}", e))?;
+    
+    // 2. 폴링으로 바이너리 존재 확인
+    let start = Instant::now();
+    let poll_interval = Duration::from_secs(2);
+    let timeout = Duration::from_secs(timeout_secs);
+    
+    loop {
+        tokio::time::sleep(poll_interval).await;
+        
+        if check_binary_exists(binary_name) {
+            return Ok("설치 완료".into());
+        }
+        
+        if start.elapsed() > timeout {
+            return Ok("설치가 진행 중입니다. 완료 후 새로고침해주세요.".into());
+        }
+    }
+}
+
+/// macOS: Terminal.app 열기 + 바이너리 폴링
+#[cfg(target_os = "macos")]
+async fn install_with_terminal_and_poll(
+    cmd: &str,
+    binary_name: &str,
+    timeout_secs: u64,
+) -> Result<String, String> {
+    // 1. Terminal.app 열기
+    let apple_script = format!(
+        r#"tell application "Terminal"
+            activate
+            do script "{}"
+        end tell"#,
+        cmd.replace('"', r#"\""#).replace('\\', r#"\\"#)
+    );
+    
+    Command::new("osascript")
+        .args(["-e", &apple_script])
+        .spawn()
+        .map_err(|e| format!("Terminal 열기 실패: {}", e))?;
+    
+    // 2. 폴링으로 바이너리 존재 확인
+    let start = Instant::now();
+    let poll_interval = Duration::from_secs(2);
+    let timeout = Duration::from_secs(timeout_secs);
+    
+    loop {
+        tokio::time::sleep(poll_interval).await;
+        
+        if check_binary_exists(binary_name) {
+            return Ok("설치 완료".into());
+        }
+        
+        if start.elapsed() > timeout {
+            return Ok("설치가 진행 중입니다. 완료 후 새로고침해주세요.".into());
+        }
+    }
+}
+
+/// Linux: 터미널 열기 + 바이너리 폴링
+#[cfg(target_os = "linux")]
+async fn install_with_terminal_and_poll(
+    cmd: &str,
+    binary_name: &str,
+    timeout_secs: u64,
+) -> Result<String, String> {
+    // 1. 터미널 열기 (gnome-terminal, konsole, xterm 등)
+    let full_cmd = format!("{}; read -p '완료. 아무 키나 누르세요...'", cmd);
+    let xfce_cmd = format!("bash -c '{}; read -p 완료'", cmd);
+    
+    let mut spawned = false;
+    
+    // gnome-terminal
+    if !spawned && Command::new("which").arg("gnome-terminal").output().map(|o| o.status.success()).unwrap_or(false) {
+        if Command::new("gnome-terminal").args(["--", "bash", "-c", &full_cmd]).spawn().is_ok() {
+            spawned = true;
+        }
+    }
+    
+    // konsole
+    if !spawned && Command::new("which").arg("konsole").output().map(|o| o.status.success()).unwrap_or(false) {
+        if Command::new("konsole").args(["-e", "bash", "-c", &full_cmd]).spawn().is_ok() {
+            spawned = true;
+        }
+    }
+    
+    // xfce4-terminal
+    if !spawned && Command::new("which").arg("xfce4-terminal").output().map(|o| o.status.success()).unwrap_or(false) {
+        if Command::new("xfce4-terminal").args(["-e", &xfce_cmd]).spawn().is_ok() {
+            spawned = true;
+        }
+    }
+    
+    // xterm
+    if !spawned && Command::new("which").arg("xterm").output().map(|o| o.status.success()).unwrap_or(false) {
+        if Command::new("xterm").args(["-e", "bash", "-c", &full_cmd]).spawn().is_ok() {
+            spawned = true;
+        }
+    }
+    
+    if !spawned {
+        return Err("터미널을 찾을 수 없습니다. 수동으로 설치해주세요.".into());
+    }
+    
+    // 2. 폴링으로 바이너리 존재 확인
+    let start = Instant::now();
+    let poll_interval = Duration::from_secs(2);
+    let timeout = Duration::from_secs(timeout_secs);
+    
+    loop {
+        tokio::time::sleep(poll_interval).await;
+        
+        if check_binary_exists(binary_name) {
+            return Ok("설치 완료".into());
+        }
+        
+        if start.elapsed() > timeout {
+            return Ok("설치가 진행 중입니다. 완료 후 새로고침해주세요.".into());
+        }
+    }
+}
+
+/// Windows: 터미널 열기 + 바이너리 삭제 폴링 (삭제용)
+#[cfg(windows)]
+async fn uninstall_with_terminal_and_poll(
+    cmd: &str,
+    binary_name: &str,
+    manual_cmd: &str,
+    config_paths: &[String],
+) -> Result<UninstallResult, String> {
+    // 1. 터미널 열기 (사용자가 UAC 응답 가능)
+    let full_cmd = format!(
+        "{} && echo. && echo [삭제 완료] && timeout /t 3",
+        cmd
+    );
+    
+    Command::new("cmd")
+        .args(["/c", "start", "cmd", "/k", &full_cmd])
+        .spawn()
+        .map_err(|e| format!("터미널 열기 실패: {}", e))?;
+    
+    // 2. 폴링으로 바이너리 삭제 확인 (2분 타임아웃)
+    let start = Instant::now();
+    let poll_interval = Duration::from_secs(2);
+    let timeout = Duration::from_secs(120);
+    
+    loop {
+        tokio::time::sleep(poll_interval).await;
+        
+        if !check_binary_exists(binary_name) {
+            // 성공: 바이너리 삭제됨 → config 파일도 삭제
+            for path in config_paths {
+                let expanded = shellexpand::tilde(path);
+                let path_buf = PathBuf::from(expanded.as_ref());
+                if path_buf.exists() {
+                    if path_buf.is_dir() {
+                        let _ = std::fs::remove_dir_all(&path_buf);
+                    } else {
+                        let _ = std::fs::remove_file(&path_buf);
+                    }
+                }
+            }
+            return Ok(UninstallResult {
+                success: true,
+                message: "삭제 완료".into(),
+                manual_command: None,
+            });
+        }
+        
+        if start.elapsed() > timeout {
+            return Ok(UninstallResult {
+                success: false,
+                message: "삭제가 진행 중입니다. 완료 후 새로고침해주세요.".into(),
+                manual_command: Some(manual_cmd.to_string()),
+            });
+        }
+    }
 }
 
 /// 스킬 설치 방법
@@ -955,29 +1169,40 @@ pub async fn install_skill(skill_id: String) -> Result<String, String> {
     let install_method = get_effective_install_method(skill);
     let install_cmd = get_effective_install_command(skill)
         .ok_or_else(|| "설치 명령어가 없습니다".to_string())?;
+    let binary_name = skill.binary_name.as_deref().unwrap_or(&skill.id);
 
     match install_method {
-        InstallMethod::Brew => install_with_brew(install_cmd).await,
+        InstallMethod::Brew => install_with_brew(install_cmd, binary_name).await,
         InstallMethod::Go => install_with_go(install_cmd).await,
         InstallMethod::Npm => install_with_npm(install_cmd).await,
         InstallMethod::Uv => install_with_uv(install_cmd).await,
-        InstallMethod::Winget => install_with_winget(install_cmd).await,
+        InstallMethod::Winget => install_with_winget(install_cmd, binary_name).await,
         InstallMethod::Builtin => Ok("내장 스킬입니다".into()),
         InstallMethod::Manual => Err("수동 설치가 필요합니다".into()),
     }
 }
 
-async fn install_with_brew(cmd: &str) -> Result<String, String> {
+async fn install_with_brew(cmd: &str, binary_name: &str) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     return Err("Windows에서는 brew를 사용할 수 없습니다".into());
 
     // brew 비대화형 모드: NONINTERACTIVE=1, HOMEBREW_NO_AUTO_UPDATE=1
-    // 프롬프트 없이 자동 진행
     let noninteractive_cmd = format!("NONINTERACTIVE=1 HOMEBREW_NO_AUTO_UPDATE=1 {}", cmd);
 
     #[cfg(target_os = "macos")]
     {
-        // macOS: 확장 PATH로 brew 명령 실행
+        // brew install --cask는 sudo 필요 → 터미널+폴링 사용
+        let is_cask = cmd.contains("--cask") || cmd.contains("cask install");
+        
+        // Xcode CLT 없으면 설치 프롬프트가 뜰 수 있음 → 터미널+폴링 사용
+        let needs_terminal = is_cask || !is_xcode_clt_installed();
+        
+        if needs_terminal {
+            // 터미널 열기 + 폴링으로 완료 감지 (5분 타임아웃)
+            return install_with_terminal_and_poll(&noninteractive_cmd, binary_name, 300).await;
+        }
+        
+        // 일반 brew install: 숨김 프로세스로 실행 (안전)
         let output = macos_sh(&noninteractive_cmd)
             .output()
             .map_err(|e| e.to_string())?;
@@ -991,7 +1216,9 @@ async fn install_with_brew(cmd: &str) -> Result<String, String> {
     
     #[cfg(target_os = "linux")]
     {
-        // Linux: 확장 PATH로 brew 명령 실행
+        let _ = binary_name; // Linux에서는 터미널+폴링 불필요 (sudo 불필요)
+        
+        // Linux: 확장 PATH로 brew 명령 실행 (Linuxbrew는 보통 sudo 불필요)
         let output = linux_sh(&noninteractive_cmd)
             .output()
             .map_err(|e| e.to_string())?;
@@ -1132,9 +1359,12 @@ async fn install_with_uv(cmd: &str) -> Result<String, String> {
     }
 }
 
-async fn install_with_winget(cmd: &str) -> Result<String, String> {
+async fn install_with_winget(cmd: &str, binary_name: &str) -> Result<String, String> {
     #[cfg(not(windows))]
-    return Err("winget은 Windows에서만 사용 가능합니다".into());
+    {
+        let _ = (cmd, binary_name); // unused warning 방지
+        return Err("winget은 Windows에서만 사용 가능합니다".into());
+    }
 
     #[cfg(windows)]
     {
@@ -1145,18 +1375,8 @@ async fn install_with_winget(cmd: &str) -> Result<String, String> {
             format!("{} --accept-source-agreements --accept-package-agreements", cmd)
         };
         
-        // Windows: 숨김 창에서 실행 + 완료 대기
-        let output = windows_shell(&full_cmd)
-            .output()
-            .map_err(|e| format!("설치 실행 실패: {}", e))?;
-        
-        if output.status.success() {
-            Ok("설치 완료".into())
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            Err(format!("설치 실패: {}{}", stderr, stdout))
-        }
+        // winget은 UAC 프롬프트 가능 → 터미널+폴링 사용 (5분 타임아웃)
+        install_with_terminal_and_poll(&full_cmd, binary_name, 300).await
     }
 }
 
@@ -1409,6 +1629,12 @@ pub async fn uninstall_skill(skill_id: String) -> Result<UninstallResult, String
     // 2. 삭제 명령어 생성 및 실행
     let install_method = get_effective_install_method(skill);
     let (uninstall_cmd, manual_cmd) = get_uninstall_command(skill, &install_method);
+    
+    // Windows winget uninstall: UAC 필요 가능 → 터미널+폴링
+    #[cfg(windows)]
+    if matches!(install_method, InstallMethod::Winget) {
+        return uninstall_with_terminal_and_poll(&uninstall_cmd, &binary_name, &manual_cmd, &skill.disconnect.config_paths).await;
+    }
     
     let output = execute_uninstall(&uninstall_cmd, &install_method).await;
 
