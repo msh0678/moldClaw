@@ -100,26 +100,17 @@ fn spawn_self_delete_script() -> Result<(), String> {
             use std::os::windows::process::CommandExt;
             const DETACHED_PROCESS: u32 = 0x00000008;
             
-            // MSI인지 확인 (msiexec로 시작하면 MSI)
-            let ps_command = if uninstall_cmd.to_lowercase().contains("msiexec") {
-                // MSI: msiexec.exe /x {ProductCode} 형태
-                // Start-Process로 msiexec 실행, 인자는 ArgumentList로 전달
-                let parts: Vec<&str> = uninstall_cmd.splitn(2, ' ').collect();
-                if parts.len() == 2 {
-                    format!(
-                        "Start-Sleep -Seconds 2; Start-Process '{}' -ArgumentList '{}' -Verb RunAs",
-                        parts[0], parts[1]
-                    )
-                } else {
-                    format!("Start-Sleep -Seconds 2; Start-Process '{}' -Verb RunAs", uninstall_cmd)
-                }
-            } else {
-                // NSIS: 실행 파일 경로
-                format!("Start-Sleep -Seconds 2; Start-Process '{}' -Verb RunAs", uninstall_cmd)
-            };
+            // msiexec 직접 실행 (UAC 자동 트리거)
+            // msiexec는 자체적으로 UAC 요청함
+            // 2초 후 실행 (앱 종료 후)
+            let delay_script = format!(
+                r#"Start-Sleep 2; {}"#,
+                uninstall_cmd
+            );
             
+            // 창 보이게 실행 (UAC 정상 표시)
             std::process::Command::new("powershell")
-                .args(["-NoProfile", "-Command", &ps_command])
+                .args(["-NoProfile", "-Command", &delay_script])
                 .creation_flags(DETACHED_PROCESS)
                 .spawn()
                 .map_err(|e| format!("언인스톨러 실행 실패: {}", e))?;
