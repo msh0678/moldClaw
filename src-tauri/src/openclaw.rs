@@ -521,7 +521,8 @@ fn create_base_config(
             "port": gateway_port,
             "bind": gateway_bind,
             "auth": {
-                "mode": "off"  // 로컬 전용이므로 auth 불필요
+                "mode": "token",
+                "token": gateway_token
             },
             // 위험한 노드 명령어 거부 목록
             "nodes": {
@@ -620,7 +621,8 @@ pub async fn create_official_config(
         set_nested_value(&mut config, &["gateway", "mode"], json!("local"));
         set_nested_value(&mut config, &["gateway", "port"], json!(gateway_port));
         set_nested_value(&mut config, &["gateway", "bind"], json!(gateway_bind));
-        set_nested_value(&mut config, &["gateway", "auth", "mode"], json!("off"));  // 로컬 전용
+        set_nested_value(&mut config, &["gateway", "auth", "mode"], json!("token"));
+        set_nested_value(&mut config, &["gateway", "auth", "token"], json!(gateway_token));
         
         // workspace 설정 (없으면 추가)
         if config.get("agents")
@@ -1429,9 +1431,6 @@ pub async fn configure_gateway_full(
     } else if !auth_password.is_empty() {
         set_nested_value(&mut config, &["gateway", "auth", "mode"], json!("password"));
         set_nested_value(&mut config, &["gateway", "auth", "password"], json!(auth_password));
-    } else {
-        // 로컬 전용이면 auth 불필요
-        set_nested_value(&mut config, &["gateway", "auth", "mode"], json!("off"));
     }
 
     write_config(&config)?;
